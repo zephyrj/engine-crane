@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 directories = "4.0.1"
+parselnk = "0.1.0"
+
