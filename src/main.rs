@@ -32,7 +32,6 @@ fn main() {
         println!("It is not installed");
         return;
     }
-
 }
 
 mod assetto_corsa {
@@ -79,7 +78,8 @@ mod assetto_corsa {
 
         #[cfg(target_os = "windows")]
         pub fn get_install_path() -> Option<PathBuf> {
-            Some(PathBuf::from(format!("C:\\Program Files (x86)\\Steam\\{}", GAME_NAME)))
+            Some(PathBuf::from(format!("C:\\Program Files (x86)\\Steam\\steamapps\\common\\{}",
+                                          GAME_NAME)))
         }
     }
 }
