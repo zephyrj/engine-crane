@@ -8,4 +8,6 @@ edition = "2021"
 [dependencies]
 directories = "4.0.1"
 parselnk = "0.1.0"
+configparser = "3.0.0"
+derive-new = "0.5"
 
