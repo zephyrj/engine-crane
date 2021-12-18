@@ -46,5 +46,6 @@ fn main() {
 
     let car_path = Path::new("C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa\\content\\cars\\abarth500");
     let car = assetto_corsa::Car::load_from_path(car_path).unwrap();
-    println!("{:?}", car);
+    println!("{:?}", car.ui_info.specs().unwrap());
+    println!("{:?}", car.ui_info.torque_curve().unwrap());
 }
