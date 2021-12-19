@@ -1,7 +1,7 @@
 mod error;
 
 use std::collections::HashMap;
-use std::{fmt, fs, io};
+use std::fs;
 use std::default::Default;
 use std::ffi::OsString;
 use std::fmt::Debug;

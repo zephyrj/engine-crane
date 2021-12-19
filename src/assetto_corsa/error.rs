@@ -1,8 +1,5 @@
 use std::{error, fmt, result};
-use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
-use std::path::Path;
-
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
