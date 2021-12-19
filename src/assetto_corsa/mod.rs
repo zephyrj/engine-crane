@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{fmt, fs};
+use std::{fmt, fs, io};
 use std::default::Default;
 use std::error;
 use std::ffi::OsString;
@@ -31,6 +31,19 @@ pub fn get_installed_cars_path() -> Option<PathBuf> {
         None
     }
 }
+
+#[derive(Debug)]
+pub struct Cars {
+    unpacked_cars: Vec<Car>,
+    packed_car_dirs: Vec<OsString>
+}
+
+impl Cars {
+    pub fn load() {
+
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub struct InvalidCarError {
@@ -117,8 +130,8 @@ impl UiInfo {
     fn load(ui_json_path: &Path) -> Result<UiInfo, Box<dyn error::Error>> {
         let ui_info_string = fs::read_to_string(ui_json_path)?;
         let ui_info = UiInfo { ui_info_path: OsString::from(ui_json_path),
-                               json_config: serde_json::from_str(ui_info_string.replace("\r\n", " ").replace("\t", "  ").as_str())?,
-                               ..Default::default() };
+            json_config: serde_json::from_str(ui_info_string.replace("\r\n", " ").replace("\t", "  ").as_str())?,
+            ..Default::default() };
         Ok(ui_info)
     }
 
@@ -298,4 +311,3 @@ impl Car {
         }
     }
 }
-
