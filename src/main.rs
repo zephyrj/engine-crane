@@ -45,7 +45,7 @@ fn main() {
     println!("BeamNG mod folder resolved to {}", beam_ng::get_mod_path().unwrap().display());
 
     let car_path = Path::new("C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa\\content\\cars\\abarth500");
-    let car = assetto_corsa::Car::load_from_path(car_path).unwrap();
+    let car = assetto_corsa::car::Car::load_from_path(car_path).unwrap();
     println!("{:?}", car.ui_info.specs().unwrap());
     println!("{:?}", car.ui_info.torque_curve().unwrap());
 }
