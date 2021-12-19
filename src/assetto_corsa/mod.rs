@@ -1,12 +1,14 @@
+mod error;
+
 use std::collections::HashMap;
 use std::{fmt, fs, io};
 use std::default::Default;
-use std::error;
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use configparser::ini::Ini;
 use serde_json::Value;
+use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 
 use crate::steam;
 
@@ -43,21 +45,6 @@ impl Cars {
 
     }
 }
-
-
-#[derive(Debug, Clone)]
-pub struct InvalidCarError {
-    reason: String
-}
-
-impl fmt::Display for InvalidCarError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid car config: {}", self.reason)
-    }
-}
-
-impl error::Error for InvalidCarError {}
-
 
 #[derive(Debug)]
 pub enum CarVersion {
@@ -127,10 +114,27 @@ pub struct UiInfo {
 }
 
 impl UiInfo {
-    fn load(ui_json_path: &Path) -> Result<UiInfo, Box<dyn error::Error>> {
-        let ui_info_string = fs::read_to_string(ui_json_path)?;
+    fn load(ui_json_path: &Path) -> Result<UiInfo> {
+        let ui_info_string = match fs::read_to_string(ui_json_path) {
+            Ok(str) => { str }
+            Err(e) => {
+                return Err( Error::new(ErrorKind::InvalidCar,
+                                       String::from(format!("Failed to read {}: {}",
+                                                                      ui_json_path.display(),
+                                                                      e.to_string()))) )
+            }
+        };
+        let json_config = match serde_json::from_str(ui_info_string.replace("\r\n", " ").replace("\t", "  ").as_str()) {
+            Ok(decoded_json) => { decoded_json },
+            Err(e) => {
+                return Err( Error::new(ErrorKind::InvalidCar,
+                                String::from(format!("Failed to decode {}: {}",
+                                                     ui_json_path.display(),
+                                                     e.to_string()))) )
+            }
+        };
         let ui_info = UiInfo { ui_info_path: OsString::from(ui_json_path),
-            json_config: serde_json::from_str(ui_info_string.replace("\r\n", " ").replace("\t", "  ").as_str())?,
+            json_config,
             ..Default::default() };
         Ok(ui_info)
     }
@@ -243,11 +247,14 @@ pub struct Car {
 }
 
 impl Car {
-    pub fn load_from_path(car_folder_path: &Path) -> Result<Car, InvalidCarError> {
+    pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
         let ui_info_path = car_folder_path.join(["ui", "ui_car.json"].iter().collect::<PathBuf>());
         let ui_info = match UiInfo::load(ui_info_path.as_path()) {
             Ok(result) => result,
-            Err(e) => { return Err(InvalidCarError { reason: format!("Failed to parse {}: {}", ui_info_path.display(), e.to_string()) }) }
+            Err(e) => { return Err(Error::new(ErrorKind::InvalidCar,
+                                                   format!("Failed to parse {}: {}",
+                                                                  ui_info_path.display(),
+                                                                  e.to_string()))) }
         };
         let mut car = Car {
             root_path: OsString::from(car_folder_path),
@@ -258,12 +265,12 @@ impl Car {
         let car_ini_path = car_folder_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
         match car.ini_config.load(car_ini_path.as_path()) {
             Err(err_str) =>  {
-                return Err(InvalidCarError {
-                    reason: String::from(format!("Failed to decode {}: {}",
-                                                 car_ini_path.display(),
-                                                 err_str)) })
+                return Err(Error::new(ErrorKind::InvalidCar,
+                                     format!("Failed to decode {}: {}",
+                                                    car_ini_path.display(),
+                                                    err_str)))
             },
-            Ok(_) => {}
+            _ => {}
         }
         car.version = CarVersion::from_string(&car.get_ini_string("header", "version")?);
         car.screen_name = car.get_ini_string("info", "screen_name")?;
@@ -277,37 +284,38 @@ impl Car {
         Ok(car)
     }
 
-    fn get_ini_string(&self, section: &str, key: &str) -> Result<String, InvalidCarError> {
+    fn get_ini_string(&self, section: &str, key: &str) -> Result<String> {
         if let Some(var) = self.ini_config.get(section, key) {
             Ok(var)
         } else {
-            Err(InvalidCarError { reason: String::from(format!("Missing field {} -> {}",
-                                                               section, key)) })
+            Err(Error::new(ErrorKind::InvalidCar,
+                           String::from(format!("Missing field {} -> {}",
+                                                          section, key))))
         }
     }
 
-    fn get_ini_int(&self, section: &str, key: &str) -> Result<i64, InvalidCarError> {
+    fn get_ini_int(&self, section: &str, key: &str) -> Result<i64> {
         Car::handle_number_result(self.ini_config.getint(section, key), section, key)
     }
 
-    fn get_ini_float(&self, section: &str, key: &str) -> Result<f64, InvalidCarError> {
+    fn get_ini_float(&self, section: &str, key: &str) -> Result<f64> {
         Car::handle_number_result(self.ini_config.getfloat(section, key), section, key)
     }
 
-    fn handle_number_result<T>(result: Result<Option<T>, String>, section: &str, key: &str) -> Result<T, InvalidCarError> {
+    fn handle_number_result<T>(result: std::result::Result<Option<T>, String>, section: &str, key: &str) -> Result<T> {
         match result {
             Ok(var) => {
                 if let Some(ret_var) = var {
                     Ok(ret_var)
                 } else {
-                    Err(InvalidCarError {
-                        reason: String::from(format!("Missing field {} -> {}",
-                                                     section, key)) })
+                    Err(Error::new(ErrorKind::InvalidCar,
+                                   String::from(format!("Missing field {} -> {}",
+                                                                  section, key))))
                 }
             },
-            Err(str) => Err(InvalidCarError {
-                reason: String::from(format!("Failed to parse field {} -> {}: {}",
-                                             section, key, str)) })
+            Err(str) => Err(Error::new(ErrorKind::InvalidCar,
+                                              String::from(format!("Failed to parse field {} -> {}: {}",
+                                                                                  section, key, str))))
         }
     }
 }
