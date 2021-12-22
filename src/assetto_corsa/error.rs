@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
-pub struct Error {
+pub struct Error{
     kind: ErrorKind,
     details: String
 }
@@ -25,6 +25,7 @@ impl error::Error for Error {}
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
     InvalidCar,
+    NotInstalled,
     Uncategorized
 }
 
@@ -32,6 +33,7 @@ impl ErrorKind {
     pub(crate) fn as_str(&self) -> &'static str {
         match self {
             ErrorKind::InvalidCar => "invalid car",
+            ErrorKind::NotInstalled => "not installed",
             ErrorKind::Uncategorized => "uncategorized error"
         }
     }

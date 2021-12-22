@@ -9,6 +9,7 @@ use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use configparser::ini::Ini;
 use serde_json::Value;
+use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 
 
 use crate::steam;
@@ -35,14 +36,31 @@ pub fn get_installed_cars_path() -> Option<PathBuf> {
     }
 }
 
-#[derive(Debug)]
-pub struct Cars {
-    unpacked_cars: Vec<car::Car>,
-    packed_car_dirs: Vec<OsString>
-}
+pub fn get_list_of_installed_cars() -> Result<Vec<OsString>> {
+    let car_dir = match get_installed_cars_path() {
+        Some(path) => path,
+        None => return Err(Error::new(ErrorKind::NotInstalled,
+                                      String::from("Assetto Corsa isn't installed")))
+    };
+    let dir_entries = match fs::read_dir(car_dir) {
+        Ok(entry_list) => entry_list,
+        Err(e) => return Err(Error::new(ErrorKind::NotInstalled,
+                                        String::from(
+                                            format!("Assetto Corsa doesn't appear to be installed: {}",
+                                                    e.to_string()))))
+    };
 
-impl Cars {
-    pub fn load() {
-
-    }
+    let cars: Vec<OsString> = dir_entries.filter_map(|e| {
+        match e {
+            Ok(dir_entry) => {
+                if dir_entry.path().is_dir() {
+                    Some(dir_entry.path().into_os_string())
+                } else {
+                    None
+                }
+            },
+            _ => None
+        }
+    }).collect();
+    Ok(cars)
 }

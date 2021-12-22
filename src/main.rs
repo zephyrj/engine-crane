@@ -35,6 +35,11 @@ fn main() {
         return;
     }
 
+    println!("Cars installed:");
+    for car in assetto_corsa::get_list_of_installed_cars().unwrap() {
+        println!("{}", Path::new(car.as_os_str()).display());
+    }
+
     if automation::is_installed() {
         println!("Automation is installed");
     } else {
