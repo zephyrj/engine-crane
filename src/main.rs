@@ -16,41 +16,96 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with sim-racing-tools. If not, see <https://www.gnu.org/licenses/>.
+along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
 */
 mod assetto_corsa;
 mod steam;
 mod automation;
 mod beam_ng;
 
+use std::ffi::OsString;
 use std::path::Path;
+use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings};
 
-fn main() {
-    if assetto_corsa::is_installed() {
-        println!("Assetto Corsa is installed");
-        println!("Installed cars can be found at {}",
-                 assetto_corsa::get_installed_cars_path().unwrap().display())
-    } else {
-        println!("Assetto Corsa is not installed");
-        return;
+#[derive(Default)]
+struct CarSelector {
+    available_cars: Vec<String>,
+    current_car: Option<String>,
+    pick_list: pick_list::State<String>
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    CarSelected(String),
+}
+
+impl Sandbox for CarSelector {
+    type Message = Message;
+
+    fn new() -> Self {
+        CarSelector { available_cars: assetto_corsa::get_list_of_installed_cars().unwrap()
+                                      .iter()
+                                      .map(|car_path| String::from(Path::new(car_path.as_os_str()).file_name().unwrap().to_str().unwrap()))
+                                      .collect(),
+                      ..Default::default() }
     }
 
-    println!("Cars installed:");
-    for car in assetto_corsa::get_list_of_installed_cars().unwrap() {
-        println!("{}", Path::new(car.as_os_str()).display());
+    fn title(&self) -> String {
+        String::from("Engine Crane")
     }
 
-    if automation::is_installed() {
-        println!("Automation is installed");
-    } else {
-        println!("Automation is not installed");
-        return;
+    fn update(&mut self, message: Self::Message) {
+        match message {
+            Message::CarSelected(car_path) => {
+                self.current_car = Some(car_path)
+            }
+        }
     }
 
-    println!("BeamNG mod folder resolved to {}", beam_ng::get_mod_path().unwrap().display());
+    fn view(&mut self) -> Element<Message> {
+        let pick_list = PickList::new(
+            &mut self.pick_list,
+            &self.available_cars,
+            self.current_car.clone(),
+            Message::CarSelected,
+        );
 
-    let car_path = Path::new("C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa\\content\\cars\\abarth500");
-    let car = assetto_corsa::car::Car::load_from_path(car_path).unwrap();
-    println!("{:?}", car.ui_info.specs().unwrap());
-    println!("{:?}", car.ui_info.torque_curve().unwrap());
+        Column::new().width(Length::Fill)
+            .align_items(Align::Center)
+            .spacing(10)
+            .push(Text::new("Assetto Corsa car"))
+            .push(pick_list).into()
+    }
+}
+
+fn main() -> iced::Result {
+    CarSelector::run(Settings::default())
+
+    // if assetto_corsa::is_installed() {
+    //     println!("Assetto Corsa is installed");
+    //     println!("Installed cars can be found at {}",
+    //              assetto_corsa::get_installed_cars_path().unwrap().display())
+    // } else {
+    //     println!("Assetto Corsa is not installed");
+    //     return;
+    // }
+    //
+    // println!("Cars installed:");
+    // for car in assetto_corsa::get_list_of_installed_cars().unwrap() {
+    //     println!("{}", Path::new(car.as_os_str()).display());
+    // }
+    //
+    // if automation::is_installed() {
+    //     println!("Automation is installed");
+    // } else {
+    //     println!("Automation is not installed");
+    //     return;
+    // }
+    //
+    // println!("BeamNG mod folder resolved to {}", beam_ng::get_mod_path().unwrap().display());
+    //
+    // let car_path = Path::new("C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa\\content\\cars\\abarth500");
+    // let car = assetto_corsa::car::Car::load_from_path(car_path).unwrap();
+    // println!("{:?}", car.ui_info.specs().unwrap());
+    // println!("{:?}", car.ui_info.torque_curve().unwrap());
 }
