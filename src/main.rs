@@ -20,8 +20,8 @@ along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
 */
 mod assetto_corsa;
 mod steam;
-mod automation;
 mod beam_ng;
+mod automation;
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -78,8 +78,10 @@ impl Sandbox for CarSelector {
     }
 }
 
-fn main() -> iced::Result {
-    CarSelector::run(Settings::default())
+fn main() {
+    //CarSelector::run(Settings::default())
+    let sandox_str = automation::get_sandbox_db_path().unwrap();
+    println!("Automation sandbox.db found at {}", Path::new(sandox_str.as_os_str()).display());
 
     // if assetto_corsa::is_installed() {
     //     println!("Assetto Corsa is installed");
