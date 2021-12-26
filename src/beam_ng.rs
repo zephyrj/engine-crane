@@ -1,3 +1,5 @@
+use std::ffi::OsString;
+use std::fs;
 use std::path::PathBuf;
 use directories::BaseDirs;
 use parselnk::Lnk;
@@ -26,4 +28,34 @@ pub fn get_mod_path() -> Option<PathBuf> {
     }
     mod_path_buf.push("mods");
     Some(mod_path_buf)
+}
+
+pub fn get_mod_list() -> Option<Vec<OsString>> {
+    let mod_dir = get_mod_path()?;
+    let dir_entries = match fs::read_dir(mod_dir) {
+        Ok(entry_list) => entry_list,
+        Err(e) => return None
+    };
+
+    let mods: Vec<OsString> = dir_entries.filter_map(|e| {
+        match e {
+            Ok(dir_entry) => {
+                if dir_entry.path().is_file() {
+                    match dir_entry.path().extension() {
+                        Some(ext) => {
+                            if ext.ne("zip") {
+                                return None
+                            }
+                        },
+                        None => return None
+                    }
+                    Some(dir_entry.path().into_os_string())
+                } else {
+                    None
+                }
+            },
+            _ => None
+        }
+    }).collect();
+    Some(mods)
 }
