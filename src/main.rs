@@ -27,9 +27,23 @@ mod ui;
 use std::ffi::OsString;
 use std::path::Path;
 
+// -> Result<(), iced::Error>
+fn main()  {
+    //ui::launch()
 
-fn main() -> Result<(), iced::Error> {
-    ui::launch()
+    match beam_ng::get_mod_list() {
+        Some(list) => {
+            println!("Found BeamNG mods:");
+            for beam_mod in list {
+                println!("{}", Path::new(beam_mod.as_os_str()).display());
+                let x = beam_ng::extract_data(&beam_mod).unwrap();
+                for (filename, data) in x {
+                    println!("{}: {:x?}", filename, data);
+                }
+            }
+        },
+        None => println!("No BeamNG mods found")
+    };
 
     // if assetto_corsa::is_installed() {
     //     println!("Assetto Corsa is installed");

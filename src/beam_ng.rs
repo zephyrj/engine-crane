@@ -1,5 +1,8 @@
 use std::ffi::OsString;
-use std::fs;
+use std::{error, fs, io};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{Error, ErrorKind, Read};
 use std::path::PathBuf;
 use directories::BaseDirs;
 use parselnk::Lnk;
@@ -58,4 +61,28 @@ pub fn get_mod_list() -> Option<Vec<OsString>> {
         }
     }).collect();
     Some(mods)
+}
+
+pub fn extract_data(mod_path: &OsString) -> Option<HashMap<String, Vec<u8>>> {
+    let zipfile = std::fs::File::open(mod_path).unwrap();
+    let mut archive = zip::ZipArchive::new(zipfile).unwrap();
+    let filenames: Vec<String> = archive.file_names().map(|filename| {
+        String::from(filename)
+    }).collect();
+    let data_map: HashMap<String, Vec<u8>> = filenames.iter().filter_map(|file_path| {
+        if file_path.ends_with(".car") || file_path.ends_with("camso_engine.jbeam") {
+            match archive.by_name(file_path) {
+                Ok(mut file) => {
+                    let mut contents = Vec::new();
+                    file.read_to_end(&mut contents).unwrap();
+                    Some((String::from(file_path), contents))
+                },
+                Err(..) => None
+            }
+        } else {
+            None
+        }
+
+    }).collect();
+    Some(data_map)
 }
