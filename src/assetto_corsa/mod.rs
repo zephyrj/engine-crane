@@ -3,7 +3,6 @@ pub mod car;
 
 use std::collections::HashMap;
 use std::fs;
-use std::default::Default;
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};

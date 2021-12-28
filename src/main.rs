@@ -39,6 +39,10 @@ fn main()  {
                 let x = beam_ng::extract_data(&beam_mod).unwrap();
                 for (filename, data) in x {
                     println!("{}: {:x?}", filename, data);
+                    if filename.ends_with(".car") {
+                        let c = automation::car::CarFile::from_bytes(data);
+                        println!("Car file: {:?}", c);
+                    }
                 }
             }
         },

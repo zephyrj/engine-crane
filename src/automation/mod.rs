@@ -1,3 +1,5 @@
+pub mod car;
+
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use directories::UserDirs;
