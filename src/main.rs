@@ -20,9 +20,9 @@ along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
 */
 mod assetto_corsa;
 mod steam;
-mod beam_ng;
 mod automation;
 mod ui;
+mod beam_ng;
 
 use std::ffi::OsString;
 use std::path::Path;
