@@ -1,3 +1,5 @@
+pub mod jbeam;
+
 use std::ffi::OsString;
 use std::{error, fs, io};
 use std::collections::HashMap;
@@ -63,7 +65,7 @@ pub fn get_mod_list() -> Option<Vec<OsString>> {
     Some(mods)
 }
 
-pub fn extract_data(mod_path: &OsString) -> Option<HashMap<String, Vec<u8>>> {
+pub fn extract_mod_data(mod_path: &OsString) -> Option<HashMap<String, Vec<u8>>> {
     let zipfile = std::fs::File::open(mod_path).unwrap();
     let mut archive = zip::ZipArchive::new(zipfile).unwrap();
     let filenames: Vec<String> = archive.file_names().map(|filename| {

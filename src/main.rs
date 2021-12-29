@@ -27,6 +27,7 @@ mod beam_ng;
 use std::ffi::OsString;
 use std::path::Path;
 
+
 // -> Result<(), iced::Error>
 fn main()  {
     //ui::launch()
@@ -36,12 +37,15 @@ fn main()  {
             println!("Found BeamNG mods:");
             for beam_mod in list {
                 println!("{}", Path::new(beam_mod.as_os_str()).display());
-                let x = beam_ng::extract_data(&beam_mod).unwrap();
+                let x = beam_ng::extract_mod_data(&beam_mod).unwrap();
                 for (filename, data) in x {
                     println!("{}: {:x?}", filename, data);
                     if filename.ends_with(".car") {
                         let c = automation::car::CarFile::from_bytes(data);
                         println!("Car file: {:?}", c);
+                    } else if filename.ends_with(".jbeam") {
+                        let jbeam_data = beam_ng::jbeam::from_slice(&*data).unwrap();
+                        println!("inertia: {:?}", jbeam_data["Camso_Engine"].as_object().unwrap()["mainEngine"].as_object().unwrap()["inertia"]);
                     }
                 }
             }
