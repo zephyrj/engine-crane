@@ -1,4 +1,5 @@
 pub mod car;
+pub mod sandbox;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -16,12 +17,6 @@ pub fn is_installed() -> bool {
     }
 }
 
-pub fn get_sandbox_db_path() -> Option<OsString> {
-    let sandbox_path = UserDirs::new()?.document_dir()?.join(PathBuf::from_iter(["My Games", "Automation", "Sandbox_openbeta.db"]));
-    match sandbox_path.is_file() {
-        true => Some(sandbox_path.into_os_string()),
-        false => None
-    }
-}
+
 
 
