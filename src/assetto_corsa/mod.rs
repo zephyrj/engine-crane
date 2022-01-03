@@ -17,7 +17,7 @@ pub const STEAM_GAME_NAME: &str = "assettocorsa";
 pub const STEAM_GAME_ID: i64 = 244210;
 
 pub fn is_installed() -> bool {
-    if let Some(install_path) = steam::get_install_path(STEAM_GAME_NAME) {
+    if let Some(install_path) = steam::get_game_install_path(STEAM_GAME_NAME) {
         install_path.is_dir()
     } else {
         false
@@ -25,7 +25,7 @@ pub fn is_installed() -> bool {
 }
 
 pub fn get_installed_cars_path() -> Option<PathBuf> {
-    if let Some(mut install_path) = steam::get_install_path(STEAM_GAME_NAME) {
+    if let Some(mut install_path) = steam::get_game_install_path(STEAM_GAME_NAME) {
         for path in ["content", "cars"] {
             install_path.push(path)
         }

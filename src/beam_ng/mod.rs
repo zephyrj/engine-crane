@@ -16,7 +16,7 @@ pub const STEAM_GAME_ID: i64 = 284160;
 pub fn get_mod_path() -> Option<PathBuf> {
     let mut mod_path_buf: PathBuf = BaseDirs::new().unwrap().cache_dir().to_path_buf();
     mod_path_buf.push(STEAM_GAME_NAME);
-    match steam::get_install_path(STEAM_GAME_NAME) {
+    match steam::get_game_install_path(STEAM_GAME_NAME) {
         Some(_) => {
             let mut link_path = mod_path_buf.clone();
             link_path.push("latest.lnk");
