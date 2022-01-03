@@ -13,6 +13,7 @@ use crate::steam;
 pub const STEAM_GAME_NAME: &str = "BeamNG.drive";
 pub const STEAM_GAME_ID: i64 = 284160;
 
+#[cfg(target_os = "windows")]
 pub fn get_mod_path() -> Option<PathBuf> {
     let mut mod_path_buf: PathBuf = BaseDirs::new().unwrap().cache_dir().to_path_buf();
     mod_path_buf.push(STEAM_GAME_NAME);
@@ -32,6 +33,16 @@ pub fn get_mod_path() -> Option<PathBuf> {
         None => {}
     }
     mod_path_buf.push("mods");
+    Some(mod_path_buf)
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_mod_path() -> Option<PathBuf> {
+    use crate::automation;
+    let mut mod_path_buf: PathBuf = steam::get_wine_prefix_dir(automation::STEAM_GAME_ID)?;
+    for path in ["users", "steamuser", "AppData", "Local", "BeamNG.drive", "mods"] {
+        mod_path_buf.push(path);
+    }
     Some(mod_path_buf)
 }
 
