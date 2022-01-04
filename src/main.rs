@@ -60,6 +60,12 @@ fn main()  {
         return;
     }
 
+    if let Some(variants) = automation::sandbox::get_engine_names() {
+        for name in variants {
+            println!("Found variant: {}", name);
+        }
+    }
+
     println!("BeamNG mod folder resolved to {}", beam_ng::get_mod_path().unwrap().display());
     match beam_ng::get_mod_list() {
         Some(list) => {

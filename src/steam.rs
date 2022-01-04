@@ -65,3 +65,15 @@ pub fn get_wine_documents_dir(game_id: i64) -> Option<PathBuf> {
     }
 }
 
+#[cfg(target_os = "linux")]
+pub fn get_wine_appdata_local_dir(game_id: i64) -> Option<PathBuf> {
+    if let Some(mut install_path) = get_wine_prefix_dir(game_id) {
+        for path in ["users", "steamuser", "AppData", "Local"] {
+            install_path.push(path);
+        }
+        Some(install_path)
+    } else {
+        None
+    }
+}
+
