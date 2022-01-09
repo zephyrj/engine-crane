@@ -91,4 +91,9 @@ fn main()  {
 
     let sandox_str = automation::sandbox::get_db_path().unwrap();
     println!("Automation sandbox.db found at {}", Path::new(sandox_str.as_os_str()).display());
+
+    let eng_results = automation::sandbox::load_engines();
+    for (uuid, eng) in eng_results {
+        println!("Found engine: {:?}", eng);
+    }
 }
