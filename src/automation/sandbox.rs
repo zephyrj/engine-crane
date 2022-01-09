@@ -188,6 +188,10 @@ impl EngineV1 {
         })
     }
 
+    pub fn friendly_name(&self) -> String {
+        format!("{} - {}", self.family_name, self.variant_name)
+    }
+
     fn decode_graph_data(row: &Row, graph_row_name: &str) -> rusqlite::Result<Vec<f64>> {
         let blob_packet = row.get_ref(graph_row_name)?.as_bytes()?;
         let data = &blob_packet[2..];
@@ -201,6 +205,12 @@ impl EngineV1 {
             cur_pos += 8;
         }
         Ok(out_vec)
+    }
+}
+
+impl std::fmt::Display for EngineV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.family_name, self.variant_name)
     }
 }
 

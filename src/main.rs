@@ -29,71 +29,71 @@ use std::path::Path;
 
 
 // -> Result<(), iced::Error>
-fn main()  {
-    //ui::launch()
+fn main() -> Result<(), iced::Error> {
+    ui::launch()
 
-    if assetto_corsa::is_installed() {
-        println!("Assetto Corsa is installed");
-        println!("Installed cars can be found at {}",
-                 assetto_corsa::get_installed_cars_path().unwrap().display())
-    } else {
-        println!("Assetto Corsa is not installed");
-        return;
-    }
-
-    for path in assetto_corsa::get_list_of_installed_cars().unwrap() {
-        let path_obj = Path::new(path.as_os_str());
-        if !path_obj.join("data").is_dir() {
-            continue;
-        }
-        println!("{}", path_obj.display());
-        let car = assetto_corsa::car::Car::load_from_path(Path::new(path.as_os_str())).unwrap();
-        println!("{:?}", car.ui_info.specs().unwrap());
-        println!("{:?}", car.ui_info.torque_curve().unwrap());
-        break;
-    }
-
-    if automation::is_installed() {
-        println!("Automation is installed");
-    } else {
-        println!("Automation is not installed");
-        return;
-    }
-
-    if let Some(variants) = automation::sandbox::get_engine_names() {
-        for name in variants {
-            println!("Found variant: {}", name);
-        }
-    }
-
-    println!("BeamNG mod folder resolved to {}", beam_ng::get_mod_path().unwrap().display());
-    match beam_ng::get_mod_list() {
-        Some(list) => {
-            println!("Found BeamNG mods:");
-            for beam_mod in list {
-                println!("{}", Path::new(beam_mod.as_os_str()).display());
-                let x = beam_ng::extract_mod_data(&beam_mod).unwrap();
-                for (filename, data) in x {
-                    println!("{}: {:x?}", filename, data);
-                    if filename.ends_with(".car") {
-                        let c = automation::car::CarFile::from_bytes(data);
-                        println!("Car file: {:?}", c);
-                    } else if filename.ends_with(".jbeam") {
-                        let jbeam_data = beam_ng::jbeam::from_slice(&*data).unwrap();
-                        println!("inertia: {:?}", jbeam_data["Camso_Engine"].as_object().unwrap()["mainEngine"].as_object().unwrap()["inertia"]);
-                    }
-                }
-            }
-        },
-        None => println!("No BeamNG mods found")
-    };
-
-
-    let sandox_str = automation::sandbox::get_db_path().unwrap();
-    println!("Automation sandbox.db found at {}", Path::new(sandox_str.as_os_str()).display());
-
-    let eng_results = automation::sandbox::load_engines();
-    for (uuid, eng) in eng_results {
-        println!("Found engine: {:?}", eng);
-    }
+    // if assetto_corsa::is_installed() {
+    //     println!("Assetto Corsa is installed");
+    //     println!("Installed cars can be found at {}",
+    //              assetto_corsa::get_installed_cars_path().unwrap().display())
+    // } else {
+    //     println!("Assetto Corsa is not installed");
+    //     return;
+    // }
+    //
+    // for path in assetto_corsa::get_list_of_installed_cars().unwrap() {
+    //     let path_obj = Path::new(path.as_os_str());
+    //     if !path_obj.join("data").is_dir() {
+    //         continue;
+    //     }
+    //     println!("{}", path_obj.display());
+    //     let car = assetto_corsa::car::Car::load_from_path(Path::new(path.as_os_str())).unwrap();
+    //     println!("{:?}", car.ui_info.specs().unwrap());
+    //     println!("{:?}", car.ui_info.torque_curve().unwrap());
+    //     break;
+    // }
+    //
+    // if automation::is_installed() {
+    //     println!("Automation is installed");
+    // } else {
+    //     println!("Automation is not installed");
+    //     return;
+    // }
+    //
+    // if let Some(variants) = automation::sandbox::get_engine_names() {
+    //     for name in variants {
+    //         println!("Found variant: {}", name);
+    //     }
+    // }
+    //
+    // println!("BeamNG mod folder resolved to {}", beam_ng::get_mod_path().unwrap().display());
+    // match beam_ng::get_mod_list() {
+    //     Some(list) => {
+    //         println!("Found BeamNG mods:");
+    //         for beam_mod in list {
+    //             println!("{}", Path::new(beam_mod.as_os_str()).display());
+    //             let x = beam_ng::extract_mod_data(&beam_mod).unwrap();
+    //             for (filename, data) in x {
+    //                 println!("{}: {:x?}", filename, data);
+    //                 if filename.ends_with(".car") {
+    //                     let c = automation::car::CarFile::from_bytes(data);
+    //                     println!("Car file: {:?}", c);
+    //                 } else if filename.ends_with(".jbeam") {
+    //                     let jbeam_data = beam_ng::jbeam::from_slice(&*data).unwrap();
+    //                     println!("inertia: {:?}", jbeam_data["Camso_Engine"].as_object().unwrap()["mainEngine"].as_object().unwrap()["inertia"]);
+    //                 }
+    //             }
+    //         }
+    //     },
+    //     None => println!("No BeamNG mods found")
+    // };
+    //
+    //
+    // let sandox_str = automation::sandbox::get_db_path().unwrap();
+    // println!("Automation sandbox.db found at {}", Path::new(sandox_str.as_os_str()).display());
+    //
+    // let eng_results = automation::sandbox::load_engines();
+    // for (uuid, eng) in eng_results {
+    //     println!("Found engine: {:?}", eng);
+    // }
 }
