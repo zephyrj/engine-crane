@@ -26,6 +26,7 @@ impl error::Error for Error {}
 pub enum ErrorKind {
     InvalidCar,
     NotInstalled,
+    InvalidEngineMetadata,
     Uncategorized
 }
 
@@ -34,6 +35,7 @@ impl ErrorKind {
         match self {
             ErrorKind::InvalidCar => "invalid car",
             ErrorKind::NotInstalled => "not installed",
+            ErrorKind::InvalidEngineMetadata => "engine metadata is invalid",
             ErrorKind::Uncategorized => "uncategorized error"
         }
     }
