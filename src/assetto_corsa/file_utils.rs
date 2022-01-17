@@ -1,8 +1,10 @@
+use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::fmt;
 use std::fs::File;
 use std::ops::Add;
 use std::path::Path;
+use std::rc::Rc;
 use std::str::FromStr;
 use configparser::ini::Ini;
 
@@ -18,6 +20,18 @@ pub fn load_ini_file(ini_path: &Path) -> Result<Ini, String> {
         }
     }
 }
+
+pub fn load_ini_file_rc(ini_path: &Path) -> Result<Rc<RefCell<Ini>>, String> {
+    let mut ini = Rc::new(RefCell::new(Ini::new()));
+    match ini.borrow_mut().load(ini_path) {
+        Err(err_str) =>  {
+            return Err(format!("Failed to decode {}: {}", ini_path.display(), err_str));
+        },
+        _ => {}
+    };
+    Ok(ini)
+}
+
 
 pub fn load_lut<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
 where

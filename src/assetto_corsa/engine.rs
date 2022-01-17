@@ -1,14 +1,19 @@
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::{fs, io};
+use std::cell::RefCell;
 use std::fs::File;
+use std::pin::Pin;
+use std::marker::PhantomPinned;
+use std::ptr::NonNull;
 use std::path::Path;
+use std::rc::{Rc, Weak};
 use configparser::ini::Ini;
 use toml::Value;
 use toml::value::Table;
 use crate::assetto_corsa::engine::Source::{AssettoCorsa, Automation};
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
-use crate::assetto_corsa::file_utils::{load_ini_file, load_lut};
+use crate::assetto_corsa::file_utils::{load_ini_file, load_ini_file_rc, load_lut};
 
 
 struct UiData {
@@ -202,8 +207,26 @@ struct FuelConsumptionFlowRate {
 }
 
 struct Power {
-    rpm_curve: Vec<i32>,
-    torque_curve: Vec<i32>
+    lut_path: OsString,
+    torque_curve: Vec<(i32, i32)>
+}
+
+impl Power {
+    fn load_from_lut(lut_path: &Path) -> Result<Power> {
+        Ok(Power {
+            lut_path: OsString::from(lut_path.as_os_str()),
+            torque_curve: match load_lut::<i32, i32>(lut_path) {
+                Ok(vec) => { vec },
+                Err(err_str) => {
+                    return Err(Error::new(ErrorKind::InvalidCar, err_str ));
+                }
+            }
+        })
+    }
+
+    fn torque_curve(&self) -> &Vec<(i32, i32)> {
+        &self.torque_curve
+    }
 }
 
 enum CoastSource {
@@ -254,22 +277,54 @@ struct TurboSection {
 }
 
 struct Turbo {
-    rpm_curve: Vec<i32>,
-    boost_curve: Vec<f64>,
+    ini_data: Weak<RefCell<Ini>>,
     sections: Vec<TurboSection>
 }
 
+impl Turbo {
+    fn load_from_ini_data(ini: &Rc<RefCell<Ini>>) -> Result<Option<Turbo>> {
+        {
+            let ini_ref = ini.borrow();
+            let map_ref = ini_ref.get_map_ref();
+            if !map_ref.contains_key("TURBO_0") {
+                return Ok(None);
+            }
+        }
+        Ok(Some(Turbo{
+            ini_data: Rc::downgrade(ini),
+            sections: vec![]
+        }))
+    }
+}
+
 struct Engine {
-    ini_data: Ini
+    data_dir: OsString,
+    ini_data: Rc<RefCell<Ini>>,
+    metadata: Option<Metadata>,
+    turbo: Option<Turbo>
 }
 
 impl Engine {
+    const INI_FILENAME: &'static str = "engine.ini";
+
     fn load_from_dir(data_dir: &OsStr) -> Result<Engine> {
-        Ok(Engine{ini_data: match load_ini_file(Path::new(data_dir).join("engine.ini").as_path()) {
-            Ok(ini_object) => { ini_object }
-            Err(err_str) => {
-                return Err(Error::new(ErrorKind::InvalidCar, err_str ))
-            }
-        }})
+        let eng = Engine {
+            data_dir: OsString::from(data_dir),
+            ini_data: match load_ini_file_rc(Path::new(data_dir).join(Engine::INI_FILENAME).as_path()) {
+                Ok(ini_object) => { ini_object }
+                Err(err_str) => {
+                    return Err(Error::new(ErrorKind::InvalidCar, err_str ))
+                }},
+            metadata: match Metadata::load_from_dir(data_dir) {
+                Ok(metadata_opt) => { metadata_opt }
+                Err(e) => {
+                    println!("Warning: Failed to load engine metadata");
+                    println!("{}", e.to_string());
+                    None
+                }
+            },
+            turbo: None,
+        };
+        Ok(eng)
     }
 }
