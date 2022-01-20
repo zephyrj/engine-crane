@@ -3,9 +3,6 @@ use std::ffi::{OsStr, OsString};
 use std::{fs, io};
 use std::cell::RefCell;
 use std::fs::File;
-use std::pin::Pin;
-use std::marker::PhantomPinned;
-use std::ptr::NonNull;
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use configparser::ini::Ini;
@@ -265,15 +262,47 @@ struct TurboControllers {
 }
 
 struct TurboSection {
-    lag_dn: f64,
-    lag_up: f64,
-    max_boost: f64,
-    wastegate: f64,
-    display_max_boost: f64,
-    reference_rpm: i32,
-    gamma: f64,
-    cockpit_adjustable: i32,
+    index: isize,
+    ini_data: Weak<RefCell<Ini>>,
     controllers: Option<TurboControllers>
+}
+
+impl TurboSection {
+    pub fn get_ini_section_name(&self) -> String {
+        format!("TURBO_{}", self.index)
+    }
+
+    pub fn lag_dn(&self) -> Option<f64> {
+        get_value(&self.ini_data,&self.get_ini_section_name(), "LAG_DN")
+    }
+
+    pub fn lag_up(&self) -> Option<f64> {
+        get_value(&self.ini_data,&self.get_ini_section_name(), "LAG_UP")
+    }
+
+    pub fn max_boost(&self) -> Option<f64> {
+        get_value(&self.ini_data,&self.get_ini_section_name(), "MAX_BOOST")
+    }
+
+    pub fn wastegate(&self) -> Option<f64> {
+        get_value(&self.ini_data,&self.get_ini_section_name(), "WASTEGATE")
+    }
+
+    pub fn display_max_boost(&self) -> Option<f64> {
+        get_value(&self.ini_data,&self.get_ini_section_name(), "DISPLAY_MAX_BOOST")
+    }
+
+    pub fn reference_rpm(&self) -> Option<i32> {
+        get_value(&self.ini_data,&self.get_ini_section_name(), "REFERENCE_RPM")
+    }
+
+    pub fn gamma(&self) -> Option<f64> {
+        get_value(&self.ini_data,&self.get_ini_section_name(), "GAMMA")
+    }
+
+    pub fn cockpit_adjustable(&self) -> Option<f64> {
+        get_value(&self.ini_data,&self.get_ini_section_name(), "COCKPIT_ADJUSTABLE")
+    }
 }
 
 struct Turbo {
@@ -292,8 +321,33 @@ impl Turbo {
         }
         Ok(Some(Turbo{
             ini_data: Rc::downgrade(ini),
-            sections: vec![]
+            sections: vec![
+                TurboSection { index: 0, ini_data: Rc::downgrade(ini), controllers: None }]
         }))
+    }
+
+    pub fn boost_threshold(&self) -> Option<f64> {
+        get_value(&self.ini_data,"DAMAGE", "TURBO_BOOST_THRESHOLD")
+    }
+
+    pub fn turbo_damage_k(&self) -> Option<i32> {
+        get_value(&self.ini_data,"DAMAGE", "TURBO_DAMAGE_K")
+    }
+
+    pub fn pressure_threshold(&self) -> Option<f64> {
+        get_value(&self.ini_data,"BOV", "PRESSURE_THRESHOLD")
+    }
+}
+
+fn get_value<T: std::str::FromStr>(ini_data: &Weak<RefCell<Ini>>,
+                                   section: &str,
+                                   key: &str) -> Option<T> {
+    let ini = ini_data.upgrade()?;
+    let ini_ref = ini.borrow();
+    let item = ini_ref.get(section, key)?;
+    match item.parse::<T>() {
+        Ok(val) => { Some(val) }
+        Err(_) => { None }
     }
 }
 
