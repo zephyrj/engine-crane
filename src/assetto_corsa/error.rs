@@ -27,6 +27,7 @@ pub enum ErrorKind {
     InvalidCar,
     NotInstalled,
     InvalidEngineMetadata,
+    InvalidEngineTurboController,
     Uncategorized
 }
 
@@ -36,7 +37,30 @@ impl ErrorKind {
             ErrorKind::InvalidCar => "invalid car",
             ErrorKind::NotInstalled => "not installed",
             ErrorKind::InvalidEngineMetadata => "engine metadata is invalid",
+            ErrorKind::InvalidEngineTurboController => "engine turbo controller is invalid",
             ErrorKind::Uncategorized => "uncategorized error"
         }
     }
 }
+
+#[derive(Debug)]
+pub struct FieldParseError {
+    invalid_value: String
+}
+
+impl FieldParseError {
+    pub fn new(invalid_value: &str) -> FieldParseError {
+        FieldParseError {
+            invalid_value: String::from(invalid_value)
+        }
+    }
+}
+
+impl Display for FieldParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unknown value '{}'", &self.invalid_value)
+    }
+}
+
+impl error::Error for FieldParseError {}
+
