@@ -2,6 +2,8 @@ mod error;
 pub mod car;
 mod engine;
 mod file_utils;
+mod lut_utils;
+mod ini_utils;
 
 use std::collections::HashMap;
 use std::fs;
