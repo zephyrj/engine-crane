@@ -4,6 +4,7 @@ mod engine;
 mod file_utils;
 mod lut_utils;
 mod ini_utils;
+mod drivetrain;
 
 use std::collections::HashMap;
 use std::fs;

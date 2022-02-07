@@ -627,7 +627,6 @@ mod tests {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/a1_science_car/data");
         match Engine::load_from_dir(&path) {
             Ok(_) => {
-
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }

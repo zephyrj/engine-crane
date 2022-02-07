@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use configparser::ini::Ini;
 use serde_json::Value;
+use crate::assetto_corsa::drivetrain::Drivetrain;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::engine::{Engine};
 use crate::assetto_corsa::ini_utils;
@@ -211,7 +212,8 @@ pub struct Car {
     root_path: OsString,
     ini_config: Ini,
     pub ui_info: UiInfo,
-    engine: Engine
+    engine: Engine,
+    drivetrain: Drivetrain
 }
 
 impl Car {
@@ -253,6 +255,7 @@ impl Car {
             ini_config: Ini::new(),
             ui_info,
             engine: Engine::load_from_dir(car_folder_path.join("data").as_path())?,
+            drivetrain: Drivetrain::load_from_path(car_folder_path.join("data").as_path())?
         };
         let car_ini_path = car_folder_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
         match car.ini_config.load(car_ini_path.as_path()) {
