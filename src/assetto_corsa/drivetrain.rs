@@ -56,13 +56,7 @@ impl ToString for DriveType {
     }
 }
 
-
 #[derive(Debug)]
-pub struct Drivetrain {
-    data_dir: OsString,
-    ini_data: Ini
-}
-
 pub struct Gearbox {
     gear_count: i32,
     reverse_gear_ratio: f64,
@@ -75,13 +69,6 @@ pub struct Gearbox {
     valid_shift_rpm_window: i32,
     controls_window_gain: f64,
     inertia: f64
-}
-
-fn mandatory_field_error(section: &str, key: &str) -> Error {
-    return Error::new(
-        ErrorKind::InvalidCar,
-        format!("Missing {}.{} in {}", section, key, Drivetrain::INI_FILENAME)
-    )
 }
 
 impl Gearbox {
@@ -150,6 +137,100 @@ impl Gearbox {
     }
 }
 
+#[derive(Debug)]
+pub struct Differential {
+    power: f64,
+    coast: f64,
+    preload: i32
+}
+
+impl Differential {
+    pub fn load_from_ini(ini_data: &Ini) -> Result<Differential> {
+        let power = match ini_utils::get_value(ini_data, "DIFFERENTIAL", "POWER") {
+            Some(val) => val,
+            None => { return Err(mandatory_field_error("DIFFERENTIAL", "POWER")); }
+        };
+        let coast = match ini_utils::get_value(ini_data, "DIFFERENTIAL", "COAST") {
+            Some(val) => val,
+            None => { return Err(mandatory_field_error("DIFFERENTIAL", "COAST")); }
+        };
+        let preload = match ini_utils::get_value(ini_data, "DIFFERENTIAL", "PRELOAD") {
+            Some(val) => val,
+            None => { return Err(mandatory_field_error("DIFFERENTIAL", "PRELOAD")); }
+        };
+        Ok(Differential{ power, coast, preload })
+    }
+}
+
+#[derive(Debug)]
+pub struct ShiftProfile {
+    name: String,
+    points: Vec<i32>
+}
+
+impl ShiftProfile {
+    pub fn load_from_ini(ini_data: &Ini, name: &str) -> Result<ShiftProfile> {
+        let name = String::from(name);
+        let mut points = Vec::new();
+        for idx in 0..3 {
+            let point_name = format!("POINT_{}", idx);
+            points.push(match ini_utils::get_value(ini_data, &name, &point_name) {
+                Some(val) => val,
+                None => { return Err(mandatory_field_error(&name, &point_name)); }
+            });
+        }
+        Ok(ShiftProfile { name, points })
+    }
+}
+
+pub struct AutoClutch {
+    upshift_profile: Option<ShiftProfile>,
+    downshift_profile: Option<ShiftProfile>,
+    use_on_changes: i32,
+    min_rpm: i32,
+    max_rpm: i32,
+    forced_on: i32
+}
+
+impl AutoClutch {
+    pub fn load_from_ini(ini_data: &Ini) -> Result<AutoClutch> {
+        let upshift_profile = AutoClutch::load_shift_profile(ini_data, "UPSHIFT_PROFILE")?;
+        let downshift_profile = AutoClutch::load_shift_profile(ini_data, "DOWNSHIFT_PROFILE")?;
+        let use_on_changes = get_mandatory_field(ini_data, "AUTOCLUTCH", "USE_ON_CHANGES")?;
+        let min_rpm = get_mandatory_field(ini_data, "AUTOCLUTCH", "MIN_RPM")?;
+        let max_rpm = get_mandatory_field(ini_data, "AUTOCLUTCH", "MAX_RPM")?;
+        let forced_on = get_mandatory_field(ini_data, "AUTOCLUTCH", "FORCED_ON")?;
+
+        Ok(AutoClutch {
+            upshift_profile,
+            downshift_profile,
+            use_on_changes,
+            min_rpm,
+            max_rpm,
+            forced_on
+        })
+    }
+
+    fn load_shift_profile(ini_data: &Ini, key_name: &str) -> Result<Option<ShiftProfile>> {
+        if let Some(profile_name) = ini_utils::get_value(ini_data, "AUTOCLUTCH", key_name) {
+            let section_name: String = profile_name;
+            if section_name.to_lowercase() != "none" {
+                return match ShiftProfile::load_from_ini(ini_data, &section_name) {
+                    Ok(prof) => { Ok(Some(prof)) },
+                    Err(_) => { return Err(mandatory_field_error(key_name, &section_name)); }
+                }
+            }
+        }
+        Ok(None)
+    }
+}
+
+#[derive(Debug)]
+pub struct Drivetrain {
+    data_dir: OsString,
+    ini_data: Ini
+}
+
 impl Drivetrain {
     const INI_FILENAME: &'static str = "drivetrain.ini";
 
@@ -173,6 +254,29 @@ impl Drivetrain {
     pub fn gearbox(&self) -> Result<Gearbox> {
         Gearbox::load_from_ini(&self.ini_data)
     }
+
+    pub fn differential(&self) -> Result<Differential> {
+        Differential::load_from_ini(&self.ini_data)
+    }
+
+    pub fn auto_clutch(&self) -> Result<AutoClutch> {
+        AutoClutch::load_from_ini(&self.ini_data)
+    }
+}
+
+fn get_mandatory_field<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> Result<T> {
+    let res: T = match ini_utils::get_value(ini_data, section_name, key) {
+        Some(val) => val,
+        None => { return Err(mandatory_field_error(section_name, key)); }
+    };
+    Ok(res)
+}
+
+fn mandatory_field_error(section: &str, key: &str) -> Error {
+    return Error::new(
+        ErrorKind::InvalidCar,
+        format!("Missing {}.{} in {}", section, key, Drivetrain::INI_FILENAME)
+    )
 }
 
 #[cfg(test)]
@@ -188,6 +292,8 @@ mod tests {
         match Drivetrain::load_from_path(&path) {
             Ok(drivetrain) => {
                 let gearbox = drivetrain.gearbox().unwrap();
+                let differential = drivetrain.differential().unwrap();
+                let auto_clutch = drivetrain.auto_clutch().unwrap();
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }
