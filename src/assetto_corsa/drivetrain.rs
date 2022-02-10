@@ -73,54 +73,21 @@ pub struct Gearbox {
 
 impl Gearbox {
     pub fn load_from_ini(ini_data: &Ini) -> Result<Gearbox> {
-        let gear_count = match ini_utils::get_value(ini_data, "GEARS", "COUNT") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARS", "COUNT")); }
-        };
+        let gear_count = get_mandatory_field(ini_data, "GEARS", "COUNT")?;
         let mut gear_ratios = Vec::new();
         for gear_num in 1..gear_count+1 {
             let gear_key = format!("GEAR_{}", gear_num);
-            gear_ratios.push(match ini_utils::get_value(ini_data, "GEARS", gear_key.as_str()) {
-                Some(val) => val,
-                None => { return Err(mandatory_field_error("GEARS", gear_key.as_str())); }
-            });
+            gear_ratios.push(get_mandatory_field(ini_data, "GEARS", gear_key.as_str())?);
         }
-        let reverse_gear_ratio = match ini_utils::get_value(ini_data, "GEARS", "GEAR_R") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARS", "GEAR_R")); }
-        };
-        let final_gear_ratio = match ini_utils::get_value(ini_data, "GEARS", "FINAL") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARS", "FINAL")); }
-        };
-        let change_up_time = match ini_utils::get_value(ini_data, "GEARBOX", "CHANGE_UP_TIME") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARBOX", "CHANGE_UP_TIME")); }
-        };
-        let change_dn_time = match ini_utils::get_value(ini_data, "GEARBOX", "CHANGE_DN_TIME") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARBOX", "CHANGE_DN_TIME")); }
-        };
-        let auto_cutoff_time = match ini_utils::get_value(ini_data, "GEARBOX", "AUTO_CUTOFF_TIME") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARBOX", "AUTO_CUTOFF_TIME")); }
-        };
-        let supports_shifter = match ini_utils::get_value(ini_data, "GEARBOX", "SUPPORTS_SHIFTER") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARBOX", "SUPPORTS_SHIFTER")); }
-        };
-        let valid_shift_rpm_window = match ini_utils::get_value(ini_data, "GEARBOX", "VALID_SHIFT_RPM_WINDOW") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARBOX", "VALID_SHIFT_RPM_WINDOW")); }
-        };
-        let controls_window_gain = match ini_utils::get_value(ini_data, "GEARBOX", "CONTROLS_WINDOW_GAIN") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("GEARBOX", "CONTROLS_WINDOW_GAIN")); }
-        };
-        let inertia = match ini_utils::get_value(ini_data, "GEARBOX", "INERTIA") {
-            Some(val) => val,
-            None => { 0.02 }
-        };
+        let reverse_gear_ratio = get_mandatory_field(ini_data, "GEARS", "GEAR_R")?;
+        let final_gear_ratio = get_mandatory_field(ini_data, "GEARS", "FINAL")?;
+        let change_up_time = get_mandatory_field(ini_data, "GEARBOX", "CHANGE_UP_TIME")?;
+        let change_dn_time = get_mandatory_field(ini_data, "GEARBOX", "CHANGE_DN_TIME")?;
+        let auto_cutoff_time = get_mandatory_field(ini_data, "GEARBOX", "AUTO_CUTOFF_TIME")?;
+        let supports_shifter = get_mandatory_field(ini_data, "GEARBOX", "SUPPORTS_SHIFTER")?;
+        let valid_shift_rpm_window = get_mandatory_field(ini_data, "GEARBOX", "VALID_SHIFT_RPM_WINDOW")?;
+        let controls_window_gain = get_mandatory_field(ini_data, "GEARBOX", "CONTROLS_WINDOW_GAIN")?;
+        let inertia = get_mandatory_field(ini_data, "GEARBOX", "INERTIA")?;
         Ok(Gearbox {
             gear_count,
             reverse_gear_ratio,
@@ -146,18 +113,9 @@ pub struct Differential {
 
 impl Differential {
     pub fn load_from_ini(ini_data: &Ini) -> Result<Differential> {
-        let power = match ini_utils::get_value(ini_data, "DIFFERENTIAL", "POWER") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("DIFFERENTIAL", "POWER")); }
-        };
-        let coast = match ini_utils::get_value(ini_data, "DIFFERENTIAL", "COAST") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("DIFFERENTIAL", "COAST")); }
-        };
-        let preload = match ini_utils::get_value(ini_data, "DIFFERENTIAL", "PRELOAD") {
-            Some(val) => val,
-            None => { return Err(mandatory_field_error("DIFFERENTIAL", "PRELOAD")); }
-        };
+        let power = get_mandatory_field(ini_data, "DIFFERENTIAL", "POWER")?;
+        let coast = get_mandatory_field(ini_data, "DIFFERENTIAL", "COAST")?;
+        let preload = get_mandatory_field(ini_data, "DIFFERENTIAL", "PRELOAD")?;
         Ok(Differential{ power, coast, preload })
     }
 }
@@ -173,11 +131,7 @@ impl ShiftProfile {
         let name = String::from(name);
         let mut points = Vec::new();
         for idx in 0..3 {
-            let point_name = format!("POINT_{}", idx);
-            points.push(match ini_utils::get_value(ini_data, &name, &point_name) {
-                Some(val) => val,
-                None => { return Err(mandatory_field_error(&name, &point_name)); }
-            });
+            points.push(get_mandatory_field(ini_data, &name, &format!("POINT_{}", idx))?);
         }
         Ok(ShiftProfile { name, points })
     }
@@ -305,8 +259,8 @@ impl Drivetrain {
         })
     }
 
-    pub fn drive_type(&self) -> Option<DriveType> {
-        ini_utils::get_value(&self.ini_data, "TRACTION", "TYPE")
+    pub fn drive_type(&self) -> Result<DriveType> {
+        get_mandatory_field(&self.ini_data, "TRACTION", "TYPE")
     }
 
     pub fn gearbox(&self) -> Result<Gearbox> {
