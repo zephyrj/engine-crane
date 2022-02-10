@@ -263,6 +263,25 @@ impl AutoShifter {
     }
 }
 
+#[derive(Debug)]
+pub struct DownshiftProtection {
+    active: i32,
+    debug: i32,
+    overrev: i32,
+    lock_n: i32
+}
+
+impl DownshiftProtection {
+    pub fn load_from_ini(ini_data: &Ini) -> Result<DownshiftProtection> {
+        Ok(DownshiftProtection{
+            active: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "ACTIVE")?,
+            debug: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "DEBUG")?,
+            overrev: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "OVERREV")?,
+            lock_n: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "LOCK_N")?,
+        })
+    }
+}
+
 
 #[derive(Debug)]
 pub struct Drivetrain {
@@ -309,6 +328,10 @@ impl Drivetrain {
     pub fn auto_shifter(&self) -> Result<AutoShifter> {
         AutoShifter::load_from_ini(&self.ini_data)
     }
+
+    pub fn downshift_protection(&self) -> Result<DownshiftProtection> {
+        DownshiftProtection::load_from_ini(&self.ini_data)
+    }
 }
 
 fn get_mandatory_field<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> Result<T> {
@@ -343,6 +366,7 @@ mod tests {
                 let auto_clutch = drivetrain.auto_clutch().unwrap();
                 let auto_blip = drivetrain.auto_blip().unwrap();
                 let auto_shifter = drivetrain.auto_shifter().unwrap();
+                let downshift_protection = drivetrain.downshift_protection().unwrap();
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }
