@@ -239,13 +239,27 @@ impl AutoBlip {
         let level = get_mandatory_field(ini_data, "AUTOBLIP", "LEVEL")?;
         let mut points = Vec::new();
         for idx in 0..3 {
-            let point_name = format!("POINT_{}", idx);
-            points.push(match ini_utils::get_value(ini_data, "AUTOBLIP", &point_name) {
-                Some(val) => val,
-                None => { return Err(mandatory_field_error("AUTOBLIP", &point_name)); }
-            });
+            points.push(get_mandatory_field(ini_data, "AUTOBLIP", &format!("POINT_{}", idx))?);
         }
         Ok(AutoBlip{ electronic, points, level })
+    }
+}
+
+#[derive(Debug)]
+pub struct AutoShifter {
+    up: i32,
+    down: i32,
+    slip_threshold: f64,
+    gas_cutoff_time: f64
+}
+
+impl AutoShifter {
+    pub fn load_from_ini(ini_data: &Ini) -> Result<AutoShifter> {
+        let up = get_mandatory_field(ini_data, "AUTO_SHIFTER", "UP")?;
+        let down = get_mandatory_field(ini_data, "AUTO_SHIFTER", "DOWN")?;
+        let slip_threshold = get_mandatory_field(ini_data, "AUTO_SHIFTER", "SLIP_THRESHOLD")?;
+        let gas_cutoff_time = get_mandatory_field(ini_data, "AUTO_SHIFTER", "GAS_CUTOFF_TIME")?;
+        Ok(AutoShifter{ up, down, slip_threshold, gas_cutoff_time })
     }
 }
 
@@ -291,6 +305,10 @@ impl Drivetrain {
     pub fn auto_blip(&self) -> Result<AutoBlip> {
         AutoBlip::load_from_ini(&self.ini_data)
     }
+
+    pub fn auto_shifter(&self) -> Result<AutoShifter> {
+        AutoShifter::load_from_ini(&self.ini_data)
+    }
 }
 
 fn get_mandatory_field<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> Result<T> {
@@ -324,6 +342,7 @@ mod tests {
                 let differential = drivetrain.differential().unwrap();
                 let auto_clutch = drivetrain.auto_clutch().unwrap();
                 let auto_blip = drivetrain.auto_blip().unwrap();
+                let auto_shifter = drivetrain.auto_shifter().unwrap();
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }
