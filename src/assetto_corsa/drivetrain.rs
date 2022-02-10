@@ -183,6 +183,7 @@ impl ShiftProfile {
     }
 }
 
+#[derive(Debug)]
 pub struct AutoClutch {
     upshift_profile: Option<ShiftProfile>,
     downshift_profile: Option<ShiftProfile>,
@@ -226,6 +227,30 @@ impl AutoClutch {
 }
 
 #[derive(Debug)]
+pub struct AutoBlip {
+    electronic: i32,
+    points: Vec<i32>,
+    level: f64
+}
+
+impl AutoBlip {
+    pub fn load_from_ini(ini_data: &Ini) -> Result<AutoBlip> {
+        let electronic = get_mandatory_field(ini_data, "AUTOBLIP", "ELECTRONIC")?;
+        let level = get_mandatory_field(ini_data, "AUTOBLIP", "LEVEL")?;
+        let mut points = Vec::new();
+        for idx in 0..3 {
+            let point_name = format!("POINT_{}", idx);
+            points.push(match ini_utils::get_value(ini_data, "AUTOBLIP", &point_name) {
+                Some(val) => val,
+                None => { return Err(mandatory_field_error("AUTOBLIP", &point_name)); }
+            });
+        }
+        Ok(AutoBlip{ electronic, points, level })
+    }
+}
+
+
+#[derive(Debug)]
 pub struct Drivetrain {
     data_dir: OsString,
     ini_data: Ini
@@ -262,6 +287,10 @@ impl Drivetrain {
     pub fn auto_clutch(&self) -> Result<AutoClutch> {
         AutoClutch::load_from_ini(&self.ini_data)
     }
+
+    pub fn auto_blip(&self) -> Result<AutoBlip> {
+        AutoBlip::load_from_ini(&self.ini_data)
+    }
 }
 
 fn get_mandatory_field<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> Result<T> {
@@ -294,6 +323,7 @@ mod tests {
                 let gearbox = drivetrain.gearbox().unwrap();
                 let differential = drivetrain.differential().unwrap();
                 let auto_clutch = drivetrain.auto_clutch().unwrap();
+                let auto_blip = drivetrain.auto_blip().unwrap();
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }
