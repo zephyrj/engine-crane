@@ -11,7 +11,6 @@ use std::fs;
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-use configparser::ini::Ini;
 use serde_json::Value;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 

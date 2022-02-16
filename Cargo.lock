@@ -323,12 +323,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "configparser"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06821ea598337a8412cf47c5b71c3bc694a7f0aed188ac28b836fab164a2c202"
-
-[[package]]
 name = "copyless"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -695,11 +689,11 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 name = "engine-crane"
 version = "0.1.0"
 dependencies = [
- "configparser",
  "csv",
  "derive-new",
  "directories",
  "iced",
+ "indexmap",
  "parselnk",
  "rusqlite",
  "serde-hjson",
@@ -1418,9 +1412,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
+checksum = "282a6247722caba404c065016bbfa522806e51714c34f5dfc3e4a3a46fcb4223"
 dependencies = [
  "autocfg",
  "hashbrown 0.11.2",

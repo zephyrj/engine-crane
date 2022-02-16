@@ -5,12 +5,12 @@ use std::ffi::OsString;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use configparser::ini::Ini;
 use serde_json::Value;
 use crate::assetto_corsa::drivetrain::Drivetrain;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::engine::{Engine};
 use crate::assetto_corsa::ini_utils;
+use crate::assetto_corsa::ini_utils::Ini;
 
 #[derive(Debug)]
 pub enum CarVersion {
@@ -250,23 +250,19 @@ impl Car {
                                                       ui_info_path.display(),
                                                       e.to_string()))) }
         };
+        let car_ini_path = car_folder_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
         let mut car = Car {
             root_path: OsString::from(car_folder_path),
-            ini_config: Ini::new(),
+            ini_config: Ini::load_from_file(car_ini_path.as_path()).map_err(|err| {
+                Error::new(ErrorKind::InvalidCar,
+                           format!("Failed to decode {}: {}",
+                                   car_ini_path.display(),
+                                   err.to_string()))
+            })?,
             ui_info,
             engine: Engine::load_from_dir(car_folder_path.join("data").as_path())?,
             drivetrain: Drivetrain::load_from_path(car_folder_path.join("data").as_path())?
         };
-        let car_ini_path = car_folder_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
-        match car.ini_config.load(car_ini_path.as_path()) {
-            Err(err_str) =>  {
-                return Err(Error::new(ErrorKind::InvalidCar,
-                                      format!("Failed to decode {}: {}",
-                                              car_ini_path.display(),
-                                              err_str)))
-            },
-            _ => {}
-        }
         Ok(car)
     }
 }

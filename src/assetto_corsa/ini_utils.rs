@@ -1,9 +1,14 @@
 use std::cell::RefCell;
-use std::error;
+use std::{error, fs, io};
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::rc::Weak;
-use configparser::ini::Ini;
+
+use std::cmp::max;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Error;
+use std::path::Path;
+use indexmap::IndexMap;
 
 #[derive(Debug)]
 pub struct FieldTypeError {
@@ -44,9 +49,335 @@ pub fn get_value_from_weak_ref<T: std::str::FromStr>(ini_data: &Weak<RefCell<Ini
 pub fn get_value<T: std::str::FromStr>(ini: &Ini,
                                        section: &str,
                                        key: &str) -> Option<T> {
-    let item = ini.get(section, key)?;
+    let item = ini.get_value(section, key)?;
     match item.parse::<T>() {
         Ok(val) => { Some(val) }
         Err(_) => { None }
     }
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+struct Section {
+    name: String,
+    indentation: isize,
+    property_map: IndexMap<String, Property>,
+    name_comment: Option<Comment>,
+    comments: Vec<Comment>,
+    ordering: Vec<LineType>
+}
+
+impl Section {
+    pub fn new(name: String) -> Section {
+        Section {
+            name,
+            indentation: 0,
+            property_map: IndexMap::new(),
+            name_comment: None,
+            comments: Vec::new(),
+            ordering: Vec::new()
+        }
+    }
+
+    pub fn from_line(line: &str, comment_symbols: &HashSet<char>) -> Result<Section, String> {
+        return match line.find('[') {
+            None => {
+                Err(String::from("No opening '[' for section name found"))
+            }
+            Some(opening_bracket_pos) => {
+                match line.find(']') {
+                    None => {
+                        return Err(String::from("No closing ']' for section name found"));
+                    }
+                    Some(closing_bracket_pos) => {
+                        let name = String::from(&line[opening_bracket_pos + 1..closing_bracket_pos]);
+                        let mut name_comment = Comment::from_line(
+                            &line[closing_bracket_pos+1..], comment_symbols
+                        );
+                        Ok(Section {
+                            name,
+                            indentation: opening_bracket_pos as isize,
+                            property_map: IndexMap::new(),
+                            name_comment,
+                            comments: Vec::new(),
+                            ordering: Vec::new()
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get_property(&self, property_key: &str) -> Option<&Property> {
+        self.property_map.get(property_key)
+    }
+
+    pub fn add_property(&mut self, property: Property) {
+        self.property_map.insert(property.key.clone(), property);
+        self.ordering.push(LineType::KeyValue);
+    }
+
+    pub fn add_comment(&mut self, comment: Comment) {
+        self.comments.push(comment);
+        self.ordering.push(LineType::Comment);
+    }
+}
+
+impl ToString for Section {
+    fn to_string(&self) -> String {
+        let mut out = String::new();
+        if !self.name.is_empty() {
+            out += &format!("[{}]", &self.name);
+            if let Some(comment) = &self.name_comment {
+                out += &comment.to_string();
+            }
+            out += "\n";
+        }
+        let mut property_iter = self.property_map.values();
+        let mut comment_iter = self.comments.iter();
+
+        let kv_strings: Vec<String> = self.ordering.iter().filter_map(|line_type| {
+            return match line_type {
+                LineType::KeyValue => {
+                    Some(property_iter.next().unwrap().to_string())
+                }
+                LineType::Comment => {
+                    Some(comment_iter.next().unwrap().to_string())
+                }
+                LineType::Ignore | LineType::SectionName => {
+                    None
+                }
+            }
+        }).collect();
+        out += &kv_strings.join("\n");
+        out
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+struct Property {
+    key: String,
+    value: String,
+    indentation: Option<String>,
+    comment: Option<Comment>
+}
+
+impl Property {
+    pub fn from_line(line: &str, comment_symbols: &HashSet<char>) -> Result<Property, String> {
+        return match line.find(char::is_alphanumeric) {
+            None => { Err(String::from("Cannot find valid property name")) }
+            Some(key_start_pos) => {
+                let mut indentation = None;
+                if key_start_pos > 0 {
+                    indentation = Some(String::from(&line[..key_start_pos]));
+                }
+
+                match line.find("=") {
+                    None => { Err(String::from("Cannot find valid property value")) }
+                    Some(delimiter_pos) => {
+                        let key = String::from(&line[key_start_pos..delimiter_pos]);
+                        let mut value = String::new();
+                        let mut comment = None;
+                        match line.find(|c: char| comment_symbols.contains(&c)) {
+                            None => {
+                                value += &line[delimiter_pos+1..].trim();
+                            }
+                            Some(comment_start_pos) => {
+                                value += &line[delimiter_pos+1..comment_start_pos].trim();
+                                comment = Comment::from_line(
+                                    &line[delimiter_pos+1+value.len()..],
+                                    comment_symbols
+                                );
+                            }
+                        }
+                        Ok(Property{ key, value, indentation, comment })
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get_value(&self) -> String {
+        self.value.clone()
+    }
+}
+
+impl ToString for Property {
+    fn to_string(&self) -> String {
+        let mut out = String::new();
+        if let Some(indentation) = &self.indentation {
+            out += indentation;
+        }
+        out += &self.key;
+        out += "=";
+        out += &self.value;
+        if let Some(comment) = &self.comment {
+            out += &comment.to_string();
+        }
+        out
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
+struct Comment {
+    symbol: String,
+    value: String,
+    indentation: Option<String>
+}
+
+impl Comment {
+    pub fn from_line(line: &str, comment_symbols: &HashSet<char>) -> Option<Comment> {
+        return match line.match_indices(|c: char| comment_symbols.contains(&c)).next() {
+            None => None,
+            Some((idx, matched_char)) => {
+                let mut indentation = None;
+                if idx > 0 { indentation = Some(String::from(&line[..idx])); }
+                Some(Comment{
+                    symbol: String::from(matched_char),
+                    value: String::from(&line[idx+1..]),
+                    indentation
+                })
+            }
+        }
+    }
+}
+
+impl ToString for Comment {
+    fn to_string(&self) -> String {
+        let mut out = String::new();
+        if let Some(indentation) = &self.indentation {
+            out += indentation;
+        }
+        out += &self.symbol;
+        out += &self.value;
+        out
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub (crate) enum LineType {
+    SectionName,
+    KeyValue,
+    Comment,
+    Ignore
+}
+
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Ini {
+    sections: IndexMap<String, Section>,
+    comment_symbols: HashSet<char>,
+}
+
+impl Ini {
+    const TOP_LEVEL: &'static str = "topLevel";
+
+    pub fn new() -> Ini {
+        Ini {
+            sections: IndexMap::new(),
+            comment_symbols: HashSet::from([';', '#'])
+        }
+    }
+
+    pub fn load_from_file(path: &Path) -> io::Result<Ini> {
+        let mut ini = Ini::new();
+        ini.parse(fs::read_to_string(path)?);
+        Ok(ini)
+    }
+
+    pub fn parse(&mut self, input: String) {
+        let mut current_section= Section::new(String::from(""));
+        for (num, line) in input.lines().enumerate() {
+            match self.get_expected_line_type(line) {
+                LineType::SectionName => {
+                    self.finish_section(current_section);
+                    current_section = Section::from_line(line, &self.comment_symbols).unwrap();
+                }
+                LineType::KeyValue => {
+                    current_section.add_property(
+                        Property::from_line(line, &self.comment_symbols).unwrap()
+                    );
+                }
+                LineType::Comment => {
+                    current_section.add_comment(
+                        Comment::from_line(line, &self.comment_symbols).unwrap()
+                    );
+                }
+                LineType::Ignore => {}
+            }
+        }
+        self.finish_section(current_section)
+    }
+
+    pub fn get_value(&self, section_name: &str, property_name: &str) -> Option<String> {
+        Some(self.sections.get(section_name)?.get_property(property_name)?.get_value())
+    }
+
+    pub fn contains_section(&self, name: &str) -> bool {
+        self.sections.contains_key(name)
+    }
+
+    fn finish_section(&mut self, section: Section) {
+        let mut key = String::new();
+        if section.name.is_empty() {
+            key = String::from(Ini::TOP_LEVEL);
+        } else {
+            key = section.name.clone();
+        }
+        self.sections.insert(key, section);
+    }
+
+    /// Essentially "what delimiting character comes first?"
+    fn get_expected_line_type(&self, line: &str) -> LineType {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return LineType::Ignore;
+        }
+
+        let comment_opt = self.find_comment_start(trimmed);
+        if let Some(section_start_pos) = self.find_section_start(trimmed) {
+            if let Some(kv_delimiter_pos) = self.find_key_value_delimiter(trimmed) {
+                if kv_delimiter_pos < section_start_pos {
+                    if let Some(comment_start_index) = comment_opt {
+                        if comment_start_index < kv_delimiter_pos {
+                            return LineType::Comment
+                        }
+                    }
+                    return LineType::KeyValue
+                }
+            }
+            if let Some(comment_start_pos) = comment_opt {
+                if comment_start_pos < section_start_pos {
+                    return LineType::Comment
+                }
+            }
+            return LineType::SectionName
+        }
+        if let Some(kv_delimiter_pos) = self.find_key_value_delimiter(trimmed) {
+            if let Some(comment_start_pos) = comment_opt {
+                if comment_start_pos < kv_delimiter_pos {
+                    return LineType::Comment
+                }
+            }
+            return LineType::KeyValue
+        }
+        return match comment_opt {
+            None => { LineType::Ignore }
+            Some(_) => { LineType::Comment }
+        };
+    }
+
+    fn find_comment_start(&self, line: &str) -> Option<usize> {
+        line.find(|c: char| self.comment_symbols.contains(&c))
+    }
+
+    fn find_section_start(&self, line: &str) -> Option<usize> {
+        line.find('[')
+    }
+
+    fn find_key_value_delimiter(&self, line: &str) -> Option<usize> {
+        line.find("=")
+    }
+}
+
+
+

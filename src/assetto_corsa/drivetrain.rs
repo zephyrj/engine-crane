@@ -4,10 +4,10 @@ use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
-use configparser::ini::Ini;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::ini_utils;
+use crate::assetto_corsa::ini_utils::Ini;
 
 
 pub enum DriveType {
@@ -249,8 +249,8 @@ impl Drivetrain {
     pub fn load_from_path(data_dir: &Path) -> Result<Drivetrain> {
         let ini_data = match load_ini_file(data_dir.join(Drivetrain::INI_FILENAME).as_path()) {
             Ok(ini_object) => { ini_object }
-            Err(err_str) => {
-                return Err(Error::new(ErrorKind::InvalidCar, err_str ));
+            Err(err) => {
+                return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
             }
         };
         Ok(Drivetrain {
@@ -259,8 +259,18 @@ impl Drivetrain {
         })
     }
 
+    pub fn write(&mut self) -> std::io::Result<()> {
+        Ok(())
+        //self.ini_data.write(Path::new(&self.data_dir).join(Drivetrain::INI_FILENAME))
+    }
+
     pub fn drive_type(&self) -> Result<DriveType> {
         get_mandatory_field(&self.ini_data, "TRACTION", "TYPE")
+    }
+
+    pub fn set_drive_type(&mut self, drive_type: DriveType) -> Result<()> {
+        //let _ = self.ini_data.set("TRACTION", "TYPE", Some(drive_type.to_string()));
+        Ok(())
     }
 
     pub fn gearbox(&self) -> Result<Gearbox> {
@@ -307,20 +317,28 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 mod tests {
     use std::ffi::OsString;
     use std::path::Path;
-    use crate::assetto_corsa::drivetrain::Drivetrain;
+    use crate::assetto_corsa::drivetrain::{Drivetrain, DriveType};
     use crate::assetto_corsa::engine::Engine;
 
     #[test]
     fn load_drivetrain() -> Result<(), String> {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/a1_science_car/data");
+        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data");
         match Drivetrain::load_from_path(&path) {
-            Ok(drivetrain) => {
+            Ok(mut drivetrain) => {
                 let gearbox = drivetrain.gearbox().unwrap();
                 let differential = drivetrain.differential().unwrap();
                 let auto_clutch = drivetrain.auto_clutch().unwrap();
                 let auto_blip = drivetrain.auto_blip().unwrap();
                 let auto_shifter = drivetrain.auto_shifter().unwrap();
                 let downshift_protection = drivetrain.downshift_protection().unwrap();
+                match drivetrain.set_drive_type(DriveType::FWD) {
+                    Ok(_) => {}
+                    Err(e) => { return Err(e.to_string()); }
+                };
+                match drivetrain.write() {
+                    Ok(_) => {}
+                    Err(e) => { return Err(e.to_string()); }
+                };
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }

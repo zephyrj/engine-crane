@@ -8,7 +8,6 @@ use std::ops::Deref;
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::str::{FromStr};
-use configparser::ini::Ini;
 use iced::futures::future::err;
 use iced::keyboard::KeyCode::N;
 use toml::Value;
@@ -18,6 +17,7 @@ use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::{load_ini_file, load_ini_file_rc};
 use crate::assetto_corsa::lut_utils::{load_lut_from_path, load_lut_from_reader};
 use crate::assetto_corsa::ini_utils;
+use crate::assetto_corsa::ini_utils::Ini;
 
 
 struct UiData {
@@ -418,6 +418,9 @@ impl TurboControllers {
         {
             Ok(res) => { res }
             Err(err) => {
+                if err.kind() == io::ErrorKind::NotFound {
+                    return Ok(None)
+                }
                 return Err(Error::new(ErrorKind::InvalidEngineTurboController,
                                       format!("Failed to load turbo controller with index {}: {}", index, err )));
             }
@@ -454,9 +457,8 @@ impl TurboControllers {
 
     fn count_turbo_controller_sections(ini: &Ini) -> isize {
         let mut count = 0;
-        let map_ref = ini.get_map_ref();
         loop {
-            if !map_ref.contains_key(TurboController::get_controller_section_name(count).as_str()) {
+            if !ini.contains_section(TurboController::get_controller_section_name(count).as_str()) {
                 return count;
             }
             count += 1;
@@ -550,9 +552,8 @@ impl Turbo {
 
     fn count_turbo_sections(ini: &Ini) -> isize {
         let mut count = 0;
-        let map_ref = ini.get_map_ref();
         loop {
-            if !map_ref.contains_key(format!("TURBO_{}", count).as_str()) {
+            if !ini.contains_section(format!("TURBO_{}", count).as_str()) {
                 return count;
             }
             count += 1;
@@ -586,15 +587,15 @@ impl Engine {
     pub fn load_from_dir(data_dir: &Path) -> Result<Engine> {
         let ini_data = match load_ini_file_rc(data_dir.join(Engine::INI_FILENAME).as_path()) {
             Ok(ini_object) => { ini_object }
-            Err(err_str) => {
-                return Err(Error::new(ErrorKind::InvalidCar, err_str ));
+            Err(err) => {
+                return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
             }
         };
         let turbo_option = match Turbo::load_from_ini_data(Path::new(data_dir),
                                                            &ini_data) {
             Ok(res) => { res }
-            Err(err_str) => {
-                return Err(Error::new(ErrorKind::InvalidCar, err_str.to_string() ));
+            Err(err) => {
+                return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
             }
         };
 
