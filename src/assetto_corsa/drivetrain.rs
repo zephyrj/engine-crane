@@ -1,8 +1,5 @@
-use std::cell::RefCell;
 use std::ffi::OsString;
-use std::ops::Deref;
 use std::path::Path;
-use std::rc::Rc;
 use std::str::FromStr;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
@@ -269,7 +266,9 @@ impl Drivetrain {
     }
 
     pub fn set_drive_type(&mut self, drive_type: DriveType) -> Result<()> {
-        //let _ = self.ini_data.set("TRACTION", "TYPE", Some(drive_type.to_string()));
+        let _ = self.ini_data.set_value("TRACTION",
+                                        "TYPE",
+                                        drive_type.to_string());
         Ok(())
     }
 
@@ -315,33 +314,38 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
+    use std::fs::File;
     use std::path::Path;
+    use std::io::Write;
     use crate::assetto_corsa::drivetrain::{Drivetrain, DriveType};
-    use crate::assetto_corsa::engine::Engine;
 
     #[test]
     fn load_drivetrain() -> Result<(), String> {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data");
         match Drivetrain::load_from_path(&path) {
-            Ok(mut drivetrain) => {
+            Ok(drivetrain) => {
                 let gearbox = drivetrain.gearbox().unwrap();
                 let differential = drivetrain.differential().unwrap();
                 let auto_clutch = drivetrain.auto_clutch().unwrap();
                 let auto_blip = drivetrain.auto_blip().unwrap();
                 let auto_shifter = drivetrain.auto_shifter().unwrap();
                 let downshift_protection = drivetrain.downshift_protection().unwrap();
-                match drivetrain.set_drive_type(DriveType::FWD) {
-                    Ok(_) => {}
-                    Err(e) => { return Err(e.to_string()); }
-                };
-                match drivetrain.write() {
-                    Ok(_) => {}
-                    Err(e) => { return Err(e.to_string()); }
-                };
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }
         }
+    }
+
+    #[test]
+    fn update_drivetrain() -> Result<(), String> {
+        let load_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data");
+        let mut drivetrain = Drivetrain::load_from_path(&load_path).map_err(|err| format!("{}", err.to_string()))?;
+        match drivetrain.set_drive_type(DriveType::FWD) {
+            Ok(_) => {}
+            Err(e) => { return Err(e.to_string()); }
+        };
+        let mut out_file = File::create("test.ini").unwrap();
+        write!(out_file, "{}", drivetrain.ini_data.to_string()).map_err(|err| format!("{}", err.to_string()))?;
+        Ok(())
     }
 }

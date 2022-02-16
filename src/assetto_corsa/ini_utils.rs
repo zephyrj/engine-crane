@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Error;
 use std::path::Path;
 use indexmap::IndexMap;
+//use std::collections::HashMap as IndexMap;
+
 
 #[derive(Debug)]
 pub struct FieldTypeError {
@@ -59,7 +61,7 @@ pub fn get_value<T: std::str::FromStr>(ini: &Ini,
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 struct Section {
     name: String,
-    indentation: isize,
+    indentation: Option<String>,
     property_map: IndexMap<String, Property>,
     name_comment: Option<Comment>,
     comments: Vec<Comment>,
@@ -70,7 +72,7 @@ impl Section {
     pub fn new(name: String) -> Section {
         Section {
             name,
-            indentation: 0,
+            indentation: None,
             property_map: IndexMap::new(),
             name_comment: None,
             comments: Vec::new(),
@@ -93,9 +95,14 @@ impl Section {
                         let mut name_comment = Comment::from_line(
                             &line[closing_bracket_pos+1..], comment_symbols
                         );
+                        let indentation = if opening_bracket_pos > 0 {
+                            Some(String::from(&line[..opening_bracket_pos]))
+                        } else {
+                            None
+                        };
                         Ok(Section {
                             name,
-                            indentation: opening_bracket_pos as isize,
+                            indentation,
                             property_map: IndexMap::new(),
                             name_comment,
                             comments: Vec::new(),
@@ -109,6 +116,14 @@ impl Section {
 
     pub fn get_property(&self, property_key: &str) -> Option<&Property> {
         self.property_map.get(property_key)
+    }
+
+    pub fn get_property_mut(&mut self, property_key: &str) -> Option<&mut Property> {
+        self.property_map.get_mut(property_key)
+    }
+
+    pub fn contains_property(&self, key: &str) -> bool {
+        self.property_map.contains_key(key)
     }
 
     pub fn add_property(&mut self, property: Property) {
@@ -198,6 +213,10 @@ impl Property {
 
     pub fn get_value(&self) -> String {
         self.value.clone()
+    }
+
+    pub fn set_value(&mut self, val: String) -> String {
+        std::mem::replace(&mut self.value, val)
     }
 }
 
@@ -312,6 +331,34 @@ impl Ini {
         Some(self.sections.get(section_name)?.get_property(property_name)?.get_value())
     }
 
+    /// Set a ini property value to the provided String. You may also provide a comment to set
+    /// If the section or property don't exist prior to this operation then they will be
+    /// created.
+    ///
+    /// Returns the previous value of the property as `Some(value)` where value is a `String` or
+    /// `None` if this operation added a new property
+    pub fn set_value(&mut self,
+                     section_name: &str,
+                     property_key: &str,
+                     property_value: String) -> Option<String> {
+        if !self.sections.contains_key(section_name) {
+            self.sections.insert(String::from(section_name),
+                                 Section::new(String::from(section_name)));
+        }
+        let section = self.sections.get_mut(section_name).unwrap();
+        if !section.contains_property(property_key) {
+            section.add_property(Property {
+                key: String::from(property_key),
+                value: property_value,
+                indentation: section.indentation.clone(),
+                comment: None
+            });
+            None
+        } else {
+            Some(section.get_property_mut(property_key).unwrap().set_value(property_value))
+        }
+    }
+
     pub fn contains_section(&self, name: &str) -> bool {
         self.sections.contains_key(name)
     }
@@ -379,5 +426,19 @@ impl Ini {
     }
 }
 
-
-
+impl ToString for Ini {
+    fn to_string(&self) -> String {
+        let mut out = String::new();
+        let section_strings: Vec<String> = self.sections.values().filter_map(|section| {
+            let section_string = section.to_string();
+            if !section_string.is_empty() {
+                Some(section_string)
+            } else {
+                None
+            }
+        }).collect();
+        out += &section_strings.join("\n\n");
+        out += "\n";
+        out
+    }
+}
