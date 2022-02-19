@@ -4,9 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::rc::Weak;
 
-use std::cmp::max;
-use std::collections::{HashMap, HashSet};
-use std::fmt::Error;
+use std::collections::HashSet;
 use std::path::Path;
 use indexmap::IndexMap;
 //use std::collections::HashMap as IndexMap;
@@ -58,6 +56,19 @@ pub fn get_value<T: std::str::FromStr>(ini: &Ini,
     }
 }
 
+pub fn set_value<T: std::fmt::Display>(ini: &mut Ini,
+                                       section: &str,
+                                       key: &str,
+                                       val: T) -> Option<String> {
+    ini.set_value(section, key, val.to_string())
+}
+
+pub fn set_float(ini: &mut Ini, section: &str, key: &str, val: f64, precision: usize) -> Option<String> {
+    ini.set_value(section,
+                  key,
+                  format!("{number:.prec$}", number=val, prec=precision))
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 struct Section {
     name: String,
@@ -65,7 +76,7 @@ struct Section {
     property_map: IndexMap<String, Property>,
     name_comment: Option<Comment>,
     comments: Vec<Comment>,
-    ordering: Vec<LineType>
+    ordering: IndexMap<String, LineType>
 }
 
 impl Section {
@@ -76,7 +87,7 @@ impl Section {
             property_map: IndexMap::new(),
             name_comment: None,
             comments: Vec::new(),
-            ordering: Vec::new()
+            ordering: IndexMap::new()
         }
     }
 
@@ -106,7 +117,7 @@ impl Section {
                             property_map: IndexMap::new(),
                             name_comment,
                             comments: Vec::new(),
-                            ordering: Vec::new()
+                            ordering: IndexMap::new()
                         })
                     }
                 }
@@ -127,13 +138,20 @@ impl Section {
     }
 
     pub fn add_property(&mut self, property: Property) {
+        self.ordering.insert(property.key.clone(), LineType::KeyValue);
         self.property_map.insert(property.key.clone(), property);
-        self.ordering.push(LineType::KeyValue);
+    }
+
+    pub fn remove_propery(&mut self, key: &str) -> Option<Property> {
+        self.ordering.shift_remove_entry(key);
+        let (_, val) = self.property_map.shift_remove_entry(key)?;
+        Some(val)
     }
 
     pub fn add_comment(&mut self, comment: Comment) {
         self.comments.push(comment);
-        self.ordering.push(LineType::Comment);
+        self.ordering.insert(format!("comment-{}", self.comments.len().to_string()),
+                             LineType::Comment);
     }
 }
 
@@ -150,7 +168,7 @@ impl ToString for Section {
         let mut property_iter = self.property_map.values();
         let mut comment_iter = self.comments.iter();
 
-        let kv_strings: Vec<String> = self.ordering.iter().filter_map(|line_type| {
+        let kv_strings: Vec<String> = self.ordering.iter().filter_map(|(_, line_type)| {
             return match line_type {
                 LineType::KeyValue => {
                     Some(property_iter.next().unwrap().to_string())
@@ -327,8 +345,21 @@ impl Ini {
         self.finish_section(current_section)
     }
 
+    pub fn write(&self, path: &Path) -> io::Result<()> {
+        fs::write(path, self.to_string())
+    }
+
     pub fn get_value(&self, section_name: &str, property_name: &str) -> Option<String> {
         Some(self.sections.get(section_name)?.get_property(property_name)?.get_value())
+    }
+
+    pub fn remove_value(&mut self, section_name: &str, property_name: &str) -> Option<String> {
+        if !self.sections.contains_key(section_name) {
+            return None;
+        }
+        let section = self.sections.get_mut(section_name).unwrap();
+
+        None
     }
 
     /// Set a ini property value to the provided String. You may also provide a comment to set
