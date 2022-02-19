@@ -25,6 +25,7 @@ impl error::Error for Error {}
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
     InvalidCar,
+    InvalidUpdate,
     NotInstalled,
     InvalidEngineMetadata,
     InvalidEngineTurboController,
@@ -35,6 +36,7 @@ impl ErrorKind {
     pub(crate) fn as_str(&self) -> &'static str {
         match self {
             ErrorKind::InvalidCar => "invalid car",
+            ErrorKind::InvalidUpdate => "requested update is invalid",
             ErrorKind::NotInstalled => "not installed",
             ErrorKind::InvalidEngineMetadata => "engine metadata is invalid",
             ErrorKind::InvalidEngineTurboController => "engine turbo controller is invalid",
