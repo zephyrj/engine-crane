@@ -6,7 +6,6 @@ use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::Ini;
 
-
 pub enum DriveType {
     RWD,
     FWD,
@@ -56,20 +55,35 @@ impl ToString for DriveType {
 #[derive(Debug)]
 pub struct Gearbox {
     gear_count: i32,
-    reverse_gear_ratio: f64,
-    final_gear_ratio: f64,
+    pub reverse_gear_ratio: f64,
+    pub final_gear_ratio: f64,
     gear_ratios: Vec<f64>,
-    change_up_time: i32,
-    change_dn_time: i32,
-    auto_cutoff_time: i32,
-    supports_shifter: i32,
-    valid_shift_rpm_window: i32,
-    controls_window_gain: f64,
-    inertia: f64
+    pub change_up_time: i32,
+    pub change_dn_time: i32,
+    pub auto_cutoff_time: i32,
+    pub supports_shifter: i32,
+    pub valid_shift_rpm_window: i32,
+    pub controls_window_gain: f64,
+    pub inertia: f64
 }
 
 impl Gearbox {
-    pub fn load_from_ini(ini_data: &Ini) -> Result<Gearbox> {
+    pub fn update_gears(&mut self, gear_ratios: Vec<f64>, final_drive_ratio: f64) -> Option<(Vec<f64>, f64)> {
+        let old_vec = std::mem::replace(&mut self.gear_ratios, gear_ratios);
+        let old_final_drive = std::mem::replace(&mut self.final_gear_ratio, final_drive_ratio);
+        return match old_vec.len() {
+            0 => None,
+            _ => Some((old_vec, old_final_drive))
+        }
+    }
+
+    fn create_gear_key(gear_num: i32) -> String {
+        format!("GEAR_{}", gear_num)
+    }
+}
+
+impl FromIni for Gearbox {
+    fn load_from_ini(ini_data: &Ini) -> Result<Gearbox> {
         let gear_count = get_mandatory_field(ini_data, "GEARS", "COUNT")?;
         let mut gear_ratios = Vec::new();
         for gear_num in 1..gear_count+1 {
@@ -101,19 +115,63 @@ impl Gearbox {
     }
 }
 
-#[derive(Debug)]
-pub struct Differential {
-    power: f64,
-    coast: f64,
-    preload: i32
+impl IniUpdater for Gearbox {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        let current_count_opt: Option<i32> = ini_utils::get_value(ini_data, "GEARS", "COUNT");
+        if let Some(current_count) = current_count_opt {
+            if current_count != self.gear_count {
+                for gear_num in 1..current_count+1 {
+                    ini_data.remove_value("GEARS", Gearbox::create_gear_key(gear_num).as_str());
+                }
+            }
+        }
+        ini_data.set_value("GEARS", "COUNT", self.gear_count.to_string());
+        for gear_num in 1..self.gear_count+1 {
+            if let Some(gear_ratio) = self.gear_ratios.get((gear_num-1) as usize) {
+                ini_utils::set_float(ini_data,
+                                     "GEARS",
+                                     Gearbox::create_gear_key(gear_num).as_str(),
+                                     *gear_ratio,
+                                     3);
+            } else {
+                return Err(String::from("Warning: gear count doesn't match stored ratios"));
+            }
+        }
+        ini_utils::set_float(ini_data, "GEARS", "GEAR_R", self.reverse_gear_ratio, 3);
+        ini_utils::set_float(ini_data, "GEARS", "FINAL", self.final_gear_ratio, 3);
+        ini_utils::set_value(ini_data, "GEARBOX", "CHANGE_UP_TIME", self.change_up_time);
+        ini_utils::set_value(ini_data, "GEARBOX", "CHANGE_DN_TIME", self.change_dn_time);
+        ini_utils::set_value(ini_data, "GEARBOX", "AUTO_CUTOFF_TIME", self.auto_cutoff_time);
+        ini_utils::set_value(ini_data, "GEARBOX", "SUPPORTS_SHIFTER", self.supports_shifter);
+        ini_utils::set_value(ini_data, "GEARBOX", "VALID_SHIFT_RPM_WINDOW", self.valid_shift_rpm_window);
+        ini_utils::set_float(ini_data, "GEARBOX", "CONTROLS_WINDOW_GAIN", self.controls_window_gain, 2);
+        ini_utils::set_float(ini_data, "GEARBOX", "INERTIA", self.inertia, 3);
+        Ok(())
+    }
 }
 
-impl Differential {
-    pub fn load_from_ini(ini_data: &Ini) -> Result<Differential> {
+#[derive(Debug)]
+pub struct Differential {
+    pub power: f64,
+    pub coast: f64,
+    pub preload: i32
+}
+
+impl FromIni for Differential {
+    fn load_from_ini(ini_data: &Ini) -> Result<Differential> {
         let power = get_mandatory_field(ini_data, "DIFFERENTIAL", "POWER")?;
         let coast = get_mandatory_field(ini_data, "DIFFERENTIAL", "COAST")?;
         let preload = get_mandatory_field(ini_data, "DIFFERENTIAL", "PRELOAD")?;
-        Ok(Differential{ power, coast, preload })
+        Ok(Differential { power, coast, preload })
+    }
+}
+
+impl IniUpdater for Differential {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        ini_utils::set_float(ini_data, "DIFFERENTIAL", "POWER", self.power, 2);
+        ini_utils::set_float(ini_data, "DIFFERENTIAL", "COAST", self.power, 2);
+        ini_utils::set_value(ini_data, "DIFFERENTIAL", "PRELOAD", self.preload);
+        Ok(())
     }
 }
 
@@ -138,14 +196,29 @@ impl ShiftProfile {
 pub struct AutoClutch {
     upshift_profile: Option<ShiftProfile>,
     downshift_profile: Option<ShiftProfile>,
-    use_on_changes: i32,
-    min_rpm: i32,
-    max_rpm: i32,
-    forced_on: i32
+    pub use_on_changes: i32,
+    pub min_rpm: i32,
+    pub max_rpm: i32,
+    pub forced_on: i32
 }
 
 impl AutoClutch {
-    pub fn load_from_ini(ini_data: &Ini) -> Result<AutoClutch> {
+    fn load_shift_profile(ini_data: &Ini, key_name: &str) -> Result<Option<ShiftProfile>> {
+        if let Some(profile_name) = ini_utils::get_value(ini_data, "AUTOCLUTCH", key_name) {
+            let section_name: String = profile_name;
+            if section_name.to_lowercase() != "none" {
+                return match ShiftProfile::load_from_ini(ini_data, &section_name) {
+                    Ok(prof) => { Ok(Some(prof)) },
+                    Err(_) => { return Err(mandatory_field_error(key_name, &section_name)); }
+                }
+            }
+        }
+        Ok(None)
+    }
+}
+
+impl FromIni for AutoClutch {
+    fn load_from_ini(ini_data: &Ini) -> Result<AutoClutch> {
         let upshift_profile = AutoClutch::load_shift_profile(ini_data, "UPSHIFT_PROFILE")?;
         let downshift_profile = AutoClutch::load_shift_profile(ini_data, "DOWNSHIFT_PROFILE")?;
         let use_on_changes = get_mandatory_field(ini_data, "AUTOCLUTCH", "USE_ON_CHANGES")?;
@@ -162,37 +235,57 @@ impl AutoClutch {
             forced_on
         })
     }
+}
 
-    fn load_shift_profile(ini_data: &Ini, key_name: &str) -> Result<Option<ShiftProfile>> {
-        if let Some(profile_name) = ini_utils::get_value(ini_data, "AUTOCLUTCH", key_name) {
-            let section_name: String = profile_name;
-            if section_name.to_lowercase() != "none" {
-                return match ShiftProfile::load_from_ini(ini_data, &section_name) {
-                    Ok(prof) => { Ok(Some(prof)) },
-                    Err(_) => { return Err(mandatory_field_error(key_name, &section_name)); }
-                }
-            }
-        }
-        Ok(None)
+impl IniUpdater for AutoClutch {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        // TODO Update shift profiles
+        ini_utils::set_value(ini_data, "AUTOCLUTCH", "USE_ON_CHANGES", self.use_on_changes);
+        ini_utils::set_value(ini_data, "AUTOCLUTCH", "MIN_RPM", self.min_rpm);
+        ini_utils::set_value(ini_data, "AUTOCLUTCH", "MAX_RPM", self.max_rpm);
+        ini_utils::set_value(ini_data, "AUTOCLUTCH", "FORCED_ON", self.forced_on);
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct AutoBlip {
-    electronic: i32,
-    points: Vec<i32>,
-    level: f64
+    pub electronic: i32,
+    pub points: Vec<i32>,
+    pub level: f64
 }
 
 impl AutoBlip {
-    pub fn load_from_ini(ini_data: &Ini) -> Result<AutoBlip> {
+    fn get_point_key<T: std::fmt::Display>(idx: T) -> String {
+        format!("POINT_{}", idx)
+    }
+}
+
+impl FromIni for AutoBlip {
+    fn load_from_ini(ini_data: &Ini) -> Result<AutoBlip> {
         let electronic = get_mandatory_field(ini_data, "AUTOBLIP", "ELECTRONIC")?;
         let level = get_mandatory_field(ini_data, "AUTOBLIP", "LEVEL")?;
         let mut points = Vec::new();
         for idx in 0..3 {
-            points.push(get_mandatory_field(ini_data, "AUTOBLIP", &format!("POINT_{}", idx))?);
+            points.push(get_mandatory_field(ini_data,
+                                            "AUTOBLIP",
+                                            AutoBlip::get_point_key(idx).as_str())?);
         }
         Ok(AutoBlip{ electronic, points, level })
+    }
+}
+
+impl IniUpdater for AutoBlip {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        ini_utils::set_value(ini_data, "AUTOBLIP", "ELECTRONIC", self.electronic);
+        ini_utils::set_float(ini_data, "AUTOBLIP", "LEVEL", self.level, 2);
+        for (idx, point) in self.points.iter().enumerate() {
+            ini_utils::set_value(ini_data,
+                                 "AUTOBLIP",
+                                 AutoBlip::get_point_key(idx).as_str(),
+                                 point);
+        }
+        Ok(())
     }
 }
 
@@ -204,8 +297,8 @@ pub struct AutoShifter {
     gas_cutoff_time: f64
 }
 
-impl AutoShifter {
-    pub fn load_from_ini(ini_data: &Ini) -> Result<AutoShifter> {
+impl FromIni for AutoShifter {
+    fn load_from_ini(ini_data: &Ini) -> Result<AutoShifter> {
         let up = get_mandatory_field(ini_data, "AUTO_SHIFTER", "UP")?;
         let down = get_mandatory_field(ini_data, "AUTO_SHIFTER", "DOWN")?;
         let slip_threshold = get_mandatory_field(ini_data, "AUTO_SHIFTER", "SLIP_THRESHOLD")?;
@@ -222,8 +315,8 @@ pub struct DownshiftProtection {
     lock_n: i32
 }
 
-impl DownshiftProtection {
-    pub fn load_from_ini(ini_data: &Ini) -> Result<DownshiftProtection> {
+impl FromIni for DownshiftProtection {
+    fn load_from_ini(ini_data: &Ini) -> Result<DownshiftProtection> {
         Ok(DownshiftProtection{
             active: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "ACTIVE")?,
             debug: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "DEBUG")?,
@@ -231,6 +324,14 @@ impl DownshiftProtection {
             lock_n: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "LOCK_N")?,
         })
     }
+}
+
+pub trait IniUpdater {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String>;
+}
+
+pub trait FromIni {
+    fn load_from_ini(ini_data: &Ini) -> Result<Self> where Self: Sized;
 }
 
 
@@ -243,22 +344,25 @@ pub struct Drivetrain {
 impl Drivetrain {
     const INI_FILENAME: &'static str = "drivetrain.ini";
 
-    pub fn load_from_path(data_dir: &Path) -> Result<Drivetrain> {
-        let ini_data = match load_ini_file(data_dir.join(Drivetrain::INI_FILENAME).as_path()) {
+    pub fn load_from_file(ini_path: &Path) -> Result<Drivetrain> {
+        let ini_data = match load_ini_file(ini_path) {
             Ok(ini_object) => { ini_object }
             Err(err) => {
                 return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
             }
         };
         Ok(Drivetrain {
-            data_dir: OsString::from(data_dir),
+            data_dir: OsString::from(ini_path.parent().unwrap()),
             ini_data
         })
     }
 
+    pub fn load_from_path(data_dir: &Path) -> Result<Drivetrain> {
+        Drivetrain::load_from_file(data_dir.join(Drivetrain::INI_FILENAME).as_path())
+    }
+
     pub fn write(&mut self) -> std::io::Result<()> {
-        Ok(())
-        //self.ini_data.write(Path::new(&self.data_dir).join(Drivetrain::INI_FILENAME))
+        self.ini_data.write(&Path::new(&self.data_dir).join(Drivetrain::INI_FILENAME))
     }
 
     pub fn drive_type(&self) -> Result<DriveType> {
@@ -272,6 +376,16 @@ impl Drivetrain {
         Ok(())
     }
 
+    pub fn load_component<T: FromIni>(&self) -> Result<T> {
+        T::load_from_ini(&self.ini_data)
+    }
+
+    pub fn update_component<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
+        component.update_ini(&mut self.ini_data).map_err(|err_string| {
+            Error::new(ErrorKind::InvalidUpdate, err_string)
+        })
+    }
+
     pub fn gearbox(&self) -> Result<Gearbox> {
         Gearbox::load_from_ini(&self.ini_data)
     }
@@ -280,8 +394,20 @@ impl Drivetrain {
         Differential::load_from_ini(&self.ini_data)
     }
 
+    pub fn set_differential(&mut self, differential: &Differential) -> Result<()> {
+        differential.update_ini(&mut self.ini_data).map_err(|err_string| {
+            Error::new(ErrorKind::InvalidUpdate, err_string)
+        })
+    }
+
     pub fn auto_clutch(&self) -> Result<AutoClutch> {
         AutoClutch::load_from_ini(&self.ini_data)
+    }
+
+    pub fn set_auto_clutch(&mut self, auto_clutch: &AutoClutch) -> Result<()> {
+        auto_clutch.update_ini(&mut self.ini_data).map_err(|err_string| {
+            Error::new(ErrorKind::InvalidUpdate, err_string)
+        })
     }
 
     pub fn auto_blip(&self) -> Result<AutoBlip> {
@@ -314,22 +440,23 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
+    use std::fs;
     use std::path::Path;
-    use std::io::Write;
-    use crate::assetto_corsa::drivetrain::{Drivetrain, DriveType};
+    use crate::assetto_corsa::drivetrain::{Drivetrain, DriveType, FromIni, Gearbox, IniUpdater};
+
+    const TEST_OUTPUT_FILENAME: &'static str = "test.ini";
 
     #[test]
     fn load_drivetrain() -> Result<(), String> {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data");
         match Drivetrain::load_from_path(&path) {
             Ok(drivetrain) => {
-                let gearbox = drivetrain.gearbox().unwrap();
-                let differential = drivetrain.differential().unwrap();
-                let auto_clutch = drivetrain.auto_clutch().unwrap();
-                let auto_blip = drivetrain.auto_blip().unwrap();
-                let auto_shifter = drivetrain.auto_shifter().unwrap();
-                let downshift_protection = drivetrain.downshift_protection().unwrap();
+                let _gearbox = drivetrain.gearbox().unwrap();
+                let _differential = drivetrain.differential().unwrap();
+                let _auto_clutch = drivetrain.auto_clutch().unwrap();
+                let _auto_blip = drivetrain.auto_blip().unwrap();
+                let _auto_shifter = drivetrain.auto_shifter().unwrap();
+                let _downshift_protection = drivetrain.downshift_protection().unwrap();
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }
@@ -344,8 +471,87 @@ mod tests {
             Ok(_) => {}
             Err(e) => { return Err(e.to_string()); }
         };
-        let mut out_file = File::create("test.ini").unwrap();
-        write!(out_file, "{}", drivetrain.ini_data.to_string()).map_err(|err| format!("{}", err.to_string()))?;
+        drivetrain.ini_data.write(Path::new("test.ini")).map_err(|err| format!("{}", err.to_string()))?;
         Ok(())
+    }
+
+    #[test]
+    fn update_gearbox() -> Result<(), String> {
+        let new_inertia = 0.02;
+        let new_ratios: Vec<f64> = vec!(2.40, 1.9, 1.61, 1.33, 1.12, 0.99);
+        let new_final_drive = 3.2;
+
+        let _exit = TidyTestFiles;
+        component_update_test(|drivetrain| {
+            let mut gearbox = drivetrain.gearbox().unwrap();
+            gearbox.inertia = new_inertia;
+            gearbox.update_gears(new_ratios.clone(), new_final_drive);
+            gearbox
+        })?;
+        validate_component(|gearbox: &Gearbox| {
+            assert_eq!(gearbox.inertia, new_inertia, "Inertia is correct");
+            assert_eq!(gearbox.gear_ratios, new_ratios, "New ratios are correct");
+            assert_eq!(gearbox.final_gear_ratio, new_final_drive, "Final drive correct");
+            assert_eq!(gearbox.gear_count, new_ratios.len() as i32, "Gear count is correct");
+        })
+    }
+
+    #[test]
+    fn update_differential() -> Result<(), String> {
+        let _exit = TidyTestFiles;
+        component_update_test(|drivetrain|{
+            let mut differential = drivetrain.differential().unwrap();
+            differential.preload = 15;
+            differential
+        })
+    }
+
+    #[test]
+    fn update_auto_clutch() -> Result<(), String> {
+        let _exit = TidyTestFiles;
+        component_update_test(|drivetrain|{
+            let mut auto_clutch = drivetrain.auto_clutch().unwrap();
+            auto_clutch.min_rpm = 2250;
+            auto_clutch
+        })
+    }
+
+    #[test]
+    fn update_auto_blip() -> Result<(), String> {
+        let _exit = TidyTestFiles;
+        component_update_test(|drivetrain|{
+            let mut auto_blip = drivetrain.auto_blip().unwrap();
+            auto_blip.level = 0.8;
+            auto_blip
+        })
+    }
+
+    fn component_update_test<T: IniUpdater, F: FnOnce(&mut Drivetrain) -> T>(component_create_fn: F) -> Result<(), String> {
+        let load_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data");
+        let mut drivetrain = Drivetrain::load_from_path(&load_path).map_err(|err| format!("{}", err.to_string()))?;
+        let component = component_create_fn(&mut drivetrain);
+        drivetrain.update_component(&component).map_err(|err| format!("{}", err.to_string()))?;
+        drivetrain.ini_data.write(Path::new(TEST_OUTPUT_FILENAME)).map_err(|err| format!("{}", err.to_string()))?;
+        Ok(())
+    }
+
+    fn validate_component<T, F>(component_validation_fn: F) -> Result<(), String>
+    where T: FromIni,
+          F: FnOnce(&T)
+    {
+        let test_path = std::env::current_dir().unwrap();
+        let drivetrain = Drivetrain::load_from_file(Path::new(TEST_OUTPUT_FILENAME)).map_err(|err| format!("{}", err.to_string()))?;
+        let component = drivetrain.load_component::<T>().map_err(|err| format!("{}", err.to_string()))?;
+        component_validation_fn(&component);
+        Ok(())
+    }
+
+    struct TidyTestFiles;
+    impl Drop for TidyTestFiles {
+        fn drop(&mut self) {
+            if Path::new(TEST_OUTPUT_FILENAME).exists() {
+                fs::remove_file(TEST_OUTPUT_FILENAME).expect("Failed to clear up test files");
+            }
+        }
     }
 }
