@@ -6,6 +6,7 @@ use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::Ini;
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum DriveType {
     RWD,
     FWD,
@@ -169,7 +170,7 @@ impl FromIni for Differential {
 impl IniUpdater for Differential {
     fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
         ini_utils::set_float(ini_data, "DIFFERENTIAL", "POWER", self.power, 2);
-        ini_utils::set_float(ini_data, "DIFFERENTIAL", "COAST", self.power, 2);
+        ini_utils::set_float(ini_data, "DIFFERENTIAL", "COAST", self.coast, 2);
         ini_utils::set_value(ini_data, "DIFFERENTIAL", "PRELOAD", self.preload);
         Ok(())
     }
@@ -291,10 +292,10 @@ impl IniUpdater for AutoBlip {
 
 #[derive(Debug)]
 pub struct AutoShifter {
-    up: i32,
-    down: i32,
-    slip_threshold: f64,
-    gas_cutoff_time: f64
+    pub up: i32,
+    pub down: i32,
+    pub slip_threshold: f64,
+    pub gas_cutoff_time: f64
 }
 
 impl FromIni for AutoShifter {
@@ -307,12 +308,22 @@ impl FromIni for AutoShifter {
     }
 }
 
+impl IniUpdater for AutoShifter {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        ini_utils::set_value(ini_data, "AUTO_SHIFTER", "UP", self.up);
+        ini_utils::set_value(ini_data, "AUTO_SHIFTER", "DOWN", self.down);
+        ini_utils::set_float(ini_data, "AUTO_SHIFTER", "SLIP_THRESHOLD", self.slip_threshold, 2);
+        ini_utils::set_float(ini_data, "AUTO_SHIFTER", "GAS_CUTOFF_TIME", self.gas_cutoff_time, 2);
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct DownshiftProtection {
-    active: i32,
-    debug: i32,
-    overrev: i32,
-    lock_n: i32
+    pub active: i32,
+    pub debug: i32,
+    pub overrev: i32,
+    pub lock_n: i32
 }
 
 impl FromIni for DownshiftProtection {
@@ -323,6 +334,16 @@ impl FromIni for DownshiftProtection {
             overrev: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "OVERREV")?,
             lock_n: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "LOCK_N")?,
         })
+    }
+}
+
+impl IniUpdater for DownshiftProtection {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        ini_utils::set_value(ini_data, "DOWNSHIFT_PROTECTION", "ACTIVE", self.active);
+        ini_utils::set_value(ini_data, "DOWNSHIFT_PROTECTION", "DEBUG", self.debug);
+        ini_utils::set_value(ini_data, "DOWNSHIFT_PROTECTION", "OVERREV", self.overrev);
+        ini_utils::set_value(ini_data, "DOWNSHIFT_PROTECTION", "LOCK_N", self.lock_n);
+        Ok(())
     }
 }
 
@@ -394,20 +415,8 @@ impl Drivetrain {
         Differential::load_from_ini(&self.ini_data)
     }
 
-    pub fn set_differential(&mut self, differential: &Differential) -> Result<()> {
-        differential.update_ini(&mut self.ini_data).map_err(|err_string| {
-            Error::new(ErrorKind::InvalidUpdate, err_string)
-        })
-    }
-
     pub fn auto_clutch(&self) -> Result<AutoClutch> {
         AutoClutch::load_from_ini(&self.ini_data)
-    }
-
-    pub fn set_auto_clutch(&mut self, auto_clutch: &AutoClutch) -> Result<()> {
-        auto_clutch.update_ini(&mut self.ini_data).map_err(|err_string| {
-            Error::new(ErrorKind::InvalidUpdate, err_string)
-        })
     }
 
     pub fn auto_blip(&self) -> Result<AutoBlip> {
@@ -442,53 +451,60 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 mod tests {
     use std::fs;
     use std::path::Path;
-    use crate::assetto_corsa::drivetrain::{Drivetrain, DriveType, FromIni, Gearbox, IniUpdater};
+    use crate::assetto_corsa::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Differential, DownshiftProtection, Drivetrain, DriveType, FromIni, Gearbox, IniUpdater};
 
+    const TEST_INPUT_FILENAME: &'static str = "/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data";
     const TEST_OUTPUT_FILENAME: &'static str = "test.ini";
 
     #[test]
-    fn load_drivetrain() -> Result<(), String> {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data");
-        match Drivetrain::load_from_path(&path) {
-            Ok(drivetrain) => {
-                let _gearbox = drivetrain.gearbox().unwrap();
-                let _differential = drivetrain.differential().unwrap();
-                let _auto_clutch = drivetrain.auto_clutch().unwrap();
-                let _auto_blip = drivetrain.auto_blip().unwrap();
-                let _auto_shifter = drivetrain.auto_shifter().unwrap();
-                let _downshift_protection = drivetrain.downshift_protection().unwrap();
-                Ok(())
-            }
-            Err(e) => { Err(e.to_string()) }
-        }
-    }
+    fn update_drive_type() -> Result<(), String> {
+        let new_drive_type = DriveType::FWD;
 
-    #[test]
-    fn update_drivetrain() -> Result<(), String> {
-        let load_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data");
-        let mut drivetrain = Drivetrain::load_from_path(&load_path).map_err(|err| format!("{}", err.to_string()))?;
+        let _exit = TidyTestFiles;
+        let mut drivetrain = Drivetrain::load_from_path(&Path::new(TEST_INPUT_FILENAME)).map_err(|err| format!("{}", err.to_string()))?;
         match drivetrain.set_drive_type(DriveType::FWD) {
             Ok(_) => {}
             Err(e) => { return Err(e.to_string()); }
         };
-        drivetrain.ini_data.write(Path::new("test.ini")).map_err(|err| format!("{}", err.to_string()))?;
+        drivetrain.ini_data.write(Path::new(TEST_OUTPUT_FILENAME)).map_err(|err| format!("{}", err.to_string()))?;
+        let new_drivetrain = Drivetrain::load_from_file(&Path::new(TEST_OUTPUT_FILENAME)).map_err(|err| format!("{}", err.to_string()))?;
+        assert_eq!(new_drivetrain.drive_type().unwrap(), new_drive_type, "Drive type is correct");
         Ok(())
     }
 
     #[test]
     fn update_gearbox() -> Result<(), String> {
+        let new_change_up_time = 140;
+        let new_change_dn_time = 190;
+        let new_auto_cutoof_time = 160;
+        let new_supports_shifter = 1;
+        let new_valid_shift_window = 700;
+        let new_controls_window_gain = 0.3;
         let new_inertia = 0.02;
         let new_ratios: Vec<f64> = vec!(2.40, 1.9, 1.61, 1.33, 1.12, 0.99);
         let new_final_drive = 3.2;
+        let new_reverse_drive = -3.700;
 
         let _exit = TidyTestFiles;
-        component_update_test(|drivetrain| {
-            let mut gearbox = drivetrain.gearbox().unwrap();
+        component_update_test(|gearbox: &mut Gearbox| {
+            gearbox.change_up_time = new_change_up_time;
+            gearbox.change_dn_time = new_change_dn_time;
+            gearbox.auto_cutoff_time = new_auto_cutoof_time;
+            gearbox.supports_shifter = new_supports_shifter;
+            gearbox.valid_shift_rpm_window = new_valid_shift_window;
+            gearbox.controls_window_gain = new_controls_window_gain;
             gearbox.inertia = new_inertia;
+            gearbox.reverse_gear_ratio = new_reverse_drive;
             gearbox.update_gears(new_ratios.clone(), new_final_drive);
-            gearbox
         })?;
         validate_component(|gearbox: &Gearbox| {
+            assert_eq!(gearbox.change_up_time, new_change_up_time, "Change up time is correct");
+            assert_eq!(gearbox.change_dn_time, new_change_dn_time, "Change dn time is correct");
+            assert_eq!(gearbox.auto_cutoff_time, new_auto_cutoof_time, "Auto cutoff time is correct");
+            assert_eq!(gearbox.supports_shifter, new_supports_shifter, "Supports shifter is correct");
+            assert_eq!(gearbox.valid_shift_rpm_window, new_valid_shift_window, "Valid shift rpm window is correct");
+            assert_eq!(gearbox.controls_window_gain, new_controls_window_gain, "Controls window gain is correct");
+            assert_eq!(gearbox.reverse_gear_ratio, new_reverse_drive, "Reverse gear ratio is correct");
             assert_eq!(gearbox.inertia, new_inertia, "Inertia is correct");
             assert_eq!(gearbox.gear_ratios, new_ratios, "New ratios are correct");
             assert_eq!(gearbox.final_gear_ratio, new_final_drive, "Final drive correct");
@@ -498,38 +514,113 @@ mod tests {
 
     #[test]
     fn update_differential() -> Result<(), String> {
+        let new_preload = 15;
+        let new_power = 0.2;
+        let new_coast = 0.8;
+
         let _exit = TidyTestFiles;
-        component_update_test(|drivetrain|{
-            let mut differential = drivetrain.differential().unwrap();
-            differential.preload = 15;
-            differential
+        component_update_test(|differential: &mut Differential|{
+            differential.preload = new_preload;
+            differential.power = new_power;
+            differential.coast = new_coast;
+        })?;
+        validate_component(|differential: &Differential| {
+            assert_eq!(differential.preload, new_preload, "Preload is correct");
+            assert_eq!(differential.power, new_power, "Power is correct");
+            assert_eq!(differential.coast, new_coast, "Coast is correct");
         })
     }
 
     #[test]
     fn update_auto_clutch() -> Result<(), String> {
+        let new_min_rpm = 2250;
+        let new_max_rpm = 3250;
+        let new_use_on_changes = 0;
+        let new_forced_on = 1;
+
         let _exit = TidyTestFiles;
-        component_update_test(|drivetrain|{
-            let mut auto_clutch = drivetrain.auto_clutch().unwrap();
-            auto_clutch.min_rpm = 2250;
-            auto_clutch
+        component_update_test(|auto_clutch: &mut AutoClutch|{
+            auto_clutch.min_rpm = new_min_rpm;
+            auto_clutch.max_rpm = new_max_rpm;
+            auto_clutch.use_on_changes = new_use_on_changes;
+            auto_clutch.forced_on = new_forced_on;
+        })?;
+        validate_component(|auto_clutch: &AutoClutch| {
+            assert_eq!(auto_clutch.min_rpm, new_min_rpm, "MinRpm is correct");
+            assert_eq!(auto_clutch.max_rpm, new_max_rpm, "MaxRpm is correct");
+            assert_eq!(auto_clutch.use_on_changes, new_use_on_changes, "new_use_on_changes is correct");
+            assert_eq!(auto_clutch.forced_on, new_forced_on, "new_forced_on is correct");
         })
     }
 
     #[test]
     fn update_auto_blip() -> Result<(), String> {
+        let new_level = 0.8;
+        let new_points = vec![20, 200, 260];
+        let new_electronic = 0;
+
         let _exit = TidyTestFiles;
-        component_update_test(|drivetrain|{
-            let mut auto_blip = drivetrain.auto_blip().unwrap();
-            auto_blip.level = 0.8;
-            auto_blip
+        component_update_test(|auto_blip: &mut AutoBlip|{
+            auto_blip.level = new_level;
+            auto_blip.points = new_points.clone();
+            auto_blip.electronic = new_electronic;
+        })?;
+        validate_component(|auto_blip: &AutoBlip| {
+            assert_eq!(auto_blip.level, new_level, "Level is correct");
+            assert_eq!(auto_blip.points, new_points, "Points are correct");
+            assert_eq!(auto_blip.electronic, new_electronic, "Electronic is correct");
         })
     }
 
-    fn component_update_test<T: IniUpdater, F: FnOnce(&mut Drivetrain) -> T>(component_create_fn: F) -> Result<(), String> {
-        let load_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/data");
+    #[test]
+    fn update_auto_shifter() -> Result<(), String> {
+        let new_up = 6000;
+        let new_down = 4400;
+        let new_slip_threshold = 1.0;
+        let new_gas_cutoff_time = 0.3;
+
+        let _exit = TidyTestFiles;
+        component_update_test(|auto_shifter: &mut AutoShifter|{
+            auto_shifter.up = new_up;
+            auto_shifter.down = new_down;
+            auto_shifter.slip_threshold = new_slip_threshold;
+            auto_shifter.gas_cutoff_time = new_gas_cutoff_time;
+        })?;
+        validate_component(|auto_shifter: &AutoShifter| {
+            assert_eq!(auto_shifter.up, new_up, "Up is correct");
+            assert_eq!(auto_shifter.down, new_down, "Down are correct");
+            assert_eq!(auto_shifter.slip_threshold, new_slip_threshold, "Slip threshold is correct");
+            assert_eq!(auto_shifter.gas_cutoff_time, new_gas_cutoff_time, "Gas cutoff time is correct");
+        })
+    }
+
+    #[test]
+    fn update_downshift_protection() -> Result<(), String> {
+        let new_active = 0;
+        let new_debug = 1;
+        let new_overrev = 300;
+        let new_lock_n = 0;
+
+        let _exit = TidyTestFiles;
+        component_update_test(|downshift_protection: &mut DownshiftProtection| {
+            downshift_protection.active = new_active;
+            downshift_protection.debug = new_debug;
+            downshift_protection.overrev = new_overrev;
+            downshift_protection.lock_n = new_lock_n;
+        })?;
+        validate_component(|downshift_protection: &DownshiftProtection| {
+            assert_eq!(downshift_protection.active, new_active, "Active is correct");
+            assert_eq!(downshift_protection.debug, new_debug, "Debug is correct");
+            assert_eq!(downshift_protection.overrev, new_overrev, "Overrev is correct");
+            assert_eq!(downshift_protection.lock_n, new_lock_n, "Lock N is correct");
+        })
+    }
+
+    fn component_update_test<T: IniUpdater + FromIni, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<(), String> {
+        let load_path = Path::new(TEST_INPUT_FILENAME);
         let mut drivetrain = Drivetrain::load_from_path(&load_path).map_err(|err| format!("{}", err.to_string()))?;
-        let component = component_create_fn(&mut drivetrain);
+        let mut component = drivetrain.load_component::<T>().unwrap();
+        component_update_fn(&mut component);
         drivetrain.update_component(&component).map_err(|err| format!("{}", err.to_string()))?;
         drivetrain.ini_data.write(Path::new(TEST_OUTPUT_FILENAME)).map_err(|err| format!("{}", err.to_string()))?;
         Ok(())
@@ -539,7 +630,6 @@ mod tests {
     where T: FromIni,
           F: FnOnce(&T)
     {
-        let test_path = std::env::current_dir().unwrap();
         let drivetrain = Drivetrain::load_from_file(Path::new(TEST_OUTPUT_FILENAME)).map_err(|err| format!("{}", err.to_string()))?;
         let component = drivetrain.load_component::<T>().map_err(|err| format!("{}", err.to_string()))?;
         component_validation_fn(&component);
