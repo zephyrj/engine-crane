@@ -269,7 +269,6 @@ impl Car {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
     use std::path::Path;
     use crate::assetto_corsa::car::Car;
 

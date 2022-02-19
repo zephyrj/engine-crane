@@ -6,14 +6,10 @@ mod lut_utils;
 mod ini_utils;
 mod drivetrain;
 
-use std::collections::HashMap;
 use std::fs;
 use std::ffi::OsString;
-use std::fmt::Debug;
-use std::path::{Path, PathBuf};
-use serde_json::Value;
+use std::path::PathBuf;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
-
 
 use crate::steam;
 
