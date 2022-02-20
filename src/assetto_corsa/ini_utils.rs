@@ -314,11 +314,15 @@ impl Ini {
             comment_symbols: HashSet::from([';', '#'])
         }
     }
+    
+    pub fn load_from_string(ini_data: String) -> Ini {
+        let mut ini = Ini::new();
+        ini.parse(ini_data);
+        ini
+    }
 
     pub fn load_from_file(path: &Path) -> io::Result<Ini> {
-        let mut ini = Ini::new();
-        ini.parse(fs::read_to_string(path)?);
-        Ok(ini)
+        Ok(Ini::load_from_string(fs::read_to_string(path)?))
     }
 
     pub fn parse(&mut self, input: String) {
