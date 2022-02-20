@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::default::Default;
 use std::ffi::OsString;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use serde_json::Value;
@@ -47,9 +47,9 @@ impl FromStr for CarVersion {
     }
 }
 
-impl ToString for CarVersion {
-    fn to_string(&self) -> String {
-        String::from(self.as_str())
+impl Display for CarVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
