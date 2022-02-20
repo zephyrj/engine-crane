@@ -7,6 +7,7 @@ use std::rc::Weak;
 use std::collections::HashSet;
 use std::path::Path;
 use indexmap::IndexMap;
+use crate::assetto_corsa::error::{Error, ErrorKind};
 //use std::collections::HashMap as IndexMap;
 
 
@@ -38,6 +39,43 @@ impl Display for FieldTypeError {
 
 impl error::Error for FieldTypeError {}
 
+impl From<FieldTypeError> for Error {
+    fn from(err: FieldTypeError) -> Self {
+        Error::new(ErrorKind::InvalidCar, err.to_string() )
+    }
+}
+
+#[derive(Debug)]
+pub struct MissingMandatoryProperty {
+    section_name: String,
+    property_name: String
+}
+
+impl MissingMandatoryProperty {
+    pub fn new(section_name: &str, property_name: &str) -> MissingMandatoryProperty {
+        MissingMandatoryProperty {
+            section_name: String::from(section_name),
+            property_name: String::from(property_name)
+        }
+    }
+}
+
+impl Display for MissingMandatoryProperty {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{} is missing",
+               &self.section_name,
+               &self.property_name,)
+    }
+}
+
+impl error::Error for MissingMandatoryProperty {}
+
+impl From<MissingMandatoryProperty> for Error {
+    fn from(err: MissingMandatoryProperty) -> Self {
+        Error::new(ErrorKind::InvalidCar, err.to_string() )
+    }
+}
+
 pub fn get_value_from_weak_ref<T: std::str::FromStr>(ini_data: &Weak<RefCell<Ini>>,
                                                      section: &str,
                                                      key: &str) -> Option<T> {
@@ -54,6 +92,14 @@ pub fn get_value<T: std::str::FromStr>(ini: &Ini,
         Ok(val) => { Some(val) }
         Err(_) => { None }
     }
+}
+
+pub fn get_mandatory_property<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> std::result::Result<T, MissingMandatoryProperty> {
+    let res: T = match get_value(ini_data, section_name, key) {
+        Some(val) => val,
+        None => { return Err(MissingMandatoryProperty::new(section_name, key)); }
+    };
+    Ok(res)
 }
 
 pub fn set_value<T: std::fmt::Display>(ini: &mut Ini,
@@ -314,7 +360,7 @@ impl Ini {
             comment_symbols: HashSet::from([';', '#'])
         }
     }
-    
+
     pub fn load_from_string(ini_data: String) -> Ini {
         let mut ini = Ini::new();
         ini.parse(ini_data);
