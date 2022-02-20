@@ -1,18 +1,15 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::{error, fs, io};
-use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::ops::Deref;
 use std::path::Path;
-use std::rc::{Rc, Weak};
 use std::str::{FromStr};
 use toml::Value;
 use toml::value::Table;
-use crate::assetto_corsa::engine::Source::{AssettoCorsa, Automation};
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
-use crate::assetto_corsa::file_utils::load_ini_file_rc;
+use crate::assetto_corsa::file_utils::load_ini_file;
+use crate::assetto_corsa::lut_utils;
 use crate::assetto_corsa::lut_utils::{load_lut_from_path, load_lut_from_reader};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::Ini;
@@ -33,22 +30,28 @@ enum Source {
 impl Source {
     fn from_str(str: &str) -> Option<Source> {
         match str {
-            "ac" => Some(AssettoCorsa),
-            "automation" => Some(Automation),
+            "ac" => Some(Source::AssettoCorsa),
+            "automation" => Some(Source::Automation),
             _ => None
         }
     }
 
-    fn to_str(&self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
-            AssettoCorsa => "ac",
-            Automation => "automation"
+            Source::AssettoCorsa => "ac",
+            Source::Automation => "automation"
         }
     }
 }
 
+impl Display for Source {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 #[derive(Debug)]
-struct Metadata {
+pub struct Metadata {
     toml_config: toml::Value,
     boost_curve_data: Option<Vec<(i32, f64)>>,
     fuel_flow_data: Option<Vec<(i32, f64)>>
@@ -170,7 +173,6 @@ impl Metadata {
             Some(data) => Some(data),
             None => None
         }
-
     }
 
     fn fuel_flow_data(&self) -> Option<&Vec<(i32, f64)>> {
@@ -233,10 +235,56 @@ impl Power {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct EngineData {
+    altitude_sensitivity: f64,
+    inertia: f64,
+    limiter: i32,
+    limiter_hz: i32,
+    minimum: i32
+}
+
+impl EngineData {
+    const SECTION_NAME: &'static str = "ENGINE_DATA";
+
+    pub fn load_from_ini(ini: &Ini) -> Result<EngineData> {
+        Ok(EngineData{
+            altitude_sensitivity: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "ALTITUDE_SENSITIVITY")?,
+            inertia: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "INERTIA")?,
+            limiter: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "LIMITER")?,
+            limiter_hz: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "LIMITER_HZ")?,
+            minimum: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "MINIMUM")?
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Damage {
+    turbo_boost_threshold: f64,
+    turbo_damage_k: i32,
+    rpm_threshold: i32,
+    rpm_damage_k: i32
+}
+
+impl Damage {
+    const SECTION_NAME: &'static str = "DAMAGE";
+
+    pub fn load_from_ini(ini: &Ini) -> Result<Damage> {
+        Ok(Damage{
+            turbo_boost_threshold: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD")?,
+            turbo_damage_k: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "TURBO_DAMAGE_K")?,
+            rpm_threshold: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "RPM_THRESHOLD")?,
+            rpm_damage_k: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "RPM_DAMAGE_K")?,
+        })
+    }
+}
+
+#[derive(Debug)]
 enum CoastSource {
     FromCoastRef
 }
 
+#[derive(Debug)]
 struct CoastCurve {
     curve_data_source: CoastSource,
     reference_rpm: i32,
@@ -273,12 +321,13 @@ impl FromStr for ControllerInput {
     }
 }
 
-impl ToString for ControllerInput {
-    fn to_string(&self) -> String {
-        String::from(self.as_str())
+impl Display for ControllerInput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
+#[derive(Debug)]
 enum ControllerCombinator {
     Add
 }
@@ -321,9 +370,9 @@ impl FromStr for ControllerCombinator {
     }
 }
 
-impl ToString for ControllerCombinator {
-    fn to_string(&self) -> String {
-        String::from(self.as_str())
+impl Display for ControllerCombinator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -331,69 +380,36 @@ impl ToString for ControllerCombinator {
 struct TurboController {
     data_dir: OsString,
     index: isize,
-    ini_data: Weak<RefCell<Ini>>,
+    input: ControllerInput,
+    combinator: ControllerCombinator,
+    lut: Vec<(i32, f64)>,
+    filter: f64,
+    up_limit: i32,
+    down_limit: i32
 }
 
 impl TurboController {
-    fn input(&self) -> Option<ControllerInput> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,
-                                           &TurboController::get_controller_section_name(self.index),
-                                           "INPUT")
-    }
+    pub fn load_from_ini(ini: &Ini, idx: isize, data_dir: &Path) -> Result<TurboController> {
+        let section_name = TurboController::get_controller_section_name(idx);
+        let lut = lut_utils::load_lut_from_property_value(
+            ini_utils::get_mandatory_property(ini, &section_name, "LUT")?,
+            data_dir
+        ).map_err(
+            |err_str| {
+                Error::new(ErrorKind::InvalidEngineTurboController,
+                           format!("Failed to load turbo controller with index {}: {}", idx, err_str ))
+            })?;
 
-    fn combinator(&self) -> Option<ControllerCombinator> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,
-                                           &TurboController::get_controller_section_name(self.index),
-                                           "COMBINATOR")
-    }
-
-    fn lut(&self) -> Option<Vec<(i32, f64)>> {
-        let data: String = match ini_utils::get_value_from_weak_ref(
-            &self.ini_data,
-            &TurboController::get_controller_section_name(self.index),
-            "LUT")
-        {
-            Some(str) => { str },
-            None => { return None; }
-        };
-        return if data.starts_with("(") {
-            let data_slice = &data[1..(data.len() - 1)];
-            match load_lut_from_reader::<i32, f64, _>(data_slice.as_bytes()) {
-                Ok(res) => {
-                    Some(res)
-                },
-                Err(_) => {
-                    None
-                }
-            }
-        } else {
-            match load_lut_from_path::<i32, f64>(Path::new(&self.data_dir).join(data.as_str()).as_path()) {
-                Ok(res) => {
-                    Some(res)
-                }
-                Err(_) => {
-                    None
-                }
-            }
-        }
-    }
-
-    fn filter(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,
-                                           &TurboController::get_controller_section_name(self.index),
-                                           "FILTER")
-    }
-
-    fn up_limit(&self) -> Option<i32> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,
-                                           &TurboController::get_controller_section_name(self.index),
-                                           "UP_LIMIT")
-    }
-
-    fn down_limit(&self) -> Option<i32> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,
-                                           &TurboController::get_controller_section_name(self.index),
-                                           "DOWN_LIMIT")
+        Ok(TurboController {
+            data_dir: OsString::from(data_dir),
+            index: idx,
+            input: ini_utils::get_mandatory_property(ini, &section_name, "INPUT")?,
+            combinator: ini_utils::get_mandatory_property(ini, &section_name, "COMBINATOR")?,
+            lut,
+            filter: ini_utils::get_mandatory_property(ini, &section_name, "FILTER")?,
+            up_limit: ini_utils::get_mandatory_property(ini, &section_name, "UP_LIMIT")?,
+            down_limit: ini_utils::get_mandatory_property(ini, &section_name, "DOWN_LIMIT")?
+        })
     }
 
     fn get_controller_section_name(index: isize) -> String {
@@ -405,13 +421,13 @@ impl TurboController {
 struct TurboControllers {
     data_dir: OsString,
     index: isize,
-    ini_config: Rc<RefCell<Ini>>,
+    ini_config: Ini,
     controllers: Vec<TurboController>
 }
 
 impl TurboControllers {
     fn load_controller_index_from_dir(index: isize, data_dir: &Path) -> Result<Option<TurboControllers>> {
-        let ini_config = match load_ini_file_rc(
+        let ini_config = match load_ini_file(
             Path::new(data_dir).join(TurboControllers::get_controller_ini_filename(index)).as_path())
         {
             Ok(res) => { res }
@@ -423,20 +439,11 @@ impl TurboControllers {
                                       format!("Failed to load turbo controller with index {}: {}", index, err )));
             }
         };
-        let mut turbo_controller_count: isize = 0;
-        {
-            let ini_ref = ini_config.borrow();
-            turbo_controller_count = TurboControllers::count_turbo_controller_sections(ini_ref.deref());
-        }
+        let mut turbo_controller_count: isize = TurboControllers::count_turbo_controller_sections(&ini_config);
 
         let mut controller_vec: Vec<TurboController> = Vec::new();
         for idx in 0..turbo_controller_count {
-            controller_vec.push(
-                TurboController {
-                    data_dir: OsString::from(data_dir),
-                    index: idx,
-                    ini_data: Rc::downgrade(&ini_config)
-                });
+            controller_vec.push(TurboController::load_from_ini(&ini_config, idx, data_dir)?);
         }
 
         Ok(Some(
@@ -468,82 +475,63 @@ impl TurboControllers {
 struct TurboSection {
     data_dir: OsString,
     index: isize,
-    ini_data: Weak<RefCell<Ini>>,
+    lag_dn: f64,
+    lag_up: f64,
+    max_boost: f64,
+    wastegate: f64,
+    display_max_boost: f64,
+    reference_rpm: i32,
+    gamma: f64,
+    cockpit_adjustable: i32,
     controllers: Option<TurboControllers>
 }
 
 impl TurboSection {
     pub fn load_from_ini(data_dir: &Path,
                          idx: isize,
-                         ini: &Rc<RefCell<Ini>>) -> Result<TurboSection> {
+                         ini: &Ini) -> Result<TurboSection> {
+        let section_name = TurboSection::get_ini_section_name(idx);
         Ok(TurboSection {
             data_dir: OsString::from(data_dir),
             index: idx,
-            ini_data: Rc::downgrade(ini),
-            controllers: TurboControllers::load_controller_index_from_dir(idx, data_dir)? })
+            lag_dn: ini_utils::get_mandatory_property(ini, &section_name, "LAG_DN")?,
+            lag_up: ini_utils::get_mandatory_property(ini, &section_name, "LAG_UP")?,
+            max_boost: ini_utils::get_mandatory_property(ini, &section_name, "MAX_BOOST")?,
+            wastegate: ini_utils::get_mandatory_property(ini, &section_name, "WASTEGATE")?,
+            display_max_boost: ini_utils::get_mandatory_property(ini, &section_name, "DISPLAY_MAX_BOOST")?,
+            reference_rpm: ini_utils::get_mandatory_property(ini, &section_name, "REFERENCE_RPM")?,
+            gamma: ini_utils::get_mandatory_property(ini, &section_name, "GAMMA")?,
+            cockpit_adjustable: ini_utils::get_mandatory_property(ini, &section_name, "COCKPIT_ADJUSTABLE")?,
+            controllers: TurboControllers::load_controller_index_from_dir(idx, data_dir)?
+        })
     }
 
-    pub fn get_ini_section_name(&self) -> String {
-        format!("TURBO_{}", self.index)
-    }
-
-    pub fn lag_dn(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,&self.get_ini_section_name(), "LAG_DN")
-    }
-
-    pub fn lag_up(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,&self.get_ini_section_name(), "LAG_UP")
-    }
-
-    pub fn max_boost(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,&self.get_ini_section_name(), "MAX_BOOST")
-    }
-
-    pub fn wastegate(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,&self.get_ini_section_name(), "WASTEGATE")
-    }
-
-    pub fn display_max_boost(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,&self.get_ini_section_name(), "DISPLAY_MAX_BOOST")
-    }
-
-    pub fn reference_rpm(&self) -> Option<i32> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,&self.get_ini_section_name(), "REFERENCE_RPM")
-    }
-
-    pub fn gamma(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,&self.get_ini_section_name(), "GAMMA")
-    }
-
-    pub fn cockpit_adjustable(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,&self.get_ini_section_name(), "COCKPIT_ADJUSTABLE")
+    pub fn get_ini_section_name(idx: isize) -> String {
+        format!("TURBO_{}", idx)
     }
 }
 
 #[derive(Debug)]
-struct Turbo {
+pub struct Turbo {
     data_dir: OsString,
-    ini_data: Weak<RefCell<Ini>>,
+    bov_pressure_threshold: f64,
     sections: Vec<TurboSection>
 }
 
 impl Turbo {
-    fn load_from_ini_data(data_dir: &Path, ini: &Rc<RefCell<Ini>>) -> Result<Option<Turbo>> {
-        let mut turbo_count: isize = 0;
-        {
-            let ini_ref = ini.borrow();
-            turbo_count = Turbo::count_turbo_sections(ini_ref.deref());
-        }
+    fn load_from_ini_data(data_dir: &Path, ini: &Ini) -> Result<Option<Turbo>> {
+        let mut turbo_count: isize = Turbo::count_turbo_sections(ini);
         if turbo_count == 0 {
             return Ok(None);
         }
+        let pressure_threshold = ini_utils::get_mandatory_property(ini, "BOV", "PRESSURE_THRESHOLD")?;
         let mut section_vec: Vec<TurboSection> = Vec::new();
         for idx in 0..turbo_count {
             section_vec.push(TurboSection::load_from_ini(data_dir, idx, ini)?);
         }
         Ok(Some(Turbo{
             data_dir: OsString::from(data_dir),
-            ini_data: Rc::downgrade(ini),
+            bov_pressure_threshold: pressure_threshold,
             sections: section_vec
         }))
     }
@@ -557,41 +545,20 @@ impl Turbo {
             count += 1;
         }
     }
-
-    pub fn boost_threshold(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,"DAMAGE", "TURBO_BOOST_THRESHOLD")
-    }
-
-    pub fn turbo_damage_k(&self) -> Option<i32> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,"DAMAGE", "TURBO_DAMAGE_K")
-    }
-
-    pub fn pressure_threshold(&self) -> Option<f64> {
-        ini_utils::get_value_from_weak_ref(&self.ini_data,"BOV", "PRESSURE_THRESHOLD")
-    }
 }
 
 #[derive(Debug)]
 pub struct Engine {
     data_dir: OsString,
-    ini_data: Rc<RefCell<Ini>>,
-    metadata: Option<Metadata>,
-    turbo: Option<Turbo>
+    ini_data: Ini
 }
 
 impl Engine {
     const INI_FILENAME: &'static str = "engine.ini";
 
     pub fn load_from_dir(data_dir: &Path) -> Result<Engine> {
-        let ini_data = match load_ini_file_rc(data_dir.join(Engine::INI_FILENAME).as_path()) {
+        let ini_data = match load_ini_file(data_dir.join(Engine::INI_FILENAME).as_path()) {
             Ok(ini_object) => { ini_object }
-            Err(err) => {
-                return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
-            }
-        };
-        let turbo_option = match Turbo::load_from_ini_data(Path::new(data_dir),
-                                                           &ini_data) {
-            Ok(res) => { res }
             Err(err) => {
                 return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
             }
@@ -599,21 +566,20 @@ impl Engine {
 
         let eng = Engine {
             data_dir: OsString::from(data_dir),
-            ini_data,
-            metadata: match Metadata::load_from_dir(data_dir) {
-                Ok(metadata_opt) => { metadata_opt }
-                Err(e) => {
-                    println!("Warning: Failed to load engine metadata");
-                    println!("{}", e.to_string());
-                    None
-                }
-            },
-            turbo: turbo_option
+            ini_data
         };
         Ok(eng)
     }
-}
 
+    pub fn metadata(&self) -> Result<Option<Metadata>> {
+        Metadata::load_from_dir(Path::new(&self.data_dir.as_os_str()))
+    }
+
+    pub fn turbo(&self) -> Result<Option<Turbo>> {
+        Turbo::load_from_ini_data(Path::new(&self.data_dir.as_os_str()),
+                                  &self.ini_data)
+    }
+}
 
 #[cfg(test)]
 mod tests {

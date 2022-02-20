@@ -39,6 +39,22 @@ pub fn load_lut_from_reader<K, V, R>(lut_reader: R) -> Result<Vec<(K, V)>, Strin
     Ok(lut_data)
 }
 
+pub fn load_lut_from_property_value<K, V>(property_value: String, data_dir: &Path) -> Result<Vec<(K, V)>, String>
+    where
+        K: std::str::FromStr, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr, <V as FromStr>::Err: fmt::Debug
+{
+    return match property_value.starts_with("(") {
+        true => {
+            let data_slice = &property_value[1..(property_value.len() - 1)];
+            load_lut_from_reader::<K, V, _>(data_slice.as_bytes())
+        }
+        false => {
+            load_lut_from_path::<K, V>(data_dir.join(property_value.as_str()).as_path()) 
+        }
+    }
+}
+
 pub fn parse_lut_element<T>(record: &csv::StringRecord, index: usize) -> Result<T, String>
     where
         T: std::str::FromStr, <T as FromStr>::Err: fmt::Debug
