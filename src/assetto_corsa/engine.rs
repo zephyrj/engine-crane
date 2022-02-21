@@ -12,7 +12,7 @@ use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::lut_utils;
 use crate::assetto_corsa::lut_utils::{load_lut_from_path, load_lut_from_reader};
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::Ini;
+use crate::assetto_corsa::ini_utils::{FromIni, get_mandatory_property, Ini};
 
 
 struct UiData {
@@ -212,14 +212,19 @@ struct FuelConsumptionFlowRate {
     max_fuel_flow: i32
 }
 
-struct Power {
+pub struct PowerCurve {
     lut_path: OsString,
     torque_curve: Vec<(i32, i32)>
 }
 
-impl Power {
-    fn load_from_lut(lut_path: &Path) -> Result<Power> {
-        Ok(Power {
+impl PowerCurve {
+    fn load_from_ini(ini_data: &Ini, data_dir: &Path) -> Result<Self> where Self: Sized {
+        let power_lut_path: String = get_mandatory_property(ini_data, "HEADER", "POWER_CURVE")?;
+        PowerCurve::load_from_lut(data_dir.join(Path::new(power_lut_path.as_str())).as_path())
+    }
+
+    fn load_from_lut(lut_path: &Path) -> Result<PowerCurve> {
+        Ok(PowerCurve {
             lut_path: OsString::from(lut_path.as_os_str()),
             torque_curve: match load_lut_from_path::<i32, i32>(lut_path) {
                 Ok(vec) => { vec },
@@ -228,10 +233,6 @@ impl Power {
                 }
             }
         })
-    }
-
-    fn torque_curve(&self) -> &Vec<(i32, i32)> {
-        &self.torque_curve
     }
 }
 
@@ -246,8 +247,10 @@ pub struct EngineData {
 
 impl EngineData {
     const SECTION_NAME: &'static str = "ENGINE_DATA";
+}
 
-    pub fn load_from_ini(ini: &Ini) -> Result<EngineData> {
+impl FromIni for EngineData {
+    fn load_from_ini(ini: &Ini) -> Result<EngineData> {
         Ok(EngineData{
             altitude_sensitivity: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "ALTITUDE_SENSITIVITY")?,
             inertia: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "INERTIA")?,
@@ -268,8 +271,10 @@ pub struct Damage {
 
 impl Damage {
     const SECTION_NAME: &'static str = "DAMAGE";
+}
 
-    pub fn load_from_ini(ini: &Ini) -> Result<Damage> {
+impl FromIni for Damage {
+    fn load_from_ini(ini: &Ini) -> Result<Damage> {
         Ok(Damage{
             turbo_boost_threshold: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD")?,
             turbo_damage_k: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "TURBO_DAMAGE_K")?,
@@ -279,17 +284,59 @@ impl Damage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum CoastSource {
     FromCoastRef
 }
 
+impl CoastSource {
+    pub const FROM_COAST_REF_VALUE: &'static str = "FROM_COAST_REF";
+    pub const COAST_REF_SECTION_NAME: &'static str = "COAST_REF";
+
+    pub fn as_str(&self) -> &'static str {
+        match self { CoastSource::FromCoastRef => CoastSource::FROM_COAST_REF_VALUE }
+    }
+
+    pub fn get_section_name(&self) -> &'static str {
+        match self { CoastSource::FromCoastRef => CoastSource::COAST_REF_SECTION_NAME }
+    }
+}
+
+impl FromStr for CoastSource {
+    type Err = FieldParseError;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            CoastSource::FROM_COAST_REF_VALUE => Ok(CoastSource::FromCoastRef),
+            _ => Err(FieldParseError::new(s))
+        }
+    }
+}
+
+impl Display for CoastSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 #[derive(Debug)]
-struct CoastCurve {
+pub struct CoastCurve {
     curve_data_source: CoastSource,
     reference_rpm: i32,
     torque: i32,
-    non_linearity: i32
+    non_linearity: f64
+}
+
+impl FromIni for CoastCurve {
+    fn load_from_ini(ini: &Ini) -> Result<CoastCurve> {
+        let curve_data_source: CoastSource = ini_utils::get_mandatory_property(ini, "HEADER", "COAST_CURVE")?;
+        let section_name = curve_data_source.get_section_name();
+        Ok(CoastCurve{
+            curve_data_source,
+            reference_rpm: ini_utils::get_mandatory_property(ini, section_name, "RPM")?,
+            torque: ini_utils::get_mandatory_property(ini, section_name, "TORQUE")?,
+            non_linearity: ini_utils::get_mandatory_property(ini, section_name, "NON_LINEARITY")?,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -345,27 +392,14 @@ pub struct ControllerCombinatorParseError{
     invalid_value: String
 }
 
-impl ControllerCombinatorParseError {
-    pub(crate) fn new(invalid_value: &str) -> ControllerCombinatorParseError {
-        ControllerCombinatorParseError{ invalid_value: String::from(invalid_value) }
-    }
-}
-
-impl Display for ControllerCombinatorParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Unknown value for ControllerCombinator: {}", self.invalid_value)
-    }
-}
-
-impl error::Error for ControllerCombinatorParseError {}
 
 impl FromStr for ControllerCombinator {
-    type Err = ControllerCombinatorParseError;
+    type Err = FieldParseError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "ADD" => Ok(ControllerCombinator::Add),
-            _ => Err(ControllerCombinatorParseError::new(s))
+            _ => Err(FieldParseError::new(s))
         }
     }
 }
@@ -575,6 +609,22 @@ impl Engine {
         Metadata::load_from_dir(Path::new(&self.data_dir.as_os_str()))
     }
 
+    pub fn power_curve(&self) -> Result<PowerCurve> {
+        PowerCurve::load_from_ini(&self.ini_data, Path::new(self.data_dir.as_os_str()))
+    }
+
+    pub fn coast_curve(&self) -> Result<CoastCurve> {
+        CoastCurve::load_from_ini(&self.ini_data)
+    }
+
+    pub fn engine_data(&self) -> Result<EngineData> {
+        EngineData::load_from_ini(&self.ini_data)
+    }
+
+    pub fn damage(&self) -> Result<Damage> {
+        Damage::load_from_ini(&self.ini_data)
+    }
+
     pub fn turbo(&self) -> Result<Option<Turbo>> {
         Turbo::load_from_ini_data(Path::new(&self.data_dir.as_os_str()),
                                   &self.ini_data)
@@ -591,7 +641,26 @@ mod tests {
     fn load_engine() -> Result<(), String> {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/a1_science_car/data");
         match Engine::load_from_dir(&path) {
-            Ok(_) => {
+            Ok(engine) => {
+                let metadata = engine.metadata().map_err(|err|{
+                    err.to_string()
+                })?;
+                let power_curve = engine.power_curve().map_err(|err|{
+                    err.to_string()
+                })?;
+                let coast_curve = engine.coast_curve().map_err(|err|{
+                    err.to_string()
+                })?;
+                let engine_data = engine.engine_data().map_err(|err|{
+                    err.to_string()
+                })?;
+                let damage = engine.damage().map_err(|err|{
+                    err.to_string()
+                })?;
+                let turbo = engine.turbo().map_err(|err|{
+                    err.to_string()
+                })?;
+                assert!(turbo.is_some());
                 Ok(())
             }
             Err(e) => { Err(e.to_string()) }
