@@ -10,6 +10,13 @@ use indexmap::IndexMap;
 use crate::assetto_corsa::error::{Error, ErrorKind};
 //use std::collections::HashMap as IndexMap;
 
+pub trait IniUpdater {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String>;
+}
+
+pub trait FromIni {
+    fn load_from_ini(ini_data: &Ini) -> crate::assetto_corsa::error::Result<Self> where Self: Sized;
+}
 
 #[derive(Debug)]
 pub struct FieldTypeError {
@@ -393,6 +400,10 @@ impl Ini {
             }
         }
         self.finish_section(current_section)
+    }
+
+    pub fn extract<T: FromIni>(&self) -> crate::assetto_corsa::error::Result<T> {
+        T::load_from_ini(self)
     }
 
     pub fn write(&self, path: &Path) -> io::Result<()> {

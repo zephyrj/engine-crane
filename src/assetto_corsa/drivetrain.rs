@@ -5,16 +5,8 @@ use std::str::FromStr;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::Ini;
+use crate::assetto_corsa::ini_utils::{Ini, FromIni, IniUpdater};
 
-
-pub trait IniUpdater {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String>;
-}
-
-pub trait FromIni {
-    fn load_from_ini(ini_data: &Ini) -> Result<Self> where Self: Sized;
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DriveType {
@@ -435,8 +427,8 @@ impl Drivetrain {
         self.ini_data.write(&Path::new(&self.data_dir).join(Drivetrain::INI_FILENAME))
     }
 
-    pub fn load_component<T: FromIni>(&self) -> Result<T> {
-        T::load_from_ini(&self.ini_data)
+    pub fn extract_component<T: FromIni>(&self) -> Result<T> {
+        self.ini_data.extract()
     }
 
     pub fn update_component<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
@@ -700,7 +692,7 @@ LOCK_N=1
 
     fn component_update_test<T: IniUpdater + FromIni, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
         let mut drivetrain = Drivetrain::load_from_ini_string(String::from(TEST_DATA));
-        let mut component = drivetrain.load_component::<T>().unwrap();
+        let mut component = drivetrain.extract_component::<T>().unwrap();
         component_update_fn(&mut component);
         drivetrain.update_component(&component).map_err(|err| format!("{}", err.to_string()))?;
         Ok(drivetrain.ini_data.to_string())
@@ -711,7 +703,7 @@ LOCK_N=1
           F: FnOnce(&T)
     {
         let drivetrain = Drivetrain::load_from_ini_string(ini_string);
-        let component = drivetrain.load_component::<T>().map_err(|err| format!("{}", err.to_string()))?;
+        let component = drivetrain.extract_component::<T>().map_err(|err| format!("{}", err.to_string()))?;
         component_validation_fn(&component);
         Ok(())
     }
