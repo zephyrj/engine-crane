@@ -71,3 +71,22 @@ pub fn parse_lut_element<T>(record: &csv::StringRecord, index: usize) -> Result<
         }
     }
 }
+
+pub fn write_lut_to_path<K, V>(data: &Vec<(K,V)>, path: &Path) -> Result<(), String>
+    where
+      K: std::fmt::Display,
+      V: std::fmt::Display
+{
+    let mut writer = csv::WriterBuilder::new().has_headers(false).delimiter(b'|').from_path(path).map_err(
+        |err| { format!("Couldn't write lut. {}", err.to_string()) }
+    )?;
+    for (key, val) in data {
+        writer.write_record(&[key.to_string(), val.to_string()]).map_err(|err| {
+            format!("Couldn't write lut. {}", err.to_string())
+        })?;
+    }
+    writer.flush().map_err(
+        |err| { format!("Couldn't write lut. {}", err.to_string()) }
+    )?;
+    Ok(())
+}
