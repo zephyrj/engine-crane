@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use std::{error, fs, io};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::{FromStr};
 use toml::Value;
 use toml::value::Table;
@@ -12,7 +12,7 @@ use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::lut_utils;
 use crate::assetto_corsa::lut_utils::{load_lut_from_path, load_lut_from_reader};
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::{FromIni, get_mandatory_property, Ini};
+use crate::assetto_corsa::ini_utils::{FromIni, get_mandatory_property, Ini, IniUpdater};
 
 
 struct UiData {
@@ -214,7 +214,7 @@ struct FuelConsumptionFlowRate {
 
 pub struct PowerCurve {
     lut_path: OsString,
-    torque_curve: Vec<(i32, i32)>
+    pub torque_curve: Vec<(i32, i32)>
 }
 
 impl PowerCurve {
@@ -233,6 +233,14 @@ impl PowerCurve {
                 }
             }
         })
+    }
+}
+
+impl IniUpdater for PowerCurve {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        lut_utils::write_lut_to_path(&self.torque_curve, PathBuf::from(&self.lut_path).as_path())?;
+        ini_utils::set_value(ini_data, "HEADER", "POWER_CURVE", PathBuf::from(&self.lut_path).display());
+        Ok(())
     }
 }
 
@@ -261,6 +269,17 @@ impl FromIni for EngineData {
     }
 }
 
+impl IniUpdater for EngineData {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        ini_utils::set_float(ini_data, Self::SECTION_NAME, "ALTITUDE_SENSITIVITY", self.altitude_sensitivity, 2);
+        ini_utils::set_float(ini_data, Self::SECTION_NAME, "INERTIA", self.inertia, 3);
+        ini_utils::set_value(ini_data, Self::SECTION_NAME, "LIMITER", self.limiter);
+        ini_utils::set_value(ini_data, Self::SECTION_NAME, "LIMITER_HZ", self.limiter_hz);
+        ini_utils::set_value(ini_data, Self::SECTION_NAME, "MINIMUM", self.minimum);
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Damage {
     turbo_boost_threshold: f64,
@@ -281,6 +300,16 @@ impl FromIni for Damage {
             rpm_threshold: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "RPM_THRESHOLD")?,
             rpm_damage_k: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "RPM_DAMAGE_K")?,
         })
+    }
+}
+
+impl IniUpdater for Damage {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        ini_utils::set_float(ini_data, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD", self.turbo_boost_threshold, 2);
+        ini_utils::set_value(ini_data, Self::SECTION_NAME, "TURBO_DAMAGE_K", self.turbo_damage_k);
+        ini_utils::set_value(ini_data, Self::SECTION_NAME, "RPM_THRESHOLD", self.rpm_threshold);
+        ini_utils::set_value(ini_data, Self::SECTION_NAME, "RPM_DAMAGE_K", self.rpm_damage_k);
+        Ok(())
     }
 }
 
@@ -336,6 +365,21 @@ impl FromIni for CoastCurve {
             torque: ini_utils::get_mandatory_property(ini, section_name, "TORQUE")?,
             non_linearity: ini_utils::get_mandatory_property(ini, section_name, "NON_LINEARITY")?,
         })
+    }
+}
+
+impl IniUpdater for CoastCurve {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        return match self.curve_data_source {
+            CoastSource::FromCoastRef => {
+                let section_name = self.curve_data_source.get_section_name();
+                ini_utils::set_value(ini_data, "HEADER", "COAST_CURVE", &self.curve_data_source);
+                ini_utils::set_value(ini_data, section_name, "RPM", self.reference_rpm);
+                ini_utils::set_value(ini_data, section_name, "TORQUE", self.torque);
+                ini_utils::set_float(ini_data, section_name, "NON_LINEARITY", self.non_linearity, 2);
+                Ok(())
+            }
+        }
     }
 }
 
