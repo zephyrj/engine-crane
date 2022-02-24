@@ -6,6 +6,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use serde_json::Value;
+use crate::assetto_corsa::traits::MandatoryCarData;
 use crate::assetto_corsa::drivetrain::Drivetrain;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::engine::{Engine};

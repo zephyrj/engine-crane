@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::{error, fs, io};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::str::{FromStr};
+use csv::Terminator;
 use toml::Value;
 use toml::value::Table;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
@@ -12,7 +12,8 @@ use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::lut_utils;
 use crate::assetto_corsa::lut_utils::{load_lut_from_path, load_lut_from_reader};
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::{FromIni, get_mandatory_property, Ini, IniUpdater};
+use crate::assetto_corsa::ini_utils::{get_mandatory_property, Ini, IniUpdater};
+use crate::assetto_corsa::traits::{MandatoryDataComponent, CarIniData, OptionalDataComponent};
 
 
 struct UiData {
@@ -213,19 +214,14 @@ struct FuelConsumptionFlowRate {
 }
 
 pub struct PowerCurve {
-    lut_path: OsString,
+    lut_path: PathBuf,
     pub torque_curve: Vec<(i32, i32)>
 }
 
 impl PowerCurve {
-    fn load_from_ini(ini_data: &Ini, data_dir: &Path) -> Result<Self> where Self: Sized {
-        let power_lut_path: String = get_mandatory_property(ini_data, "HEADER", "POWER_CURVE")?;
-        PowerCurve::load_from_lut(data_dir.join(Path::new(power_lut_path.as_str())).as_path())
-    }
-
     fn load_from_lut(lut_path: &Path) -> Result<PowerCurve> {
         Ok(PowerCurve {
-            lut_path: OsString::from(lut_path.as_os_str()),
+            lut_path: PathBuf::from(lut_path.as_os_str()),
             torque_curve: match load_lut_from_path::<i32, i32>(lut_path) {
                 Ok(vec) => { vec },
                 Err(err_str) => {
@@ -233,6 +229,13 @@ impl PowerCurve {
                 }
             }
         })
+    }
+}
+
+impl MandatoryDataComponent for PowerCurve {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let power_lut_path: String = get_mandatory_property(parent_data.ini_data(), "HEADER", "POWER_CURVE")?;
+        PowerCurve::load_from_lut(parent_data.data_dir().join(Path::new(power_lut_path.as_str())).as_path())
     }
 }
 
@@ -257,14 +260,15 @@ impl EngineData {
     const SECTION_NAME: &'static str = "ENGINE_DATA";
 }
 
-impl FromIni for EngineData {
-    fn load_from_ini(ini: &Ini) -> Result<EngineData> {
+impl MandatoryDataComponent for EngineData {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
         Ok(EngineData{
-            altitude_sensitivity: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "ALTITUDE_SENSITIVITY")?,
-            inertia: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "INERTIA")?,
-            limiter: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "LIMITER")?,
-            limiter_hz: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "LIMITER_HZ")?,
-            minimum: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "MINIMUM")?
+            altitude_sensitivity: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "ALTITUDE_SENSITIVITY")?,
+            inertia: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "INERTIA")?,
+            limiter: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "LIMITER")?,
+            limiter_hz: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "LIMITER_HZ")?,
+            minimum: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "MINIMUM")?
         })
     }
 }
@@ -292,13 +296,14 @@ impl Damage {
     const SECTION_NAME: &'static str = "DAMAGE";
 }
 
-impl FromIni for Damage {
-    fn load_from_ini(ini: &Ini) -> Result<Damage> {
+impl MandatoryDataComponent for Damage {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
         Ok(Damage{
-            turbo_boost_threshold: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD")?,
-            turbo_damage_k: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "TURBO_DAMAGE_K")?,
-            rpm_threshold: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "RPM_THRESHOLD")?,
-            rpm_damage_k: ini_utils::get_mandatory_property(ini, Self::SECTION_NAME, "RPM_DAMAGE_K")?,
+            turbo_boost_threshold: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD")?,
+            turbo_damage_k: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "TURBO_DAMAGE_K")?,
+            rpm_threshold: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "RPM_THRESHOLD")?,
+            rpm_damage_k: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "RPM_DAMAGE_K")?,
         })
     }
 }
@@ -355,15 +360,17 @@ pub struct CoastCurve {
     non_linearity: f64
 }
 
-impl FromIni for CoastCurve {
-    fn load_from_ini(ini: &Ini) -> Result<CoastCurve> {
-        let curve_data_source: CoastSource = ini_utils::get_mandatory_property(ini, "HEADER", "COAST_CURVE")?;
+impl MandatoryDataComponent for CoastCurve {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
+        let curve_data_source: CoastSource = ini_utils::get_mandatory_property(ini_data, "HEADER", "COAST_CURVE")?;
+
         let section_name = curve_data_source.get_section_name();
         Ok(CoastCurve{
             curve_data_source,
-            reference_rpm: ini_utils::get_mandatory_property(ini, section_name, "RPM")?,
-            torque: ini_utils::get_mandatory_property(ini, section_name, "TORQUE")?,
-            non_linearity: ini_utils::get_mandatory_property(ini, section_name, "NON_LINEARITY")?,
+            reference_rpm: ini_utils::get_mandatory_property(ini_data, section_name, "RPM")?,
+            torque: ini_utils::get_mandatory_property(ini_data, section_name, "TORQUE")?,
+            non_linearity: ini_utils::get_mandatory_property(ini_data, section_name, "NON_LINEARITY")?,
         })
     }
 }
@@ -456,7 +463,7 @@ impl Display for ControllerCombinator {
 
 #[derive(Debug)]
 struct TurboController {
-    data_dir: OsString,
+    data_dir: PathBuf,
     index: isize,
     input: ControllerInput,
     combinator: ControllerCombinator,
@@ -479,7 +486,7 @@ impl TurboController {
             })?;
 
         Ok(TurboController {
-            data_dir: OsString::from(data_dir),
+            data_dir: PathBuf::from(data_dir),
             index: idx,
             input: ini_utils::get_mandatory_property(ini, &section_name, "INPUT")?,
             combinator: ini_utils::get_mandatory_property(ini, &section_name, "COMBINATOR")?,
@@ -495,9 +502,25 @@ impl TurboController {
     }
 }
 
+impl IniUpdater for TurboController {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        let section_name = TurboController::get_controller_section_name(self.index);
+        ini_utils::set_value(ini_data, &section_name, "INPUT", &self.input);
+        ini_utils::set_value(ini_data, &section_name, "COMBINATOR", &self.combinator);
+        ini_utils::set_value(ini_data,
+                             &section_name,
+                             "LUT",
+                             lut_utils::write_lut_to_property_value(&self.lut, b'=', Terminator::Any(b'|'))?);
+        ini_utils::set_float(ini_data, &section_name, "FILTER", self.filter, 3);
+        ini_utils::set_value(ini_data, &section_name, "UP_LIMIT", self.up_limit);
+        ini_utils::set_value(ini_data, &section_name, "DOWN_LIMIT", self.down_limit);
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 struct TurboControllers {
-    data_dir: OsString,
+    data_dir: PathBuf,
     index: isize,
     ini_config: Ini,
     controllers: Vec<TurboController>
@@ -526,7 +549,7 @@ impl TurboControllers {
 
         Ok(Some(
             TurboControllers {
-                data_dir: OsString::from(data_dir),
+                data_dir: PathBuf::from(data_dir),
                 index,
                 ini_config,
                 controllers: controller_vec
@@ -547,11 +570,23 @@ impl TurboControllers {
             count += 1;
         }
     }
+
+    fn update(&mut self) {
+        for controller in &self.controllers {
+
+        }
+    }
+}
+
+impl IniUpdater for TurboControllers {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        todo!()
+    }
 }
 
 #[derive(Debug)]
 struct TurboSection {
-    data_dir: OsString,
+    data_dir: PathBuf,
     index: isize,
     lag_dn: f64,
     lag_up: f64,
@@ -570,7 +605,7 @@ impl TurboSection {
                          ini: &Ini) -> Result<TurboSection> {
         let section_name = TurboSection::get_ini_section_name(idx);
         Ok(TurboSection {
-            data_dir: OsString::from(data_dir),
+            data_dir: PathBuf::from(data_dir),
             index: idx,
             lag_dn: ini_utils::get_mandatory_property(ini, &section_name, "LAG_DN")?,
             lag_up: ini_utils::get_mandatory_property(ini, &section_name, "LAG_UP")?,
@@ -589,31 +624,54 @@ impl TurboSection {
     }
 }
 
+impl IniUpdater for TurboSection {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        let section_name = TurboSection::get_ini_section_name(self.index);
+        ini_utils::set_float(ini_data, &section_name, "LAG_DN", self.lag_dn, 2);
+        ini_utils::set_float(ini_data, &section_name, "LAG_UP", self.lag_up, 2);
+        ini_utils::set_float(ini_data, &section_name, "MAX_BOOST", self.max_boost, 2);
+        ini_utils::set_float(ini_data, &section_name, "WASTEGATE", self.wastegate, 2);
+        ini_utils::set_float(ini_data, &section_name, "DISPLAY_MAX_BOOST", self.display_max_boost, 2);
+        ini_utils::set_value(ini_data, &section_name, "REFERENCE_RPM", self.reference_rpm);
+        ini_utils::set_float(ini_data, &section_name, "GAMMA", self.gamma, 2);
+        ini_utils::set_value(ini_data, &section_name, "COCKPIT_ADJUSTABLE", self.cockpit_adjustable);
+        for controller in &self.controllers {
+            // TODO
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct Turbo {
-    data_dir: OsString,
+    data_dir: PathBuf,
     bov_pressure_threshold: f64,
     sections: Vec<TurboSection>
 }
 
-impl Turbo {
-    fn load_from_ini_data(data_dir: &Path, ini: &Ini) -> Result<Option<Turbo>> {
-        let mut turbo_count: isize = Turbo::count_turbo_sections(ini);
+impl OptionalDataComponent for Turbo {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Option<Self>> where Self: Sized {
+        let ini_data = parent_data.ini_data();
+        let mut turbo_count: isize = Turbo::count_turbo_sections(ini_data);
         if turbo_count == 0 {
             return Ok(None);
         }
-        let pressure_threshold = ini_utils::get_mandatory_property(ini, "BOV", "PRESSURE_THRESHOLD")?;
+
+        let data_dir = parent_data.data_dir();
+        let pressure_threshold = ini_utils::get_mandatory_property(ini_data, "BOV", "PRESSURE_THRESHOLD")?;
         let mut section_vec: Vec<TurboSection> = Vec::new();
         for idx in 0..turbo_count {
-            section_vec.push(TurboSection::load_from_ini(data_dir, idx, ini)?);
+            section_vec.push(TurboSection::load_from_ini(data_dir, idx, ini_data)?);
         }
         Ok(Some(Turbo{
-            data_dir: OsString::from(data_dir),
+            data_dir: PathBuf::from(data_dir),
             bov_pressure_threshold: pressure_threshold,
             sections: section_vec
         }))
     }
+}
 
+impl Turbo {
     fn count_turbo_sections(ini: &Ini) -> isize {
         let mut count = 0;
         loop {
@@ -625,14 +683,31 @@ impl Turbo {
     }
 }
 
+impl IniUpdater for Turbo {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        ini_utils::set_float(ini_data, "BOV", "PRESSURE_THRESHOLD", self.bov_pressure_threshold, 2);
+        for section in &self.sections {
+            section.update_ini(ini_data)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct Engine {
-    data_dir: OsString,
+    data_dir: PathBuf,
     ini_data: Ini
 }
 
 impl Engine {
     const INI_FILENAME: &'static str = "engine.ini";
+
+    pub fn load_from_ini_string(ini_data: String) -> Engine {
+        Engine {
+            data_dir: PathBuf::from(""),
+            ini_data: Ini::load_from_string(ini_data)
+        }
+    }
 
     pub fn load_from_dir(data_dir: &Path) -> Result<Engine> {
         let ini_data = match load_ini_file(data_dir.join(Engine::INI_FILENAME).as_path()) {
@@ -643,43 +718,78 @@ impl Engine {
         };
 
         let eng = Engine {
-            data_dir: OsString::from(data_dir),
+            data_dir: PathBuf::from(data_dir),
             ini_data
         };
         Ok(eng)
     }
 
+    pub fn update_component<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
+        component.update_ini(&mut self.ini_data).map_err(|err_string| {
+            Error::new(ErrorKind::InvalidUpdate, err_string)
+        })
+    }
+
     pub fn metadata(&self) -> Result<Option<Metadata>> {
         Metadata::load_from_dir(Path::new(&self.data_dir.as_os_str()))
     }
+}
 
-    pub fn power_curve(&self) -> Result<PowerCurve> {
-        PowerCurve::load_from_ini(&self.ini_data, Path::new(self.data_dir.as_os_str()))
+impl CarIniData for Engine {
+    fn ini_data(&self) -> &Ini {
+        &self.ini_data
     }
 
-    pub fn coast_curve(&self) -> Result<CoastCurve> {
-        CoastCurve::load_from_ini(&self.ini_data)
-    }
-
-    pub fn engine_data(&self) -> Result<EngineData> {
-        EngineData::load_from_ini(&self.ini_data)
-    }
-
-    pub fn damage(&self) -> Result<Damage> {
-        Damage::load_from_ini(&self.ini_data)
-    }
-
-    pub fn turbo(&self) -> Result<Option<Turbo>> {
-        Turbo::load_from_ini_data(Path::new(&self.data_dir.as_os_str()),
-                                  &self.ini_data)
+    fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
     use std::path::Path;
-    use crate::assetto_corsa::engine::Engine;
+    use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, EngineData, PowerCurve, Turbo};
+    use crate::assetto_corsa::ini_utils::IniUpdater;
+    use crate::assetto_corsa::traits::{extract_mandatory_component, extract_optional_component, MandatoryDataComponent};
+
+    const TURBO_NO_CTRL_DATA: &'static str = r#"
+[HEADER]
+VERSION=1
+POWER_CURVE=power.lut			; power curve file
+COAST_CURVE=FROM_COAST_REF 		; coast curve. can define 3 different options (coast reference, coast values for mathematical curve, coast curve file)
+
+[ENGINE_DATA]
+ALTITUDE_SENSITIVITY=0.1	; sensitivity to altitude
+INERTIA=0.120					; engine inertia
+LIMITER=6500					; engine rev limiter. 0 no limiter
+LIMITER_HZ=30
+MINIMUM=1250
+
+[COAST_REF]
+RPM=7000						; rev number reference
+TORQUE=60						; engine braking torque value in Nm at rev number reference
+NON_LINEARITY=0					; coast engine brake from ZERO to TORQUE value at rpm with linear (0) to fully exponential (1)
+
+
+[TURBO_0]
+LAG_DN=0.99				; Interpolation lag used slowing down the turbo
+LAG_UP=0.99				; Interpolation lag used to spin up the turbo
+MAX_BOOST=1.00				; Maximum boost generated. This value is never exceeded and multiply the torque like T=T*(1.0 + boost), so a boost of 2 will give you 3 times the torque at a given rpm.
+WASTEGATE=0			; Max level of boost before the wastegate does its things. 0 = no wastegate
+DISPLAY_MAX_BOOST=1.00	; Value used by display apps
+REFERENCE_RPM=5000			; The reference rpm where the turbo reaches maximum boost (at max gas pedal).
+GAMMA=1
+COCKPIT_ADJUSTABLE=0
+
+[BOV]
+PRESSURE_THRESHOLD=0.5 ; the pressure on the air intake that the valve can take before opening, the pressure on the intake depends on throttle, this is mostly used for fmod audio
+
+[DAMAGE]
+TURBO_BOOST_THRESHOLD=1.5  ; level of TOTAL boost before the engine starts to take damage
+TURBO_DAMAGE_K=5			; amount of damage per second per (boost - threshold)
+RPM_THRESHOLD=6700			; RPM at which the engine starts to take damage
+RPM_DAMAGE_K=1
+    "#;
 
     #[test]
     fn load_engine() -> Result<(), String> {
@@ -689,19 +799,19 @@ mod tests {
                 let metadata = engine.metadata().map_err(|err|{
                     err.to_string()
                 })?;
-                let power_curve = engine.power_curve().map_err(|err|{
+                let power_curve = extract_mandatory_component::<PowerCurve>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
-                let coast_curve = engine.coast_curve().map_err(|err|{
+                let coast_curve = extract_mandatory_component::<CoastCurve>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
-                let engine_data = engine.engine_data().map_err(|err|{
+                let engine_data = extract_mandatory_component::<EngineData>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
-                let damage = engine.damage().map_err(|err|{
+                let damage = extract_mandatory_component::<Damage>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
-                let turbo = engine.turbo().map_err(|err|{
+                let turbo = extract_optional_component::<Turbo>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
                 assert!(turbo.is_some());
@@ -709,5 +819,86 @@ mod tests {
             }
             Err(e) => { Err(e.to_string()) }
         }
+    }
+
+    #[test]
+    fn update_coast_curve() -> Result<(), String> {
+        let new_rpm = 9000;
+        let new_torque = 80;
+        let new_non_linearity = 0.5;
+
+        let output_ini_string = component_update_test(|coast_curve: &mut CoastCurve| {
+            coast_curve.reference_rpm = new_rpm;
+            coast_curve.torque = new_torque;
+            coast_curve.non_linearity = new_non_linearity;
+        })?;
+        validate_component(output_ini_string, |coast_curve: &CoastCurve| {
+            assert_eq!(coast_curve.reference_rpm, new_rpm, "Reference rpm is correct");
+            assert_eq!(coast_curve.torque, new_torque, "torque is correct");
+            assert_eq!(coast_curve.non_linearity, new_non_linearity, "non-linearity is correct");
+        })
+    }
+
+    #[test]
+    fn update_engine_data() -> Result<(), String> {
+        let new_altitude_sensitivity = 0.15;
+        let new_inertia = 0.140;
+        let new_limiter = 7000;
+        let new_limiter_hz = 40;
+        let new_minimum = 900;
+
+        let output_ini_string = component_update_test(|engine_data: &mut EngineData| {
+            engine_data.altitude_sensitivity = new_altitude_sensitivity;
+            engine_data.inertia = new_inertia;
+            engine_data.limiter = new_limiter;
+            engine_data.limiter_hz = new_limiter_hz;
+            engine_data.minimum = new_minimum;
+        })?;
+        validate_component(output_ini_string, |engine_data: &EngineData| {
+            assert_eq!(engine_data.altitude_sensitivity, new_altitude_sensitivity, "altitude_sensitivity is correct");
+            assert_eq!(engine_data.inertia, new_inertia, "inertia is correct");
+            assert_eq!(engine_data.limiter, new_limiter, "limiter is correct");
+            assert_eq!(engine_data.limiter_hz, new_limiter_hz, "limiter_hz is correct");
+            assert_eq!(engine_data.minimum, new_minimum, "minimum is correct");
+        })
+    }
+
+    #[test]
+    fn update_damage() -> Result<(), String> {
+        let new_turbo_boost_threshold = 1.9;
+        let new_turbo_damage_k = 10;
+        let new_rpm_threshold = 7000;
+        let rpm_damage_k = 2;
+
+        let output_ini_string = component_update_test(|damage: &mut Damage| {
+            damage.turbo_boost_threshold = new_turbo_boost_threshold;
+            damage.turbo_damage_k = new_turbo_damage_k;
+            damage.rpm_threshold = new_rpm_threshold;
+            damage.rpm_damage_k = rpm_damage_k;
+        })?;
+        validate_component(output_ini_string, |damage: &Damage| {
+            assert_eq!(damage.turbo_boost_threshold, new_turbo_boost_threshold, "turbo_boost_threshold is correct");
+            assert_eq!(damage.turbo_damage_k, new_turbo_damage_k, "turbo_damage_k is correct");
+            assert_eq!(damage.rpm_threshold, new_rpm_threshold, "rpm_threshold is correct");
+            assert_eq!(damage.rpm_damage_k, rpm_damage_k, "rpm_damage_k is correct");
+        })
+    }
+
+    fn component_update_test<T: IniUpdater + MandatoryDataComponent, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
+        let mut engine = Engine::load_from_ini_string(String::from(TURBO_NO_CTRL_DATA));
+        let mut component = extract_mandatory_component::<T>(&engine).unwrap();
+        component_update_fn(&mut component);
+        engine.update_component(&component).map_err(|err| format!("{}", err.to_string()))?;
+        Ok(engine.ini_data.to_string())
+    }
+
+    fn validate_component<T, F>(ini_string: String, component_validation_fn: F) -> Result<(), String>
+        where T: MandatoryDataComponent,
+              F: FnOnce(&T)
+    {
+        let engine = Engine::load_from_ini_string(ini_string);
+        let component = extract_mandatory_component::<T>(&engine).map_err(|err| format!("{}", err.to_string()))?;
+        component_validation_fn(&component);
+        Ok(())
     }
 }

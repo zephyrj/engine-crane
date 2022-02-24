@@ -1,11 +1,12 @@
-use std::ffi::OsString;
+
 use std::fmt::{Display, Formatter};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
-use crate::assetto_corsa::ini_utils;
+use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::ini_utils::{Ini, FromIni, IniUpdater};
+use crate::assetto_corsa::traits::{CarIniData, MandatoryDataComponent, MandatoryCarData};
 
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -60,10 +61,10 @@ pub struct Traction {
     drive_type: DriveType
 }
 
-impl FromIni for Traction {
-    fn load_from_ini(ini_data: &Ini) -> Result<Self> where Self: Sized {
+impl MandatoryDataComponent for Traction {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         Ok(Traction{
-            drive_type: get_mandatory_field(ini_data, "TRACTION", "TYPE")?
+            drive_type: get_mandatory_field(parent_data.ini_data(), "TRACTION", "TYPE")?
         })
     }
 }
@@ -106,8 +107,9 @@ impl Gearbox {
     }
 }
 
-impl FromIni for Gearbox {
-    fn load_from_ini(ini_data: &Ini) -> Result<Gearbox> {
+impl MandatoryDataComponent for Gearbox {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
         let gear_count = get_mandatory_field(ini_data, "GEARS", "COUNT")?;
         let mut gear_ratios = Vec::new();
         for gear_num in 1..gear_count+1 {
@@ -179,10 +181,10 @@ pub struct Clutch {
     pub max_torque: i32
 }
 
-impl FromIni for Clutch {
-    fn load_from_ini(ini_data: &Ini) -> Result<Self> where Self: Sized {
+impl MandatoryDataComponent for Clutch {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> {
         Ok(Clutch{
-            max_torque: get_mandatory_field(ini_data, "CLUTCH", "MAX_TORQUE")?
+            max_torque: get_mandatory_field(parent_data.ini_data(), "CLUTCH", "MAX_TORQUE")?
         })
     }
 }
@@ -201,8 +203,9 @@ pub struct Differential {
     pub preload: i32
 }
 
-impl FromIni for Differential {
-    fn load_from_ini(ini_data: &Ini) -> Result<Differential> {
+impl MandatoryDataComponent for Differential {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
         let power = get_mandatory_field(ini_data, "DIFFERENTIAL", "POWER")?;
         let coast = get_mandatory_field(ini_data, "DIFFERENTIAL", "COAST")?;
         let preload = get_mandatory_field(ini_data, "DIFFERENTIAL", "PRELOAD")?;
@@ -261,8 +264,9 @@ impl AutoClutch {
     }
 }
 
-impl FromIni for AutoClutch {
-    fn load_from_ini(ini_data: &Ini) -> Result<AutoClutch> {
+impl MandatoryDataComponent for AutoClutch {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
         let upshift_profile = AutoClutch::load_shift_profile(ini_data, "UPSHIFT_PROFILE")?;
         let downshift_profile = AutoClutch::load_shift_profile(ini_data, "DOWNSHIFT_PROFILE")?;
         let use_on_changes = get_mandatory_field(ini_data, "AUTOCLUTCH", "USE_ON_CHANGES")?;
@@ -305,8 +309,9 @@ impl AutoBlip {
     }
 }
 
-impl FromIni for AutoBlip {
-    fn load_from_ini(ini_data: &Ini) -> Result<AutoBlip> {
+impl MandatoryDataComponent for AutoBlip {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
         let electronic = get_mandatory_field(ini_data, "AUTOBLIP", "ELECTRONIC")?;
         let level = get_mandatory_field(ini_data, "AUTOBLIP", "LEVEL")?;
         let mut points = Vec::new();
@@ -341,8 +346,9 @@ pub struct AutoShifter {
     pub gas_cutoff_time: f64
 }
 
-impl FromIni for AutoShifter {
-    fn load_from_ini(ini_data: &Ini) -> Result<AutoShifter> {
+impl MandatoryDataComponent for AutoShifter {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
         let up = get_mandatory_field(ini_data, "AUTO_SHIFTER", "UP")?;
         let down = get_mandatory_field(ini_data, "AUTO_SHIFTER", "DOWN")?;
         let slip_threshold = get_mandatory_field(ini_data, "AUTO_SHIFTER", "SLIP_THRESHOLD")?;
@@ -369,8 +375,9 @@ pub struct DownshiftProtection {
     pub lock_n: i32
 }
 
-impl FromIni for DownshiftProtection {
-    fn load_from_ini(ini_data: &Ini) -> Result<DownshiftProtection> {
+impl MandatoryDataComponent for DownshiftProtection {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+        let ini_data = parent_data.ini_data();
         Ok(DownshiftProtection{
             active: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "ACTIVE")?,
             debug: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "DEBUG")?,
@@ -392,7 +399,7 @@ impl IniUpdater for DownshiftProtection {
 
 #[derive(Debug)]
 pub struct Drivetrain {
-    data_dir: OsString,
+    data_dir: PathBuf,
     ini_data: Ini
 }
 
@@ -401,7 +408,7 @@ impl Drivetrain {
 
     pub fn load_from_ini_string(ini_data: String) -> Drivetrain {
         Drivetrain {
-            data_dir: OsString::from(""),
+            data_dir: PathBuf::new(),
             ini_data: Ini::load_from_string(ini_data)
         }
     }
@@ -414,27 +421,35 @@ impl Drivetrain {
             }
         };
         Ok(Drivetrain {
-            data_dir: OsString::from(ini_path.parent().unwrap()),
+            data_dir: PathBuf::from(ini_path.parent().unwrap()),
             ini_data
         })
-    }
-
-    pub fn load_from_path(data_dir: &Path) -> Result<Drivetrain> {
-        Drivetrain::load_from_file(data_dir.join(Drivetrain::INI_FILENAME).as_path())
     }
 
     pub fn write(&mut self) -> std::io::Result<()> {
         self.ini_data.write(&Path::new(&self.data_dir).join(Drivetrain::INI_FILENAME))
     }
 
-    pub fn extract_component<T: FromIni>(&self) -> Result<T> {
-        self.ini_data.extract()
-    }
-
-    pub fn update_component<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
+    pub fn update_subcomponent<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
         component.update_ini(&mut self.ini_data).map_err(|err_string| {
             Error::new(ErrorKind::InvalidUpdate, err_string)
         })
+    }
+}
+
+impl CarIniData for Drivetrain {
+    fn ini_data(&self) -> &Ini {
+        &self.ini_data
+    }
+
+    fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+}
+
+impl MandatoryCarData for Drivetrain {
+    fn load_from_path(data_dir: &Path) -> Result<Drivetrain> {
+        Drivetrain::load_from_file(data_dir.join(Drivetrain::INI_FILENAME).as_path())
     }
 }
 
@@ -456,6 +471,7 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 #[cfg(test)]
 mod tests {
     use crate::assetto_corsa::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, DriveType, FromIni, Gearbox, IniUpdater, Traction};
+    use crate::assetto_corsa::traits::{extract_mandatory_component, MandatoryDataComponent};
 
     const TEST_DATA: &'static str = r#"
 [HEADER]
@@ -531,10 +547,10 @@ LOCK_N=1
     fn update_traction() -> Result<(), String> {
         let new_drive_type = DriveType::FWD;
 
-        let output_ini_string = component_update_test(|traction: &mut Traction| {
+        let output_ini_string = subcomponent_update_test(|traction: &mut Traction| {
             traction.drive_type = new_drive_type.clone();
         })?;
-        validate_component(output_ini_string, |gearbox: &Traction| {
+        validate_subcomponent(output_ini_string, |gearbox: &Traction| {
             assert_eq!(gearbox.drive_type, new_drive_type, "Drive type is correct");
         })
     }
@@ -552,7 +568,7 @@ LOCK_N=1
         let new_final_drive = 3.2;
         let new_reverse_drive = -3.700;
 
-        let output_ini_string = component_update_test(|gearbox: &mut Gearbox| {
+        let output_ini_string = subcomponent_update_test(|gearbox: &mut Gearbox| {
             gearbox.change_up_time = new_change_up_time;
             gearbox.change_dn_time = new_change_dn_time;
             gearbox.auto_cutoff_time = new_auto_cutoof_time;
@@ -563,7 +579,7 @@ LOCK_N=1
             gearbox.reverse_gear_ratio = new_reverse_drive;
             gearbox.update_gears(new_ratios.clone(), new_final_drive);
         })?;
-        validate_component(output_ini_string, |gearbox: &Gearbox| {
+        validate_subcomponent(output_ini_string, |gearbox: &Gearbox| {
             assert_eq!(gearbox.change_up_time, new_change_up_time, "Change up time is correct");
             assert_eq!(gearbox.change_dn_time, new_change_dn_time, "Change dn time is correct");
             assert_eq!(gearbox.auto_cutoff_time, new_auto_cutoof_time, "Auto cutoff time is correct");
@@ -582,10 +598,10 @@ LOCK_N=1
     fn update_clutch() -> Result<(), String> {
         let new_max_torque = 300;
 
-        let output_ini_string = component_update_test(|clutch: &mut Clutch|{
+        let output_ini_string = subcomponent_update_test(|clutch: &mut Clutch|{
             clutch.max_torque = new_max_torque;
         })?;
-        validate_component(output_ini_string,
+        validate_subcomponent(output_ini_string,
                            |clutch: &Clutch| {
             assert_eq!(clutch.max_torque, new_max_torque, "Max torque is correct");
         })
@@ -597,12 +613,12 @@ LOCK_N=1
         let new_power = 0.2;
         let new_coast = 0.8;
 
-        let output_ini_string = component_update_test(|differential: &mut Differential|{
+        let output_ini_string = subcomponent_update_test(|differential: &mut Differential|{
             differential.preload = new_preload;
             differential.power = new_power;
             differential.coast = new_coast;
         })?;
-        validate_component(output_ini_string, |differential: &Differential| {
+        validate_subcomponent(output_ini_string, |differential: &Differential| {
             assert_eq!(differential.preload, new_preload, "Preload is correct");
             assert_eq!(differential.power, new_power, "Power is correct");
             assert_eq!(differential.coast, new_coast, "Coast is correct");
@@ -616,13 +632,13 @@ LOCK_N=1
         let new_use_on_changes = 0;
         let new_forced_on = 1;
 
-        let output_ini_string = component_update_test(|auto_clutch: &mut AutoClutch|{
+        let output_ini_string = subcomponent_update_test(|auto_clutch: &mut AutoClutch|{
             auto_clutch.min_rpm = new_min_rpm;
             auto_clutch.max_rpm = new_max_rpm;
             auto_clutch.use_on_changes = new_use_on_changes;
             auto_clutch.forced_on = new_forced_on;
         })?;
-        validate_component(output_ini_string, |auto_clutch: &AutoClutch| {
+        validate_subcomponent(output_ini_string, |auto_clutch: &AutoClutch| {
             assert_eq!(auto_clutch.min_rpm, new_min_rpm, "MinRpm is correct");
             assert_eq!(auto_clutch.max_rpm, new_max_rpm, "MaxRpm is correct");
             assert_eq!(auto_clutch.use_on_changes, new_use_on_changes, "new_use_on_changes is correct");
@@ -636,12 +652,12 @@ LOCK_N=1
         let new_points = vec![20, 200, 260];
         let new_electronic = 0;
 
-        let output_ini_string = component_update_test(|auto_blip: &mut AutoBlip|{
+        let output_ini_string = subcomponent_update_test(|auto_blip: &mut AutoBlip|{
             auto_blip.level = new_level;
             auto_blip.points = new_points.clone();
             auto_blip.electronic = new_electronic;
         })?;
-        validate_component(output_ini_string, |auto_blip: &AutoBlip| {
+        validate_subcomponent(output_ini_string, |auto_blip: &AutoBlip| {
             assert_eq!(auto_blip.level, new_level, "Level is correct");
             assert_eq!(auto_blip.points, new_points, "Points are correct");
             assert_eq!(auto_blip.electronic, new_electronic, "Electronic is correct");
@@ -655,13 +671,13 @@ LOCK_N=1
         let new_slip_threshold = 1.0;
         let new_gas_cutoff_time = 0.3;
 
-        let output_ini_string = component_update_test(|auto_shifter: &mut AutoShifter|{
+        let output_ini_string = subcomponent_update_test(|auto_shifter: &mut AutoShifter|{
             auto_shifter.up = new_up;
             auto_shifter.down = new_down;
             auto_shifter.slip_threshold = new_slip_threshold;
             auto_shifter.gas_cutoff_time = new_gas_cutoff_time;
         })?;
-        validate_component(output_ini_string, |auto_shifter: &AutoShifter| {
+        validate_subcomponent(output_ini_string, |auto_shifter: &AutoShifter| {
             assert_eq!(auto_shifter.up, new_up, "Up is correct");
             assert_eq!(auto_shifter.down, new_down, "Down are correct");
             assert_eq!(auto_shifter.slip_threshold, new_slip_threshold, "Slip threshold is correct");
@@ -676,13 +692,13 @@ LOCK_N=1
         let new_overrev = 300;
         let new_lock_n = 0;
 
-        let output_ini_string = component_update_test(|downshift_protection: &mut DownshiftProtection| {
+        let output_ini_string = subcomponent_update_test(|downshift_protection: &mut DownshiftProtection| {
             downshift_protection.active = new_active;
             downshift_protection.debug = new_debug;
             downshift_protection.overrev = new_overrev;
             downshift_protection.lock_n = new_lock_n;
         })?;
-        validate_component(output_ini_string, |downshift_protection: &DownshiftProtection| {
+        validate_subcomponent(output_ini_string, |downshift_protection: &DownshiftProtection| {
             assert_eq!(downshift_protection.active, new_active, "Active is correct");
             assert_eq!(downshift_protection.debug, new_debug, "Debug is correct");
             assert_eq!(downshift_protection.overrev, new_overrev, "Overrev is correct");
@@ -690,20 +706,20 @@ LOCK_N=1
         })
     }
 
-    fn component_update_test<T: IniUpdater + FromIni, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
+    fn subcomponent_update_test<T: IniUpdater + MandatoryDataComponent, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
         let mut drivetrain = Drivetrain::load_from_ini_string(String::from(TEST_DATA));
-        let mut component = drivetrain.extract_component::<T>().unwrap();
+        let mut component = extract_mandatory_component::<T>(&drivetrain).unwrap();
         component_update_fn(&mut component);
-        drivetrain.update_component(&component).map_err(|err| format!("{}", err.to_string()))?;
+        drivetrain.update_subcomponent(&component).map_err(|err| format!("{}", err.to_string()))?;
         Ok(drivetrain.ini_data.to_string())
     }
 
-    fn validate_component<T, F>(ini_string: String, component_validation_fn: F) -> Result<(), String>
-    where T: FromIni,
-          F: FnOnce(&T)
+    fn validate_subcomponent<T, F>(ini_string: String, component_validation_fn: F) -> Result<(), String>
+        where T: MandatoryDataComponent,
+              F: FnOnce(&T)
     {
         let drivetrain = Drivetrain::load_from_ini_string(ini_string);
-        let component = drivetrain.extract_component::<T>().map_err(|err| format!("{}", err.to_string()))?;
+        let component = extract_mandatory_component::<T>(&drivetrain).map_err(|err| format!("{}", err.to_string()))?;
         component_validation_fn(&component);
         Ok(())
     }
