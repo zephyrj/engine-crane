@@ -392,7 +392,9 @@ impl IniUpdater for CoastCurve {
 
 #[derive(Debug)]
 enum ControllerInput {
-    Rpms
+    Rpms,
+    Gas,
+    Gear
 }
 
 impl Default for ControllerInput {
@@ -400,11 +402,15 @@ impl Default for ControllerInput {
 }
 
 impl ControllerInput {
-    pub const RPMS_VALUE :&'static str = "RPMS";
+    pub const RPMS_VALUE: &'static str = "RPMS";
+    pub const GAS_VALUE: &'static str = "GAS";
+    pub const GEAR_VALUE: &'static str= "GEAR";
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            ControllerInput::Rpms => ControllerInput::RPMS_VALUE
+            ControllerInput::Rpms => ControllerInput::RPMS_VALUE,
+            ControllerInput::Gas => ControllerInput::GAS_VALUE,
+            ControllerInput::Gear => ControllerInput::GEAR_VALUE
         }
     }
 }
@@ -414,6 +420,8 @@ impl FromStr for ControllerInput {
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             ControllerInput::RPMS_VALUE => Ok(ControllerInput::Rpms),
+            ControllerInput::GAS_VALUE => Ok(ControllerInput::Gas),
+            ControllerInput::GEAR_VALUE => Ok(ControllerInput::Gear),
             _ => Err(FieldParseError::new(s))
         }
     }
@@ -427,13 +435,18 @@ impl Display for ControllerInput {
 
 #[derive(Debug)]
 enum ControllerCombinator {
-    Add
+    Add,
+    Mult
 }
 
 impl ControllerCombinator {
+    pub const ADD_VALUE :&'static str = "ADD";
+    pub const MULT_VALUE :&'static str = "MULT";
+
     pub fn as_str(&self) -> &'static str {
         match self {
-            ControllerCombinator::Add => "ADD"
+            ControllerCombinator::Add => ControllerCombinator::ADD_VALUE,
+            ControllerCombinator::Mult => ControllerCombinator::MULT_VALUE
         }
     }
 }
@@ -449,7 +462,8 @@ impl FromStr for ControllerCombinator {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
-            "ADD" => Ok(ControllerCombinator::Add),
+            ControllerCombinator::ADD_VALUE => Ok(ControllerCombinator::Add),
+            ControllerCombinator::MULT_VALUE => Ok(ControllerCombinator::Mult),
             _ => Err(FieldParseError::new(s))
         }
     }
@@ -467,10 +481,10 @@ struct TurboController {
     index: isize,
     input: ControllerInput,
     combinator: ControllerCombinator,
-    lut: Vec<(i32, f64)>,
+    lut: Vec<(f64, f64)>,
     filter: f64,
-    up_limit: i32,
-    down_limit: i32
+    up_limit: f64,
+    down_limit: f64
 }
 
 impl TurboController {
@@ -540,8 +554,7 @@ impl TurboControllers {
                                       format!("Failed to load turbo controller with index {}: {}", index, err )));
             }
         };
-        let mut turbo_controller_count: isize = TurboControllers::count_turbo_controller_sections(&ini_config);
-
+        let turbo_controller_count: isize = TurboControllers::count_turbo_controller_sections(&ini_config);
         let mut controller_vec: Vec<TurboController> = Vec::new();
         for idx in 0..turbo_controller_count {
             controller_vec.push(TurboController::load_from_ini(&ini_config, idx, data_dir)?);
@@ -645,7 +658,7 @@ impl IniUpdater for TurboSection {
 #[derive(Debug)]
 pub struct Turbo {
     data_dir: PathBuf,
-    bov_pressure_threshold: f64,
+    bov_pressure_threshold: Option<f64>,
     sections: Vec<TurboSection>
 }
 
@@ -658,7 +671,7 @@ impl OptionalDataComponent for Turbo {
         }
 
         let data_dir = parent_data.data_dir();
-        let pressure_threshold = ini_utils::get_mandatory_property(ini_data, "BOV", "PRESSURE_THRESHOLD")?;
+        let pressure_threshold = ini_utils::get_value(ini_data, "BOV", "PRESSURE_THRESHOLD");
         let mut section_vec: Vec<TurboSection> = Vec::new();
         for idx in 0..turbo_count {
             section_vec.push(TurboSection::load_from_ini(data_dir, idx, ini_data)?);
@@ -685,7 +698,10 @@ impl Turbo {
 
 impl IniUpdater for Turbo {
     fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        ini_utils::set_float(ini_data, "BOV", "PRESSURE_THRESHOLD", self.bov_pressure_threshold, 2);
+        if let Some(bov_pressure_threshold) = self.bov_pressure_threshold {
+            ini_utils::set_float(ini_data, "BOV", "PRESSURE_THRESHOLD", bov_pressure_threshold, 2);
+        }
+
         for section in &self.sections {
             section.update_ini(ini_data)?;
         }
@@ -793,7 +809,7 @@ RPM_DAMAGE_K=1
 
     #[test]
     fn load_engine() -> Result<(), String> {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/a1_science_car/data");
+        let path = Path::new("src/assetto_corsa/test-data/engine-with-turbo-ctrl");
         match Engine::load_from_dir(&path) {
             Ok(engine) => {
                 let metadata = engine.metadata().map_err(|err|{
