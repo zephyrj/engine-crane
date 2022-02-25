@@ -518,8 +518,8 @@ impl Ini {
     }
 }
 
-impl ToString for Ini {
-    fn to_string(&self) -> String {
+impl Display for Ini {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut out = String::new();
         let section_strings: Vec<String> = self.sections.values().filter_map(|section| {
             let section_string = section.to_string();
@@ -531,6 +531,6 @@ impl ToString for Ini {
         }).collect();
         out += &section_strings.join("\n\n");
         out += "\n";
-        out
+        write!(f, "{}", out)
     }
 }
