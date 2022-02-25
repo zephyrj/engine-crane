@@ -1,4 +1,5 @@
 use std::{fmt, io};
+use std::fmt::Display;
 use std::fs::File;
 use std::path::Path;
 use std::str::FromStr;
@@ -6,8 +7,8 @@ use csv::Terminator;
 
 pub fn load_lut_from_path<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
     where
-        K: std::str::FromStr, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr, <V as FromStr>::Err: fmt::Debug
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
 {
     let file = match File::open(lut_path) {
         Ok(file) => { file }
@@ -20,8 +21,8 @@ pub fn load_lut_from_path<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
 
 pub fn load_lut_from_reader<K, V, R>(lut_reader: R, delimiter: u8, terminator: Terminator) -> Result<Vec<(K, V)>, String>
     where
-        K: std::str::FromStr, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
         R: io::Read
 {
     let mut lut_data: Vec<(K, V)> = Vec::new();
@@ -29,8 +30,9 @@ pub fn load_lut_from_reader<K, V, R>(lut_reader: R, delimiter: u8, terminator: T
     for result in rdr.records() {
         match result {
             Ok(record) => {
-                lut_data.push((parse_lut_element(&record, 0)?,
-                               parse_lut_element(&record, 1)?));
+                let key: K = parse_lut_element(&record, 0)?;
+                let value: V = parse_lut_element(&record, 1)?;
+                lut_data.push((key, value));
             },
             _ => {}
         }
@@ -40,8 +42,8 @@ pub fn load_lut_from_reader<K, V, R>(lut_reader: R, delimiter: u8, terminator: T
 
 pub fn load_lut_from_property_value<K, V>(property_value: String, data_dir: &Path) -> Result<Vec<(K, V)>, String>
     where
-        K: std::str::FromStr, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr, <V as FromStr>::Err: fmt::Debug
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
 {
     return match property_value.starts_with("(") {
         true => {
@@ -56,7 +58,7 @@ pub fn load_lut_from_property_value<K, V>(property_value: String, data_dir: &Pat
 
 pub fn parse_lut_element<T>(record: &csv::StringRecord, index: usize) -> Result<T, String>
     where
-        T: std::str::FromStr, <T as FromStr>::Err: fmt::Debug
+        T: std::str::FromStr + Display, <T as FromStr>::Err: fmt::Debug
 {
     match record.get(index).unwrap().parse::<T>() {
         Ok(s) => { Ok(s) },
@@ -65,8 +67,7 @@ pub fn parse_lut_element<T>(record: &csv::StringRecord, index: usize) -> Result<
             if let Some(pos) = record.position() {
                 err_str.push_str(&format!(" at line {}", pos.line()));
             }
-            return Err(format!("{} to {}",
-                               err_str, std::any::type_name::<T>()))
+            return Err(format!("{} to {}. {:?}", err_str, std::any::type_name::<T>(), e))
         }
     }
 }
@@ -115,8 +116,8 @@ pub fn write_lut_to_property_value<K, V>(data: &Vec<(K,V)>, delimiter: u8, termi
 
 #[test]
 fn load_lut_string() {
-    let data = String::from("(100=12|200=13|300=40)");
-    let mut vec: Vec<(i32, i32)> = load_lut_from_property_value(data, Path::new("")).unwrap();
+    let data = String::from("(0=0.12|0.97=13|1=0.40)");
+    let mut vec: Vec<(f64, f64)> = load_lut_from_property_value(data, Path::new("")).unwrap();
     println!("{:?}", vec);
     let out = write_lut_to_property_value(&vec, b'=', Terminator::Any(b'|')).unwrap();
     println!("{}", out);
