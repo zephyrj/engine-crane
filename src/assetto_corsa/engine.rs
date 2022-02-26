@@ -809,7 +809,9 @@ RPM_DAMAGE_K=1
 
     #[test]
     fn load_engine() -> Result<(), String> {
-        let path = Path::new("src/assetto_corsa/test-data/engine-with-turbo-ctrl");
+        let this_file = Path::new(file!());
+        let this_dir = this_file.parent().unwrap();
+        let path = this_dir.join("test-data/car-with-turbo-with-ctrls/data");
         match Engine::load_from_dir(&path) {
             Ok(engine) => {
                 let metadata = engine.metadata().map_err(|err|{

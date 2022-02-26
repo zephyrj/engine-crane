@@ -15,23 +15,26 @@ use crate::assetto_corsa::ini_utils::Ini;
 
 #[derive(Debug)]
 pub enum CarVersion {
-    Default,
+    One,
+    Two,
     CspExtendedPhysics
 }
 
 impl Default for CarVersion {
     fn default() -> Self {
-        CarVersion::Default
+        CarVersion::One
     }
 }
 
 impl CarVersion {
     pub const VERSION_1 :&'static str = "1";
+    pub const VERSION_2 :&'static str = "2";
     pub const CSP_EXTENDED_2 : &'static str = "extended-2";
 
     fn as_str(&self) -> &'static str {
         match self {
-            CarVersion::Default => CarVersion::VERSION_1,
+            CarVersion::One => CarVersion::VERSION_1,
+            CarVersion::Two => CarVersion::VERSION_2,
             CarVersion::CspExtendedPhysics => CarVersion::CSP_EXTENDED_2
         }
     }
@@ -41,7 +44,8 @@ impl FromStr for CarVersion {
     type Err = FieldParseError;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
-            CarVersion::VERSION_1 => Ok(CarVersion::Default),
+            CarVersion::VERSION_1 => Ok(CarVersion::One),
+            CarVersion::VERSION_2 => Ok(CarVersion::Two),
             CarVersion::CSP_EXTENDED_2 => Ok(CarVersion::CspExtendedPhysics),
             _ => Err(FieldParseError::new(s))
         }
@@ -219,27 +223,27 @@ pub struct Car {
 
 impl Car {
     pub fn version(&self) -> Option<CarVersion> {
-        ini_utils::get_value(&self.ini_config, "header", "version")
+        ini_utils::get_value(&self.ini_config, "HEADER", "VERSION")
     }
 
     pub fn screen_name(&self) -> Option<String> {
-        ini_utils::get_value(&self.ini_config, "info","screen_name")
+        ini_utils::get_value(&self.ini_config, "INFO","SCREEN_NAME")
     }
 
     pub fn total_mass(&self) -> Option<u32> {
-        ini_utils::get_value(&self.ini_config, "basic","totalmass")
+        ini_utils::get_value(&self.ini_config, "BASIC","TOTALMASS")
     }
 
     pub fn default_fuel(&self) -> Option<u32> {
-        ini_utils::get_value(&self.ini_config, "fuel","fuel")
+        ini_utils::get_value(&self.ini_config, "FUEL","FUEL")
     }
 
     pub fn max_fuel(&self) -> Option<u32> {
-        ini_utils::get_value(&self.ini_config, "fuel","max_fuel")
+        ini_utils::get_value(&self.ini_config, "FUEL","MAX_FUEL")
     }
 
     pub fn fuel_consumption(&self) -> Option<f64> {
-        ini_utils::get_value(&self.ini_config, "fuel","consumption")
+        ini_utils::get_value(&self.ini_config, "FUEL","CONSUMPTION")
     }
 
     pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
@@ -252,7 +256,7 @@ impl Car {
                                                       e.to_string()))) }
         };
         let car_ini_path = car_folder_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
-        let mut car = Car {
+        let car = Car {
             root_path: OsString::from(car_folder_path),
             ini_config: Ini::load_from_file(car_ini_path.as_path()).map_err(|err| {
                 Error::new(ErrorKind::InvalidCar,
