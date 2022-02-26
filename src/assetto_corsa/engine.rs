@@ -13,7 +13,7 @@ use crate::assetto_corsa::lut_utils;
 use crate::assetto_corsa::lut_utils::{load_lut_from_path, load_lut_from_reader};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{get_mandatory_property, Ini, IniUpdater};
-use crate::assetto_corsa::traits::{MandatoryDataComponent, CarIniData, OptionalDataComponent};
+use crate::assetto_corsa::traits::{MandatoryDataSection, CarIniData, OptionalDataSection};
 
 
 struct UiData {
@@ -232,7 +232,7 @@ impl PowerCurve {
     }
 }
 
-impl MandatoryDataComponent for PowerCurve {
+impl MandatoryDataSection for PowerCurve {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let power_lut_path: String = get_mandatory_property(parent_data.ini_data(), "HEADER", "POWER_CURVE")?;
         PowerCurve::load_from_lut(parent_data.data_dir().join(Path::new(power_lut_path.as_str())).as_path())
@@ -260,7 +260,7 @@ impl EngineData {
     const SECTION_NAME: &'static str = "ENGINE_DATA";
 }
 
-impl MandatoryDataComponent for EngineData {
+impl MandatoryDataSection for EngineData {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         Ok(EngineData{
@@ -296,7 +296,7 @@ impl Damage {
     const SECTION_NAME: &'static str = "DAMAGE";
 }
 
-impl MandatoryDataComponent for Damage {
+impl MandatoryDataSection for Damage {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         Ok(Damage{
@@ -360,7 +360,7 @@ pub struct CoastCurve {
     non_linearity: f64
 }
 
-impl MandatoryDataComponent for CoastCurve {
+impl MandatoryDataSection for CoastCurve {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let curve_data_source: CoastSource = ini_utils::get_mandatory_property(ini_data, "HEADER", "COAST_CURVE")?;
@@ -662,7 +662,7 @@ pub struct Turbo {
     sections: Vec<TurboSection>
 }
 
-impl OptionalDataComponent for Turbo {
+impl OptionalDataSection for Turbo {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Option<Self>> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let mut turbo_count: isize = Turbo::count_turbo_sections(ini_data);
@@ -766,7 +766,7 @@ mod tests {
     use std::path::Path;
     use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, EngineData, PowerCurve, Turbo};
     use crate::assetto_corsa::ini_utils::IniUpdater;
-    use crate::assetto_corsa::traits::{extract_mandatory_component, extract_optional_component, MandatoryDataComponent};
+    use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, MandatoryDataSection};
 
     const TURBO_NO_CTRL_DATA: &'static str = r#"
 [HEADER]
@@ -815,19 +815,19 @@ RPM_DAMAGE_K=1
                 let metadata = engine.metadata().map_err(|err|{
                     err.to_string()
                 })?;
-                let power_curve = extract_mandatory_component::<PowerCurve>(&engine).map_err(|err|{
+                let power_curve = extract_mandatory_section::<PowerCurve>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
-                let coast_curve = extract_mandatory_component::<CoastCurve>(&engine).map_err(|err|{
+                let coast_curve = extract_mandatory_section::<CoastCurve>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
-                let engine_data = extract_mandatory_component::<EngineData>(&engine).map_err(|err|{
+                let engine_data = extract_mandatory_section::<EngineData>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
-                let damage = extract_mandatory_component::<Damage>(&engine).map_err(|err|{
+                let damage = extract_mandatory_section::<Damage>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
-                let turbo = extract_optional_component::<Turbo>(&engine).map_err(|err|{
+                let turbo = extract_optional_section::<Turbo>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
                 assert!(turbo.is_some());
@@ -835,24 +835,6 @@ RPM_DAMAGE_K=1
             }
             Err(e) => { Err(e.to_string()) }
         }
-    }
-
-    #[test]
-    fn update_coast_curve() -> Result<(), String> {
-        let new_rpm = 9000;
-        let new_torque = 80;
-        let new_non_linearity = 0.5;
-
-        let output_ini_string = component_update_test(|coast_curve: &mut CoastCurve| {
-            coast_curve.reference_rpm = new_rpm;
-            coast_curve.torque = new_torque;
-            coast_curve.non_linearity = new_non_linearity;
-        })?;
-        validate_component(output_ini_string, |coast_curve: &CoastCurve| {
-            assert_eq!(coast_curve.reference_rpm, new_rpm, "Reference rpm is correct");
-            assert_eq!(coast_curve.torque, new_torque, "torque is correct");
-            assert_eq!(coast_curve.non_linearity, new_non_linearity, "non-linearity is correct");
-        })
     }
 
     #[test]
@@ -880,6 +862,24 @@ RPM_DAMAGE_K=1
     }
 
     #[test]
+    fn update_coast_curve() -> Result<(), String> {
+        let new_rpm = 9000;
+        let new_torque = 80;
+        let new_non_linearity = 0.5;
+
+        let output_ini_string = component_update_test(|coast_curve: &mut CoastCurve| {
+            coast_curve.reference_rpm = new_rpm;
+            coast_curve.torque = new_torque;
+            coast_curve.non_linearity = new_non_linearity;
+        })?;
+        validate_component(output_ini_string, |coast_curve: &CoastCurve| {
+            assert_eq!(coast_curve.reference_rpm, new_rpm, "Reference rpm is correct");
+            assert_eq!(coast_curve.torque, new_torque, "torque is correct");
+            assert_eq!(coast_curve.non_linearity, new_non_linearity, "non-linearity is correct");
+        })
+    }
+
+    #[test]
     fn update_damage() -> Result<(), String> {
         let new_turbo_boost_threshold = 1.9;
         let new_turbo_damage_k = 10;
@@ -900,20 +900,20 @@ RPM_DAMAGE_K=1
         })
     }
 
-    fn component_update_test<T: IniUpdater + MandatoryDataComponent, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
+    fn component_update_test<T: IniUpdater + MandatoryDataSection, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
         let mut engine = Engine::load_from_ini_string(String::from(TURBO_NO_CTRL_DATA));
-        let mut component = extract_mandatory_component::<T>(&engine).unwrap();
+        let mut component = extract_mandatory_section::<T>(&engine).unwrap();
         component_update_fn(&mut component);
         engine.update_component(&component).map_err(|err| format!("{}", err.to_string()))?;
         Ok(engine.ini_data.to_string())
     }
 
     fn validate_component<T, F>(ini_string: String, component_validation_fn: F) -> Result<(), String>
-        where T: MandatoryDataComponent,
+        where T: MandatoryDataSection,
               F: FnOnce(&T)
     {
         let engine = Engine::load_from_ini_string(ini_string);
-        let component = extract_mandatory_component::<T>(&engine).map_err(|err| format!("{}", err.to_string()))?;
+        let component = extract_mandatory_section::<T>(&engine).map_err(|err| format!("{}", err.to_string()))?;
         component_validation_fn(&component);
         Ok(())
     }

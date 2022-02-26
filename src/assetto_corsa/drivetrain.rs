@@ -6,7 +6,7 @@ use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::ini_utils::{Ini, FromIni, IniUpdater};
-use crate::assetto_corsa::traits::{CarIniData, MandatoryDataComponent, MandatoryCarData};
+use crate::assetto_corsa::traits::{CarIniData, MandatoryDataSection, MandatoryCarData};
 
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,7 +61,7 @@ pub struct Traction {
     drive_type: DriveType
 }
 
-impl MandatoryDataComponent for Traction {
+impl MandatoryDataSection for Traction {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         Ok(Traction{
             drive_type: get_mandatory_field(parent_data.ini_data(), "TRACTION", "TYPE")?
@@ -107,7 +107,7 @@ impl Gearbox {
     }
 }
 
-impl MandatoryDataComponent for Gearbox {
+impl MandatoryDataSection for Gearbox {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let gear_count = get_mandatory_field(ini_data, "GEARS", "COUNT")?;
@@ -181,7 +181,7 @@ pub struct Clutch {
     pub max_torque: i32
 }
 
-impl MandatoryDataComponent for Clutch {
+impl MandatoryDataSection for Clutch {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> {
         Ok(Clutch{
             max_torque: get_mandatory_field(parent_data.ini_data(), "CLUTCH", "MAX_TORQUE")?
@@ -203,7 +203,7 @@ pub struct Differential {
     pub preload: i32
 }
 
-impl MandatoryDataComponent for Differential {
+impl MandatoryDataSection for Differential {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let power = get_mandatory_field(ini_data, "DIFFERENTIAL", "POWER")?;
@@ -264,7 +264,7 @@ impl AutoClutch {
     }
 }
 
-impl MandatoryDataComponent for AutoClutch {
+impl MandatoryDataSection for AutoClutch {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let upshift_profile = AutoClutch::load_shift_profile(ini_data, "UPSHIFT_PROFILE")?;
@@ -309,7 +309,7 @@ impl AutoBlip {
     }
 }
 
-impl MandatoryDataComponent for AutoBlip {
+impl MandatoryDataSection for AutoBlip {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let electronic = get_mandatory_field(ini_data, "AUTOBLIP", "ELECTRONIC")?;
@@ -346,7 +346,7 @@ pub struct AutoShifter {
     pub gas_cutoff_time: f64
 }
 
-impl MandatoryDataComponent for AutoShifter {
+impl MandatoryDataSection for AutoShifter {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let up = get_mandatory_field(ini_data, "AUTO_SHIFTER", "UP")?;
@@ -375,7 +375,7 @@ pub struct DownshiftProtection {
     pub lock_n: i32
 }
 
-impl MandatoryDataComponent for DownshiftProtection {
+impl MandatoryDataSection for DownshiftProtection {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         Ok(DownshiftProtection{
@@ -471,7 +471,7 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 #[cfg(test)]
 mod tests {
     use crate::assetto_corsa::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, DriveType, FromIni, Gearbox, IniUpdater, Traction};
-    use crate::assetto_corsa::traits::{extract_mandatory_component, MandatoryDataComponent};
+    use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
 
     const TEST_DATA: &'static str = r#"
 [HEADER]
@@ -706,20 +706,20 @@ LOCK_N=1
         })
     }
 
-    fn subcomponent_update_test<T: IniUpdater + MandatoryDataComponent, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
+    fn subcomponent_update_test<T: IniUpdater + MandatoryDataSection, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
         let mut drivetrain = Drivetrain::load_from_ini_string(String::from(TEST_DATA));
-        let mut component = extract_mandatory_component::<T>(&drivetrain).unwrap();
+        let mut component = extract_mandatory_section::<T>(&drivetrain).unwrap();
         component_update_fn(&mut component);
         drivetrain.update_subcomponent(&component).map_err(|err| format!("{}", err.to_string()))?;
         Ok(drivetrain.ini_data.to_string())
     }
 
     fn validate_subcomponent<T, F>(ini_string: String, component_validation_fn: F) -> Result<(), String>
-        where T: MandatoryDataComponent,
+        where T: MandatoryDataSection,
               F: FnOnce(&T)
     {
         let drivetrain = Drivetrain::load_from_ini_string(ini_string);
-        let component = extract_mandatory_component::<T>(&drivetrain).map_err(|err| format!("{}", err.to_string()))?;
+        let component = extract_mandatory_section::<T>(&drivetrain).map_err(|err| format!("{}", err.to_string()))?;
         component_validation_fn(&component);
         Ok(())
     }
