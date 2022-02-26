@@ -24,6 +24,8 @@ impl error::Error for Error {}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
+    NoSuchCar,
+    CarAlreadyExists,
     InvalidCar,
     InvalidUpdate,
     NotInstalled,
@@ -35,6 +37,8 @@ pub enum ErrorKind {
 impl ErrorKind {
     pub(crate) fn as_str(&self) -> &'static str {
         match self {
+            ErrorKind::NoSuchCar => "car doesn't exist",
+            ErrorKind::CarAlreadyExists => "car already exists",
             ErrorKind::InvalidCar => "invalid car",
             ErrorKind::InvalidUpdate => "requested update is invalid",
             ErrorKind::NotInstalled => "not installed",

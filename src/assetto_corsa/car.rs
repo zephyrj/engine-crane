@@ -6,12 +6,96 @@ use std::fmt::{Debug, Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use serde_json::Value;
+use walkdir::WalkDir;
+use crate::assetto_corsa;
 use crate::assetto_corsa::traits::MandatoryCarData;
 use crate::assetto_corsa::drivetrain::Drivetrain;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::engine::{Engine};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::Ini;
+
+pub fn create_new_spec(existing_car_name: &str, spec_name: &str) -> Result<PathBuf>{
+    let installed_cars_path = match assetto_corsa::get_installed_cars_path() {
+        Some(path) => {
+            path
+        },
+        None => {
+            return Err(Error::new(ErrorKind::NoSuchCar,
+                                  String::from("Can't find installed cars path")));
+        }
+    };
+    let existing_car_path = installed_cars_path.join(existing_car_name);
+    if !existing_car_path.exists() {
+        return Err(Error::new(ErrorKind::NoSuchCar,
+                              format!("Can't find {}", existing_car_path.display())));
+    }
+    let new_car_name = format!("{}_{}", existing_car_name, spec_name);
+    let new_car_path = installed_cars_path.join(&new_car_name);
+    if new_car_path.exists() {
+        return Err(Error::new(ErrorKind::CarAlreadyExists,
+                              format!("{}", new_car_path.display())));
+    }
+
+    std::fs::create_dir(&new_car_path).map_err(|err| {
+        Error::new(ErrorKind::Uncategorized,
+                   format!("Failed to create {}. {}", new_car_path.display(), err.to_string()))
+    })?;
+    fs_extra::dir::copy(&existing_car_path,
+                        &new_car_path,
+                        &fs_extra::dir::CopyOptions::new()).map_err(|err|{
+            Error::new(ErrorKind::Uncategorized,
+                   format!("Failed to copy contents of {} to {}. {}",
+                           existing_car_path.display(),
+                           new_car_path.display(),
+                           err.to_string()))
+    })?;
+
+    let acd_path = new_car_path.join("data.acd");
+    if acd_path.exists() {
+        if let Some(err) = std::fs::remove_file(acd_path).err(){
+            println!("Warning: Failed to delete data.acd file from {}. {}", new_car_path.display(), err.to_string())
+        }
+    }
+
+    let mut paths_to_update: Vec<PathBuf> = Vec::new();
+    for entry in WalkDir::new(&new_car_path).into_iter().filter_map(|e| e.ok()) {
+        if !entry.metadata().unwrap().is_file() {
+            continue
+        }
+        let filename = entry.file_name();
+        if (filename == existing_car_name) &&
+           (filename.to_string_lossy().ends_with(".kn5") || (filename.to_string_lossy().ends_with(".bank"))) {
+            paths_to_update.push(entry.path().to_path_buf());
+        }
+        else if filename == "car.ini" {
+            match Ini::load_from_file(entry.path()) {
+                Ok(mut ini) => {
+                    if let Some(mut screen_name) = ini_utils::get_value::<String>(&ini, "INFO", "SCREEN_NAME") {
+                        screen_name += " ";
+                        screen_name += spec_name;
+                        ini_utils::set_value(&mut ini, "INFO", "SCREEN_NAME", screen_name);
+                    }
+                }
+                Err(err) => {
+                    println!("Warning: Failed to update {}. {}", entry.path().display(), err.to_string())
+                }
+            }
+        }
+    }
+    for path in paths_to_update {
+        std::fs::rename(&path, &path.display().to_string().replace(existing_car_name,
+                                                                            &new_car_name)).map_err(|err| {
+            Error::new(ErrorKind::Uncategorized,
+                       format!("Failed to rename {}", path.display()))
+        })?
+    }
+
+
+    Ok(new_car_path)
+}
+
+
 
 #[derive(Debug)]
 pub enum CarVersion {
@@ -89,8 +173,7 @@ impl<'a> SpecValue<'a> {
 #[derive(Default)]
 pub struct UiInfo {
     ui_info_path: OsString,
-    json_config: serde_json::Value,
-    car_class: String
+    json_config: serde_json::Value
 }
 
 impl UiInfo {
@@ -113,9 +196,10 @@ impl UiInfo {
                                                             e.to_string()))) )
             }
         };
-        let ui_info = UiInfo { ui_info_path: OsString::from(ui_json_path),
-            json_config,
-            ..Default::default() };
+        let ui_info = UiInfo {
+            ui_info_path: OsString::from(ui_json_path),
+            json_config
+        };
         Ok(ui_info)
     }
 
@@ -282,11 +366,18 @@ mod tests {
         let this_file = Path::new(file!());
         let this_dir = this_file.parent().unwrap();
         let path = this_dir.join("test-data/car-with-turbo-with-ctrls");
-        match Car::load_from_path(&path) {
-            Ok(_) => {
-                Ok(())
+        let car = match Car::load_from_path(&path) {
+            Ok(car) => {
+                car
             }
-            Err(e) => { Err(e.to_string()) }
-        }
+            Err(e) => {  return Err(e.to_string()) }
+        };
+        let ui_info = &car.ui_info;
+        assert_eq!(ui_info.name().unwrap(), "Turbo with CTRL");
+        assert_eq!(ui_info.brand().unwrap(), "Test");
+        assert_eq!(ui_info.class().unwrap(), "street");
+        assert_eq!(ui_info.tags().unwrap(), Vec::from(["#Supercars", "awd", "semiautomatic", "street", "turbo", "germany"]));
+        let specs = ui_info.specs().unwrap();
+        Ok(())
     }
 }
