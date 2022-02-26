@@ -104,7 +104,7 @@ impl UiInfo {
                                                             e.to_string()))) )
             }
         };
-        let json_config = match serde_json::from_str(ui_info_string.replace("\r\n", " ").replace("\t", "  ").as_str()) {
+        let json_config = match serde_json::from_str(ui_info_string.replace("\r\n", "\n").replace("\n", " ").replace("\t", "  ").as_str()) {
             Ok(decoded_json) => { decoded_json },
             Err(e) => {
                 return Err( Error::new(ErrorKind::InvalidCar,
@@ -279,7 +279,9 @@ mod tests {
 
     #[test]
     fn load_car() -> Result<(), String> {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/zephyr_za401/");
+        let this_file = Path::new(file!());
+        let this_dir = this_file.parent().unwrap();
+        let path = this_dir.join("test-data/car-with-turbo-with-ctrls");
         match Car::load_from_path(&path) {
             Ok(_) => {
                 Ok(())
