@@ -455,6 +455,16 @@ impl Ini {
         self.sections.contains_key(name)
     }
 
+    pub fn section_contains_property(&self, section_name: &str, property_name: &str) -> bool {
+        match self.contains_section(section_name) {
+            false => { false }
+            true => {
+                let section: &Section = self.sections.get(section_name).unwrap();
+                section.contains_property(property_name)
+            }
+        }
+    }
+
     fn finish_section(&mut self, section: Section) {
         let mut key = String::new();
         if section.name.is_empty() {
