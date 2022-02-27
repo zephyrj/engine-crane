@@ -12,6 +12,10 @@ impl Error {
     pub(crate) fn new(kind: ErrorKind, details: String) -> Error {
         Error{ kind, details }
     }
+    pub(crate) fn from_io_error(io_err: std::io::Error, failed_operation: &str) -> Error {
+        Error{ kind: ErrorKind::IOError,
+               details: format!("{}. {}", failed_operation, io_err.to_string()) }
+    }
 }
 
 impl Display for Error {
@@ -31,6 +35,7 @@ pub enum ErrorKind {
     NotInstalled,
     InvalidEngineMetadata,
     InvalidEngineTurboController,
+    IOError,
     Uncategorized
 }
 
@@ -44,6 +49,7 @@ impl ErrorKind {
             ErrorKind::NotInstalled => "not installed",
             ErrorKind::InvalidEngineMetadata => "engine metadata is invalid",
             ErrorKind::InvalidEngineTurboController => "engine turbo controller is invalid",
+            ErrorKind::IOError => "io error",
             ErrorKind::Uncategorized => "uncategorized error"
         }
     }
