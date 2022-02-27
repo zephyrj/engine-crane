@@ -86,6 +86,8 @@ pub fn get_list_of_installed_cars() -> Result<Vec<OsString>> {
     Ok(cars)
 }
 
+
+#[derive(Debug)]
 pub struct SfxData {
     sfx_by_folder_map: HashMap<String, Vec<String>>,
     sfx_bank_map: HashMap<String, String>
@@ -140,5 +142,16 @@ pub fn load_sfx_data() -> Result<SfxData> {
         }
     }
     Ok(sfx_data)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::assetto_corsa::load_sfx_data;
+
+    #[test]
+    fn sfx_test() -> Result<(), String> {
+        println!("{:?}", load_sfx_data());
+        Ok(())
+    }
 }
 
