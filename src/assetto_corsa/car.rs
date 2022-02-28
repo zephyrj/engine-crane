@@ -17,59 +17,26 @@ use crate::assetto_corsa::engine::{Engine};
 use crate::assetto_corsa::{ini_utils, load_sfx_data};
 use crate::assetto_corsa::ini_utils::Ini;
 
-pub fn create_new_spec(existing_car_name: &str, spec_name: &str) -> Result<PathBuf>{
-    let installed_cars_path = match assetto_corsa::get_installed_cars_path() {
-        Some(path) => {
-            path
-        },
-        None => {
-            return Err(Error::new(ErrorKind::NoSuchCar,
-                                  String::from("Can't find installed cars path")));
-        }
-    };
-    let existing_car_path = installed_cars_path.join(existing_car_name);
-    if !existing_car_path.exists() {
-        return Err(Error::new(ErrorKind::NoSuchCar,
-                              format!("Can't find {}", existing_car_path.display())));
-    }
-    let new_car_name = format!("{}_{}", existing_car_name, spec_name);
-    let new_car_path = installed_cars_path.join(&new_car_name);
-    if new_car_path.exists() {
-        return Err(Error::new(ErrorKind::CarAlreadyExists,
-                              format!("{}", new_car_path.display())));
-    }
-
-    std::fs::create_dir(&new_car_path).map_err(|err| {
-        Error::new(ErrorKind::Uncategorized,
-                   format!("Failed to create {}. {}", new_car_path.display(), err.to_string()))
-    })?;
-    let mut copy_options = fs_extra::dir::CopyOptions::new();
-    copy_options.content_only = true;
-    fs_extra::dir::copy(&existing_car_path,
-                        &new_car_path,
-                        &copy_options).map_err(|err|{
-            Error::new(ErrorKind::Uncategorized,
-                   format!("Failed to copy contents of {} to {}. {}",
-                           existing_car_path.display(),
-                           new_car_path.display(),
-                           err.to_string()))
-    })?;
-
-    let acd_path = new_car_path.join("data.acd");
+pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
+    let acd_path = car_path.join("data.acd");
     if acd_path.exists() {
-        if let Some(err) = std::fs::remove_file(acd_path).err(){
-            println!("Warning: Failed to delete data.acd file from {}. {}", new_car_path.display(), err.to_string())
-        }
+        std::fs::remove_file(acd_path).map_err(|io_err| {
+            Error::from_io_error(io_err, format!("Failed to delete data.acd file from {}", car_path.display()).as_str())
+        })?;
     }
+    Ok(())
+}
 
+fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<()> {
+    let new_car_name = car_path.file_name().unwrap().to_str().unwrap();
     let mut paths_to_update: Vec<PathBuf> = Vec::new();
-    for entry in WalkDir::new(&new_car_path).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(&car_path).into_iter().filter_map(|e| e.ok()) {
         if !entry.metadata().unwrap().is_file() {
             continue
         }
         let filename = entry.file_name();
         let filename_string = filename.to_string_lossy();
-        if (filename_string.starts_with(existing_car_name)) &&
+        if (filename_string.starts_with(name_to_change)) &&
             (filename_string.ends_with(".kn5") || (filename_string.ends_with(".bank"))) {
             paths_to_update.push(entry.path().to_path_buf());
         } else if filename_string == "lods.ini" {
@@ -86,7 +53,7 @@ pub fn create_new_spec(existing_car_name: &str, spec_name: &str) -> Result<PathB
                 ini_utils::set_value(&mut lod_ini,
                                      &current_lod_name,
                                      "FILE",
-                                     old_value.replace(existing_car_name, &new_car_name));
+                                     old_value.replace(name_to_change, new_car_name));
                 idx += 1;
             }
             lod_ini.write(entry.path()).map_err(|err| {
@@ -97,57 +64,53 @@ pub fn create_new_spec(existing_car_name: &str, spec_name: &str) -> Result<PathB
 
     for path in paths_to_update {
         let mut new_path = path.clone();
-        let new_filename = path.file_name().unwrap().to_str().unwrap().replace(existing_car_name, &new_car_name);
+        let new_filename = path.file_name().unwrap().to_str().unwrap().replace(name_to_change, new_car_name);
         new_path.pop();
         new_path.push(new_filename);
         std::fs::rename(&path, &new_path).map_err(|err| {
             Error::new(ErrorKind::Uncategorized,
                        format!("Failed to rename from {} to {}. {}", path.display(), new_path.display(), err.to_string()))
-        })?
+        })?;
     }
+    Ok(())
+}
 
-    let mut new_car = Car::load_from_path(new_car_path.as_path())?;
-    if let Some(mut screen_name) = new_car.screen_name() {
-        screen_name += " ";
-        screen_name += spec_name;
-        new_car.set_screen_name(screen_name.as_str());
-    } else {
-        println!("Warning: Couldn't update screen name");
-    }
-    if let Some(ui_name) = new_car.ui_info.name() {
-        new_car.ui_info.set_name(format!("{} {}", ui_name, spec_name))
-    } else {
-        println!("Warning: Couldn't update ui_info name");
-    }
+pub fn update_car_name(car_path: &Path, new_name: &str) -> Result<()> {
+    let mut new_car = Car::load_from_path(car_path)?;
+    new_car.set_screen_name(new_name);
+    new_car.ui_info.set_name(new_name.to_string());
     new_car.write()?;
+    Ok(())
+}
 
+fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
+    let guids_file_path = car_path.join(PathBuf::from_iter(["sfx", "GUIDs.txt"]));
+    let car_name = car_path.file_name().unwrap().to_str().unwrap();
 
-
-    let guids_file_path = new_car_path.join(PathBuf::from_iter(["sfx", "GUIDs.txt"]));
     let mut updated_lines: Vec<String> = Vec::new();
     if guids_file_path.exists() {
-        {
-            let file = File::open(&guids_file_path).map_err(|err|{
-                Error::new(ErrorKind::Uncategorized,
-                           String::from(
-                               format!("Couldn't open {}. {}", guids_file_path.display(), err.to_string())))
-            })?;
+        let file = File::open(&guids_file_path).map_err(|err|{
+            Error::new(ErrorKind::Uncategorized,
+                       String::from(
+                           format!("Couldn't open {}. {}", guids_file_path.display(), err.to_string())))
+        })?;
 
-            updated_lines = BufReader::new(file).lines().into_iter().filter_map(|res| {
-                match res {
-                    Ok(string) => Some(string.replace(&existing_car_name, &new_car_name)),
-                    Err(err) => {
-                        println!("Warning: Encountered error reading from {}. {}",
-                                 guids_file_path.display(),
-                                 err.to_string());
-                        None
-                    }
+        updated_lines = BufReader::new(file).lines().into_iter().filter_map(|res| {
+            match res {
+                Ok(string) => Some(string.replace(name_to_change, car_name)),
+                Err(err) => {
+                    println!("Warning: Encountered error reading from {}. {}",
+                             guids_file_path.display(),
+                             err.to_string());
+                    None
                 }
-            }).collect();
-        }
+            }
+        }).collect();
+
     } else {
-        updated_lines = load_sfx_data()?.generate_clone_guid_info(existing_car_name, &new_car_name);
+        updated_lines = load_sfx_data()?.generate_clone_guid_info(name_to_change, car_name);
     }
+
     let file = File::create(&guids_file_path).map_err(|err|{
         Error::new(ErrorKind::Uncategorized,
                    String::from(
@@ -161,6 +124,65 @@ pub fn create_new_spec(existing_car_name: &str, spec_name: &str) -> Result<PathB
                            format!("Couldn't write to {}. {}", guids_file_path.display(), err.to_string())))
         })?;
     }
+    Ok(())
+}
+
+pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Result<()> {
+    if existing_car_path == new_car_path {
+        return Err(Error::new(ErrorKind::CarAlreadyExists,
+                              format!("Cannot clone car to its existing location. ({})",
+                                             existing_car_path.display())));
+    }
+
+    std::fs::create_dir(&new_car_path).map_err(|err| {
+        Error::new(ErrorKind::Uncategorized,
+                   format!("Failed to create {}. {}", new_car_path.display(), err.to_string()))
+    })?;
+    let mut copy_options = fs_extra::dir::CopyOptions::new();
+    copy_options.content_only = true;
+    fs_extra::dir::copy(&existing_car_path,
+                        &new_car_path,
+                        &copy_options).map_err(|err|{
+        Error::new(ErrorKind::Uncategorized,
+                   format!("Failed to copy contents of {} to {}. {}",
+                           existing_car_path.display(),
+                           new_car_path.display(),
+                           err.to_string()))
+    })?;
+
+    if let Some(err) = delete_data_acd_file(new_car_path).err(){
+        println!("Warning: {}", err.to_string());
+    }
+    let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
+    let cloned_car_name = new_car_path.file_name().unwrap().to_str().unwrap();
+    fix_car_specific_filenames(new_car_path, existing_car_name)?;
+    update_car_name(new_car_path, cloned_car_name)?;
+    update_car_sfx(new_car_path, existing_car_name)?;
+    Ok(())
+}
+
+pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<PathBuf>{
+    let installed_cars_path = match assetto_corsa::get_installed_cars_path() {
+        Some(path) => { path },
+        None => {
+            return Err(Error::new(ErrorKind::NoSuchCar,
+                                  String::from("Can't find installed cars path")));
+        }
+    };
+
+    let existing_car_path = installed_cars_path.join(existing_car_name);
+    if !existing_car_path.exists() {
+        return Err(Error::new(ErrorKind::NoSuchCar,
+                              format!("Can't find {}", existing_car_path.display())));
+    }
+    let new_car_name = format!("{}_{}", existing_car_name, spec_name);
+    let new_car_path = installed_cars_path.join(&new_car_name);
+    if new_car_path.exists() {
+        return Err(Error::new(ErrorKind::CarAlreadyExists,
+                              format!("{}", new_car_path.display())));
+    }
+
+    clone_existing_car(existing_car_path.as_path(), new_car_path.as_path())?;
     Ok(new_car_path)
 }
 
@@ -470,7 +492,7 @@ impl Car {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use crate::assetto_corsa::car::{Car, create_new_spec};
+    use crate::assetto_corsa::car::{Car, create_new_car_spec};
 
     #[test]
     fn load_car() -> Result<(), String> {
@@ -494,7 +516,7 @@ mod tests {
 
     #[test]
     fn clone_car() {
-        let new_car_path = create_new_spec("zephyr_za401", "test").unwrap();
+        let new_car_path = create_new_car_spec("zephyr_za401", "test").unwrap();
         println!("{}", new_car_path.display());
     }
 }
