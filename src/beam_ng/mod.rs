@@ -3,12 +3,14 @@ pub mod jbeam;
 use std::ffi::OsString;
 use std::{error, fs, io};
 use std::collections::HashMap;
+use std::fmt::format;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use directories::BaseDirs;
 use parselnk::Lnk;
-use crate::steam;
+use serde_hjson::{Map, Value};
+use crate::{automation, steam};
 
 pub const STEAM_GAME_NAME: &str = "BeamNG.drive";
 pub const STEAM_GAME_ID: i64 = 284160;
@@ -76,7 +78,61 @@ pub fn get_mod_list() -> Option<Vec<OsString>> {
     Some(mods)
 }
 
-pub fn extract_mod_data(mod_path: &OsString) -> Option<HashMap<String, Vec<u8>>> {
+pub struct ModData {
+    car_file: automation::car::CarFile,
+    engine_jbeam_data: serde_hjson::Map<String, serde_hjson::Value>
+}
+
+pub fn load_mod_data(mod_name: &str) -> Result<ModData, String> {
+    let mod_path = &get_mod_path();
+    let mod_path = match mod_path {
+        None => { return Err(String::from("Cannot find Beam.NG mods path")); }
+        Some(mod_path) => { mod_path.join(mod_name) }
+    };
+    extract_mod_data(mod_path.as_path())
+}
+
+pub fn extract_mod_data(mod_path: &Path) -> Result<ModData, String> {
+    let zipfile = std::fs::File::open(mod_path).map_err(|err| {
+        format!("Failed to open {}. {}", mod_path.display(), err.to_string())
+    })?;
+    let mut archive = zip::ZipArchive::new(zipfile).map_err(|err| {
+        format!("Failed to read archive {}. {}", mod_path.display(), err.to_string())
+    })?;
+    let filenames: Vec<String> = archive.file_names().map(|filename| {
+        String::from(filename)
+    }).collect();
+
+    let mut car_data: Vec<u8> = Vec::new();
+    let mut jbeam_data: Vec<u8> = Vec::new();
+    for file_path in &filenames {
+        if file_path.ends_with(".car") {
+            match archive.by_name(file_path) {
+                Ok(mut file) => {
+                    file.read_to_end(&mut car_data).unwrap();
+                },
+                Err(err) => {
+                    return Err(format!("Failed to read {}. {}", file_path, err.to_string()));
+                }
+            }
+        } else if file_path.ends_with("camso_engine.jbeam") {
+            match archive.by_name(file_path) {
+                Ok(mut file) => {
+                    file.read_to_end(&mut jbeam_data).unwrap();
+                },
+                Err(err) => {
+                    return Err(format!("Failed to read {}. {}", file_path, err.to_string()));
+                }
+            }
+        }
+    }
+    Ok(ModData{
+        car_file: automation::car::CarFile::from_bytes(jbeam_data).unwrap(),
+        engine_jbeam_data: jbeam::from_slice(&*car_data).unwrap()
+    })
+}
+
+pub fn old_extract_mod_data(mod_path: &OsString) -> Option<HashMap<String, Vec<u8>>> {
     let zipfile = std::fs::File::open(mod_path).unwrap();
     let mut archive = zip::ZipArchive::new(zipfile).unwrap();
     let filenames: Vec<String> = archive.file_names().map(|filename| {
