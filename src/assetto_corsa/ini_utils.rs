@@ -419,7 +419,9 @@ impl Ini {
             return None;
         }
         let section = self.sections.get_mut(section_name).unwrap();
-
+        if let Some(old_prop) = section.remove_propery(property_name) {
+            return Some(old_prop.value)
+        }
         None
     }
 
