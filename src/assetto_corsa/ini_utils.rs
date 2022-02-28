@@ -414,6 +414,9 @@ impl Ini {
         Some(self.sections.get(section_name)?.get_property(property_name)?.get_value())
     }
 
+    /// Remove a property from a given section.
+    /// Returns the previous value of the property as `Some(value)` where value is a `String` or
+    /// `None` if this operation didn't remove anything
     pub fn remove_value(&mut self, section_name: &str, property_name: &str) -> Option<String> {
         if !self.sections.contains_key(section_name) {
             return None;
@@ -425,10 +428,7 @@ impl Ini {
         None
     }
 
-    /// Set a ini property value to the provided String. You may also provide a comment to set
-    /// If the section or property don't exist prior to this operation then they will be
-    /// created.
-    ///
+    /// Set a ini property value to the provided String.
     /// Returns the previous value of the property as `Some(value)` where value is a `String` or
     /// `None` if this operation added a new property
     pub fn set_value(&mut self,
@@ -461,8 +461,7 @@ impl Ini {
         match self.contains_section(section_name) {
             false => { false }
             true => {
-                let section: &Section = self.sections.get(section_name).unwrap();
-                section.contains_property(property_name)
+                self.sections.get(section_name).unwrap().contains_property(property_name)
             }
         }
     }
