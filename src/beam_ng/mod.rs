@@ -1,16 +1,11 @@
 pub mod jbeam;
 
 use std::ffi::OsString;
-use std::{error, fs, io};
-use std::collections::HashMap;
-use std::fmt::format;
-use std::fs::File;
-use std::io::{Error, ErrorKind, Read};
+use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use directories::BaseDirs;
-use parselnk::Lnk;
-use serde_hjson::{Map, Value};
-use crate::{automation, steam};
+use serde_hjson::Value;
+use crate::steam;
 
 pub const STEAM_GAME_NAME: &str = "BeamNG.drive";
 pub const STEAM_GAME_ID: i64 = 284160;
@@ -78,9 +73,10 @@ pub fn get_mod_list() -> Option<Vec<OsString>> {
     Some(mods)
 }
 
+#[derive(Debug)]
 pub struct ModData {
-    car_file: automation::car::CarFile,
-    engine_jbeam_data: serde_hjson::Map<String, serde_hjson::Value>
+    pub car_file_data: Vec<u8>,
+    pub engine_jbeam_data: serde_hjson::Map<String, serde_hjson::Value>
 }
 
 pub fn load_mod_data(mod_name: &str) -> Result<ModData, String> {
@@ -127,31 +123,7 @@ pub fn extract_mod_data(mod_path: &Path) -> Result<ModData, String> {
         }
     }
     Ok(ModData{
-        car_file: automation::car::CarFile::from_bytes(jbeam_data).unwrap(),
-        engine_jbeam_data: jbeam::from_slice(&*car_data).unwrap()
+        car_file_data: car_data,
+        engine_jbeam_data: jbeam::from_slice(&*jbeam_data).unwrap()
     })
-}
-
-pub fn old_extract_mod_data(mod_path: &OsString) -> Option<HashMap<String, Vec<u8>>> {
-    let zipfile = std::fs::File::open(mod_path).unwrap();
-    let mut archive = zip::ZipArchive::new(zipfile).unwrap();
-    let filenames: Vec<String> = archive.file_names().map(|filename| {
-        String::from(filename)
-    }).collect();
-    let data_map: HashMap<String, Vec<u8>> = filenames.iter().filter_map(|file_path| {
-        if file_path.ends_with(".car") || file_path.ends_with("camso_engine.jbeam") {
-            match archive.by_name(file_path) {
-                Ok(mut file) => {
-                    let mut contents = Vec::new();
-                    file.read_to_end(&mut contents).unwrap();
-                    Some((String::from(file_path), contents))
-                },
-                Err(..) => None
-            }
-        } else {
-            None
-        }
-
-    }).collect();
-    Some(data_map)
 }
