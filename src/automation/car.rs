@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::default::Default;
 use std::mem;
 
@@ -38,7 +39,7 @@ impl<'a> ByteChunk<'a> {
 }
 
 #[derive(Debug)]
-enum AttributeValue {
+pub enum AttributeValue {
     Blob(Blob),
     Text(String),
     Number(f64),
@@ -46,19 +47,32 @@ enum AttributeValue {
     True
 }
 
-#[derive(Debug)]
-struct Attribute {
-    name: String,
-    value: AttributeValue
+impl AttributeValue {
+    pub fn as_str(&self) -> Option<&str> {
+        return match self {
+            AttributeValue::Blob(_) => { None }
+            AttributeValue::Text(t) => { Some(t.as_str()) }
+            AttributeValue::Number(_) => { None }
+            AttributeValue::False => { Some("false") }
+            AttributeValue::True => { Some("true") }
+        }
+    }
+
 }
 
 #[derive(Debug)]
-struct Section {
+pub struct Attribute {
+    pub name: String,
+    pub value: AttributeValue
+}
+
+#[derive(Debug)]
+pub struct Section {
     name: String,
     num_children: usize,
-    attributes: Vec<Attribute>,
-    sections: Vec<Section>,
-    stack: Vec<usize>
+    attributes: HashMap<String, Attribute>,
+    sections: HashMap<String, Section>,
+    stack: Vec<String>
 }
 
 impl Section {
@@ -69,6 +83,14 @@ impl Section {
         return false;
     }
 
+    pub fn get_section(&self, section_name: &str) -> Option<&Section> {
+        self.sections.get(section_name)
+    }
+
+    pub fn get_attribute(&self, attribute_name: &str) -> Option<&Attribute> {
+        self.attributes.get(attribute_name)
+    }
+
     fn finalise_sections_if_complete(&mut self) {
         while !self.stack.is_empty() && self.get_current_section().is_complete() {
             self.stack.pop();
@@ -77,7 +99,7 @@ impl Section {
 
     fn add_attribute(&mut self, attr: Attribute) {
         if self.stack.is_empty() {
-            self.attributes.push(attr);
+            self.attributes.insert(attr.name.clone(), attr);
         } else {
             self.get_current_section().add_attribute(attr);
         }
@@ -86,9 +108,9 @@ impl Section {
 
     fn add_section(&mut self, section: Section) {
         if self.stack.is_empty() {
-            let section_index = self.sections.len();
-            self.sections.push(section);
-            self.stack.push(section_index);
+            let section_name = section.name.clone();
+            self.sections.insert(section.name.clone(), section);
+            self.stack.push(section_name);
         } else {
             self.get_current_section().add_section(section);
         }
@@ -96,12 +118,12 @@ impl Section {
     }
 
     fn get_current_section(&mut self) -> &mut Section {
-        self.sections.get_mut(*self.stack.last().unwrap()).unwrap()
+        self.sections.get_mut(self.stack.last().unwrap()).unwrap()
     }
 }
 
 #[derive(Debug)]
-struct Blob {
+pub struct Blob {
     chunk: Vec<u8>,
     name: String,
     sections: Vec<Section>,
@@ -112,9 +134,9 @@ struct Blob {
 pub struct CarFile {
     byte_stream: Vec<u8>,
     current_pos: usize,
-    attributes: Vec<Attribute>,
-    sections: Vec<Section>,
-    stack: Vec<usize>
+    attributes: HashMap<String, Attribute>,
+    sections: HashMap<String, Section>,
+    stack: Vec<String>
 }
 
 impl CarFile {
@@ -122,13 +144,17 @@ impl CarFile {
         let mut c = CarFile {
             byte_stream,
             current_pos: 0,
-            attributes: Vec::new(),
-            sections: Vec::new(),
+            attributes: HashMap::new(),
+            sections: HashMap::new(),
             stack: Vec::new()
         };
         c.parse_opening_blob_mark()?;
         c.parse()?;
         Ok(c)
+    }
+
+    pub fn get_section(&self, section_name: &str) -> Option<&Section> {
+        self.sections.get(section_name)
     }
 
     fn parse_opening_blob_mark(&mut self) -> Result<(), String> {
@@ -178,14 +204,14 @@ impl CarFile {
                                 self.add_attribute(attr);
                             }
                             TypeIdentifier::Section => {
-                                let mut section = self.parse_section(attribute_name);
+                                let section = self.parse_section(attribute_name);
                                 self.add_section(section);
                             }
                             TypeIdentifier::Text | TypeIdentifier::BlobMark => {
                                 let len = self.parse_length();
                                 if self.peek_is_blob() {
                                     self.increment_position(2);
-                                    let mut section = self.parse_section(attribute_name);
+                                    let section = self.parse_section(attribute_name);
                                     self.add_section(section);
                                 } else {
                                     let attr = Attribute { name: attribute_name,
@@ -235,8 +261,8 @@ impl CarFile {
         Section {
             name,
             num_children,
-            attributes: Vec::new(),
-            sections: Vec::new(),
+            attributes: HashMap::new(),
+            sections: HashMap::new(),
             stack: Vec::new()
         }
     }
@@ -284,7 +310,7 @@ impl CarFile {
     }
 
     fn get_current_section(&mut self) -> &mut Section {
-        self.sections.get_mut(*self.stack.last().unwrap()).unwrap()
+        self.sections.get_mut(self.stack.last().unwrap()).unwrap()
     }
 
     fn increment_position(&mut self, len: usize) {
@@ -293,7 +319,7 @@ impl CarFile {
 
     fn add_attribute(&mut self, attr: Attribute) {
         if self.stack.is_empty() {
-            self.attributes.push(attr);
+            self.attributes.insert(attr.name.clone(), attr);
         } else {
             self.get_current_section().add_attribute(attr);
         }
@@ -301,9 +327,9 @@ impl CarFile {
 
     fn add_section(&mut self, section: Section) {
         if self.stack.is_empty() {
-            let section_idx = self.sections.len();
-            self.sections.push(section);
-            self.stack.push(section_idx);
+            let section_name = section.name.clone();
+            self.sections.insert(section.name.clone(), section);
+            self.stack.push(section_name);
         } else {
             self.get_current_section().add_section(section);
         }
