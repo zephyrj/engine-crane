@@ -5,7 +5,7 @@ use std::str::FromStr;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::{ini_utils};
-use crate::assetto_corsa::ini_utils::{Ini, FromIni, IniUpdater};
+use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::traits::{CarIniData, MandatoryDataSection, MandatoryCarData};
 
 
@@ -470,7 +470,7 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::assetto_corsa::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, DriveType, FromIni, Gearbox, IniUpdater, Traction};
+    use crate::assetto_corsa::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, DriveType, Gearbox, IniUpdater, Traction};
     use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
 
     const TEST_DATA: &'static str = r#"

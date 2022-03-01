@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
-use directories::UserDirs;
-use rusqlite::{Connection, Result, Row};
-use rusqlite::types::ValueRef;
+use rusqlite::{Connection, Row};
 
 use crate::steam;
 use crate::automation::{STEAM_GAME_ID};
@@ -217,7 +215,7 @@ impl std::fmt::Display for EngineV1 {
 pub fn load_engines() -> HashMap<String, EngineV1> {
     let conn = Connection::open(get_db_path_4_2().unwrap()).unwrap();
     let mut stmt = conn.prepare(get_sql_load_query()).unwrap();
-    let mut engs = stmt.query_map([], EngineV1::load_from_row).unwrap();
+    let engs = stmt.query_map([], EngineV1::load_from_row).unwrap();
     let mut out_map = HashMap::new();
     for eng in engs {
         match eng {

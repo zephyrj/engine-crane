@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::ptr::NonNull;
-use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, Container};
+use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error};
 use crate::assetto_corsa;
 use crate::automation;
-use crate::automation::sandbox::EngineV1;
 
 pub fn launch() -> Result<(), Error> {
     CarSelector::run((Settings::default()))

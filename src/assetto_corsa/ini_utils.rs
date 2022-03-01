@@ -156,7 +156,7 @@ impl Section {
                     }
                     Some(closing_bracket_pos) => {
                         let name = String::from(&line[opening_bracket_pos + 1..closing_bracket_pos]);
-                        let mut name_comment = Comment::from_line(
+                        let name_comment = Comment::from_line(
                             &line[closing_bracket_pos+1..], comment_symbols
                         );
                         let indentation = if opening_bracket_pos > 0 {

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{error, fs, io};
+use std::{fs, io};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -10,7 +10,7 @@ use toml::value::Table;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::lut_utils;
-use crate::assetto_corsa::lut_utils::{load_lut_from_path, load_lut_from_reader};
+use crate::assetto_corsa::lut_utils::load_lut_from_path;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{get_mandatory_property, Ini, IniUpdater};
 use crate::assetto_corsa::traits::{MandatoryDataSection, CarIniData, OptionalDataSection};
@@ -84,7 +84,7 @@ impl Metadata {
             }
         };
 
-        let mut meta = Metadata{
+        let meta = Metadata{
             toml_config,
             boost_curve_data: Metadata::find_boost_curve_data(data_dir),
             fuel_flow_data: Metadata::find_fuel_flow_data(data_dir)
@@ -665,7 +665,7 @@ pub struct Turbo {
 impl OptionalDataSection for Turbo {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Option<Self>> where Self: Sized {
         let ini_data = parent_data.ini_data();
-        let mut turbo_count: isize = Turbo::count_turbo_sections(ini_data);
+        let turbo_count: isize = Turbo::count_turbo_sections(ini_data);
         if turbo_count == 0 {
             return Ok(None);
         }

@@ -23,10 +23,7 @@ mod steam;
 mod automation;
 mod ui;
 mod beam_ng;
-
-use std::ffi::OsString;
-use std::path::Path;
-
+mod fabricator;
 
 // -> Result<(), iced::Error>
 fn main() -> Result<(), iced::Error> {

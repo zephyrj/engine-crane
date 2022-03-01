@@ -10,11 +10,9 @@ mod traits;
 use std::collections::HashMap;
 use std::fs;
 use std::ffi::OsString;
-use std::fmt::format;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::path::PathBuf;
-use iced::keyboard::KeyCode::V;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 
 use crate::steam;

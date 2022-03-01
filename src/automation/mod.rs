@@ -1,9 +1,6 @@
 pub mod car;
 pub mod sandbox;
 
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-use directories::UserDirs;
 use crate::steam;
 
 pub const STEAM_GAME_NAME: &str = "Automation";
