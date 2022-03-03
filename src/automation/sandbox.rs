@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
-use rusqlite::{Connection, Row};
+use rusqlite::{Connection, params, Row};
 
 use crate::steam;
 use crate::automation::{STEAM_GAME_ID};
@@ -214,7 +214,7 @@ impl std::fmt::Display for EngineV1 {
 
 pub fn load_engines() -> HashMap<String, EngineV1> {
     let conn = Connection::open(get_db_path_4_2().unwrap()).unwrap();
-    let mut stmt = conn.prepare(get_sql_load_query()).unwrap();
+    let mut stmt = conn.prepare(load_all_engines_query()).unwrap();
     let engs = stmt.query_map([], EngineV1::load_from_row).unwrap();
     let mut out_map = HashMap::new();
     for eng in engs {
@@ -226,7 +226,21 @@ pub fn load_engines() -> HashMap<String, EngineV1> {
     out_map
 }
 
-fn get_sql_load_query() -> &'static str {
+pub fn load_engine_by_uuid(uuid: &str) -> Result<Option<EngineV1>, String> {
+    let conn = Connection::open(get_db_path().unwrap()).unwrap();
+    let mut stmt = conn.prepare(load_engine_by_uuid_query()).unwrap();
+    let engs = stmt.query_map(&[(":uid", uuid)],
+                                                         EngineV1::load_from_row).unwrap();
+    for row in engs {
+        let eng = row.map_err(|err|{
+            format!("Failed to read sandbox.db. {}", err.to_string())
+        })?;
+        return Ok(Some(eng));
+    }
+    Ok(None)
+}
+
+fn load_all_engines_query() -> &'static str {
     r#"select f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
     v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, f.Stroke as VStroke, v.*,
     r.*,
@@ -237,6 +251,17 @@ fn get_sql_load_query() -> &'static str {
     join "EngineCurves" as c using(uid) ;"#
 }
 
+fn load_engine_by_uuid_query() -> &'static str {
+    r#"select f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
+    v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, f.Stroke as VStroke, v.*,
+    r.*,
+    c.*
+    from "Variants" as v
+    join "Families" as f on v.FUID = f.UID
+    join "EngineResults" as r using(uid)
+    join "EngineCurves" as c using(uid)
+    where v_uuid = :uid;"#
+}
 
 #[cfg(target_os = "windows")]
 pub fn get_db_path() -> Option<OsString> {
@@ -299,4 +324,16 @@ fn legacy_sandbox_path() -> Vec<&'static str> {
 
 fn sandbox_dir_4_2() -> Vec<&'static str> {
     vec!["AutomationGame", "Saved", "UserData", "Sandbox_211122.db"]
+}
+
+mod tests {
+    use std::path::PathBuf;
+    use crate::automation::sandbox::{get_db_path, get_db_path_4_2};
+
+    #[test]
+    fn get_sandbox_db_path() -> Result<(), String> {
+        let paht = PathBuf::from(get_db_path().unwrap());
+        println!("Sandbox path is {}", paht.display());
+        Ok(())
+    }
 }
