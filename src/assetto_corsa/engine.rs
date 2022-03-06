@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::{fs, io};
+use std::ffi::{OsStr, OsString};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -213,13 +214,23 @@ struct FuelConsumptionFlowRate {
     max_fuel_flow: i32
 }
 
+#[derive(Debug)]
 pub struct PowerCurve {
-    lut_path: PathBuf,
+    pub lut_path: PathBuf,
     pub torque_curve: Vec<(i32, i32)>
 }
 
 impl PowerCurve {
-    fn load_from_lut(lut_path: &Path) -> Result<PowerCurve> {
+    const DEFAULT_LUT_NAME: &'static str = "power.lut";
+
+    pub fn new(lut_path: &Path) -> PowerCurve {
+        PowerCurve{
+            lut_path: PathBuf::from(lut_path),
+            torque_curve: Vec::new()
+        }
+    }
+
+    pub fn load_from_lut(lut_path: &Path) -> Result<PowerCurve> {
         Ok(PowerCurve {
             lut_path: PathBuf::from(lut_path.as_os_str()),
             torque_curve: match load_lut_from_path::<i32, i32>(lut_path) {
@@ -229,6 +240,11 @@ impl PowerCurve {
                 }
             }
         })
+    }
+
+    pub fn write_lut(&self) -> std::result::Result<(), String> {
+        lut_utils::write_lut_to_path(&self.torque_curve, PathBuf::from(&self.lut_path).as_path())?;
+        Ok(())
     }
 }
 
@@ -241,8 +257,8 @@ impl MandatoryDataSection for PowerCurve {
 
 impl IniUpdater for PowerCurve {
     fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        lut_utils::write_lut_to_path(&self.torque_curve, PathBuf::from(&self.lut_path).as_path())?;
-        ini_utils::set_value(ini_data, "HEADER", "POWER_CURVE", PathBuf::from(&self.lut_path).display());
+        let lut_filename = self.lut_path.file_name().unwrap_or(OsStr::new(PowerCurve::DEFAULT_LUT_NAME)).to_str().unwrap_or(PowerCurve::DEFAULT_LUT_NAME);
+        ini_utils::set_value(ini_data, "HEADER", "POWER_CURVE", lut_filename);
         Ok(())
     }
 }
@@ -391,7 +407,7 @@ impl IniUpdater for CoastCurve {
 }
 
 #[derive(Debug)]
-enum ControllerInput {
+pub enum ControllerInput {
     Rpms,
     Gas,
     Gear
@@ -434,7 +450,7 @@ impl Display for ControllerInput {
 }
 
 #[derive(Debug)]
-enum ControllerCombinator {
+pub enum ControllerCombinator {
     Add,
     Mult
 }
@@ -476,12 +492,12 @@ impl Display for ControllerCombinator {
 }
 
 #[derive(Debug)]
-struct TurboController {
+pub struct TurboController {
     data_dir: PathBuf,
     index: isize,
     input: ControllerInput,
     combinator: ControllerCombinator,
-    lut: Vec<(f64, f64)>,
+    lut: Vec<(f64, f64)>, // TODO create Enum
     filter: f64,
     up_limit: f64,
     down_limit: f64
@@ -511,6 +527,26 @@ impl TurboController {
         })
     }
 
+    pub fn new(out_dir: &Path,
+               index: isize,
+               input: ControllerInput,
+               combinator: ControllerCombinator,
+               lut: Vec<(f64, f64)>,
+               filter: f64,
+               up_limit: f64,
+               down_limit: f64) -> TurboController {
+        TurboController {
+            data_dir: PathBuf::from(out_dir),
+            index,
+            input,
+            combinator,
+            lut,
+            filter,
+            up_limit,
+            down_limit
+        }
+    }
+
     fn get_controller_section_name(index: isize) -> String {
         format!("CONTROLLER_{}", index)
     }
@@ -533,18 +569,42 @@ impl IniUpdater for TurboController {
 }
 
 #[derive(Debug)]
-struct TurboControllers {
-    data_dir: PathBuf,
+pub struct TurboControllers {
+    ini_path: PathBuf,
     index: isize,
     ini_config: Ini,
     controllers: Vec<TurboController>
 }
 
 impl TurboControllers {
+    pub fn new(out_path: &Path, index: isize) -> TurboControllers {
+        TurboControllers {
+            ini_path: PathBuf::from(out_path.join(TurboControllers::get_controller_ini_filename(index))),
+            index,
+            ini_config: Ini::new(),
+            controllers: Vec::new()
+        }
+    }
+
+    pub fn load_all_from_ini_dir(data_dir: &Path, ini_data: &Ini) -> Result<Option<HashMap<isize, TurboControllers>>> {
+        let turbo_count: isize = Turbo::count_turbo_sections(ini_data);
+        if turbo_count == 0 {
+            return Ok(None);
+        }
+        let mut out_map = HashMap::new();
+        for turbo_idx in 0..turbo_count {
+            match TurboControllers::load_controller_index_from_dir(turbo_idx, data_dir)? {
+                None => { continue }
+                Some(turbo_ctrls) => {
+                    out_map.insert(turbo_idx, turbo_ctrls); }
+            }
+        }
+        Ok(Some(out_map))
+    }
+
     fn load_controller_index_from_dir(index: isize, data_dir: &Path) -> Result<Option<TurboControllers>> {
-        let ini_config = match load_ini_file(
-            Path::new(data_dir).join(TurboControllers::get_controller_ini_filename(index)).as_path())
-        {
+        let ini_path = Path::new(data_dir).join(TurboControllers::get_controller_ini_filename(index));
+        let ini_config = match load_ini_file(ini_path.as_path()) {
             Ok(res) => { res }
             Err(err) => {
                 if err.kind() == io::ErrorKind::NotFound {
@@ -562,12 +622,23 @@ impl TurboControllers {
 
         Ok(Some(
             TurboControllers {
-                data_dir: PathBuf::from(data_dir),
+                ini_path,
                 index,
                 ini_config,
                 controllers: controller_vec
             }
         ))
+    }
+
+    pub fn add_controller(&mut self, controller: TurboController) {
+        self.controllers.push(controller)
+    }
+
+    pub fn write(&self) -> Result<()> {
+        self.ini_config.write(&self.ini_path).map_err(|io_err|{
+            Error::from_io_error(io_err, format!("Failed to write {}", self.ini_path.display()).as_str())
+        })?;
+        Ok(())
     }
 
     fn get_controller_ini_filename(index: isize) -> String {
@@ -584,21 +655,16 @@ impl TurboControllers {
         }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self) -> std::result::Result<(), String> {
         for controller in &self.controllers {
-
+            controller.update_ini(&mut self.ini_config)?;
         }
-    }
-}
-
-impl IniUpdater for TurboControllers {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        todo!()
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-struct TurboSection {
+pub struct TurboSection {
     data_dir: PathBuf,
     index: isize,
     lag_dn: f64,
@@ -609,10 +675,49 @@ struct TurboSection {
     reference_rpm: i32,
     gamma: f64,
     cockpit_adjustable: i32,
-    controllers: Option<TurboControllers>
 }
 
 impl TurboSection {
+    pub fn from_defaults(out_dir: &Path, index: isize) -> TurboSection {
+        TurboSection {
+            data_dir: PathBuf::from(out_dir),
+            index,
+            lag_dn: 0.99,
+            lag_up: 0.965,
+            max_boost: 1.0,
+            wastegate: 1.0,
+            display_max_boost: 1.0,
+            reference_rpm: 3000,
+            gamma: 1.0,
+            cockpit_adjustable: 0
+        }
+    }
+
+    pub fn new(out_dir: &Path,
+               index: isize,
+               lag_dn: f64,
+               lag_up: f64,
+               max_boost: f64,
+               wastegate: f64,
+               display_max_boost: f64,
+               reference_rpm: i32,
+               gamma: f64,
+               cockpit_adjustable: i32) -> TurboSection
+    {
+        TurboSection {
+            data_dir: PathBuf::from(out_dir),
+            index,
+            lag_dn,
+            lag_up,
+            max_boost,
+            wastegate,
+            display_max_boost,
+            reference_rpm,
+            gamma,
+            cockpit_adjustable
+        }
+    }
+
     pub fn load_from_ini(data_dir: &Path,
                          idx: isize,
                          ini: &Ini) -> Result<TurboSection> {
@@ -627,8 +732,7 @@ impl TurboSection {
             display_max_boost: ini_utils::get_mandatory_property(ini, &section_name, "DISPLAY_MAX_BOOST")?,
             reference_rpm: ini_utils::get_mandatory_property(ini, &section_name, "REFERENCE_RPM")?,
             gamma: ini_utils::get_mandatory_property(ini, &section_name, "GAMMA")?,
-            cockpit_adjustable: ini_utils::get_mandatory_property(ini, &section_name, "COCKPIT_ADJUSTABLE")?,
-            controllers: TurboControllers::load_controller_index_from_dir(idx, data_dir)?
+            cockpit_adjustable: ini_utils::get_mandatory_property(ini, &section_name, "COCKPIT_ADJUSTABLE")?
         })
     }
 
@@ -648,9 +752,6 @@ impl IniUpdater for TurboSection {
         ini_utils::set_value(ini_data, &section_name, "REFERENCE_RPM", self.reference_rpm);
         ini_utils::set_float(ini_data, &section_name, "GAMMA", self.gamma, 2);
         ini_utils::set_value(ini_data, &section_name, "COCKPIT_ADJUSTABLE", self.cockpit_adjustable);
-        for controller in &self.controllers {
-            // TODO
-        }
         Ok(())
     }
 }
@@ -685,6 +786,14 @@ impl OptionalDataSection for Turbo {
 }
 
 impl Turbo {
+    pub fn new(out_path: &Path) -> Turbo {
+        Turbo {
+            data_dir: PathBuf::from(out_path),
+            bov_pressure_threshold: None,
+            sections: Vec::new()
+        }
+    }
+
     fn count_turbo_sections(ini: &Ini) -> isize {
         let mut count = 0;
         loop {
@@ -712,7 +821,9 @@ impl IniUpdater for Turbo {
 #[derive(Debug)]
 pub struct Engine {
     data_dir: PathBuf,
-    ini_data: Ini
+    ini_data: Ini,
+    power: PowerCurve,
+    turbo_controllers: Option<HashMap<isize, TurboControllers>>
 }
 
 impl Engine {
@@ -721,7 +832,9 @@ impl Engine {
     pub fn load_from_ini_string(ini_data: String) -> Engine {
         Engine {
             data_dir: PathBuf::from(""),
-            ini_data: Ini::load_from_string(ini_data)
+            ini_data: Ini::load_from_string(ini_data),
+            power: PowerCurve::new(Path::new("")),
+            turbo_controllers: None
         }
     }
 
@@ -732,10 +845,15 @@ impl Engine {
                 return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
             }
         };
-
+        let power_lut_path = ini_data.get_value("HEADER", "POWER_CURVE").ok_or_else(||{
+            Error::new(ErrorKind::InvalidUpdate, format!("Cannot find a lut for power curve"))
+        })?;
+        let turbo_controllers = TurboControllers::load_all_from_ini_dir(data_dir, &ini_data)?;
         let eng = Engine {
             data_dir: PathBuf::from(data_dir),
-            ini_data
+            ini_data,
+            power: PowerCurve::load_from_lut(data_dir.join(power_lut_path).as_path())?,
+            turbo_controllers
         };
         Ok(eng)
     }
@@ -748,6 +866,27 @@ impl Engine {
 
     pub fn metadata(&self) -> Result<Option<Metadata>> {
         Metadata::load_from_dir(Path::new(&self.data_dir.as_os_str()))
+    }
+
+    pub fn write(&mut self) -> Result<()> {
+        self.ini_data.write(self.data_dir()).map_err(|io_err| {
+            Error::from_io_error(io_err,
+                                 format!("Failed to write engine ini data. {}", self.data_dir.join(Engine::INI_FILENAME).display()).as_str())
+        })?;
+        self.power.write_lut().map_err(|err| {
+            Error::new(ErrorKind::IOError, format!("Failed to write {}. {}",
+                                                   self.power.lut_path.display(),
+                                                   err))
+        })?;
+        match &self.turbo_controllers {
+            None => { Ok(()) }
+            Some(controller_map) => {
+                for controller_file in controller_map.values() {
+                    controller_file.write()?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 
