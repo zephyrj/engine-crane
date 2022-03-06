@@ -1,10 +1,10 @@
 mod error;
 pub mod car;
-mod engine;
+pub(crate) mod engine;
 mod file_utils;
 mod lut_utils;
 mod ini_utils;
-mod drivetrain;
+pub(crate) mod drivetrain;
 mod traits;
 
 use std::collections::HashMap;
