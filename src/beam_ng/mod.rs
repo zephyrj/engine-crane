@@ -4,6 +4,8 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use directories::BaseDirs;
+use parselnk::Lnk;
 use serde_hjson::Value;
 use crate::steam;
 
@@ -126,4 +128,16 @@ pub fn extract_mod_data(mod_path: &Path) -> Result<ModData, String> {
         car_file_data: car_data,
         engine_jbeam_data: jbeam::from_slice(&*jbeam_data).unwrap()
     })
+}
+
+mod tests {
+    use std::path::PathBuf;
+    use crate::beam_ng::get_mod_path;
+
+    #[test]
+    fn get_beam_ng_mod_path() -> Result<(), String> {
+        let path = PathBuf::from(get_mod_path().unwrap());
+        println!("BeamNG mod path is {}", path.display());
+        Ok(())
+    }
 }
