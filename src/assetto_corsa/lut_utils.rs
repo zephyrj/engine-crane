@@ -1,9 +1,58 @@
 use std::{fmt, io};
 use std::fmt::Display;
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use csv::Terminator;
+
+struct LutFile<K, V>
+    where
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+{
+    path: PathBuf,
+    data: Vec<(K,V)>
+}
+
+impl<K, V> LutFile<K, V>
+    where
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+{
+    pub fn from_path(lut_path: &Path) -> Result<LutFile<K, V>, String> {
+        Ok(LutFile {
+            path: lut_path.to_path_buf(),
+            data: load_lut_from_path::<K, V>(lut_path)?
+        })
+    }
+}
+
+enum LutType<K, V>
+    where
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+{
+    File(LutFile<K,V>),
+    Inline(Vec<(K,V)>)
+}
+
+impl<K, V> LutType<K, V>
+    where
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+{
+    pub fn load_from_property_value(property_value: String, data_dir: &Path) -> Result<LutType<K, V>, String>{
+        return match property_value.starts_with("(") {
+            true => {
+                let data_slice = &property_value[1..(property_value.len() - 1)];
+                Ok(LutType::Inline(load_lut_from_reader::<K, V, _>(data_slice.as_bytes(), b'=', Terminator::Any(b'|'))?))
+            }
+            false => {
+                Ok(LutType::File(LutFile::from_path(data_dir.join(property_value.as_str()).as_path())?))
+            }
+        }
+    }
+}
 
 pub fn load_lut_from_path<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
     where
