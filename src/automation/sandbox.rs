@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
+use directories::{BaseDirs, UserDirs};
 use rusqlite::{Connection, params, Row};
 
 use crate::steam;
@@ -8,91 +9,91 @@ use crate::automation::{STEAM_GAME_ID};
 
 #[derive(Debug)]
 pub struct EngineV1 {
-    uuid: String,
-    family_name: String,
-    variant_name: String,
-    family_game_days: i32,
-    variant_game_days: i32,
-    block_config: String,
-    block_material: String,
-    block_type: String,
-    head_type: String,
-    head_material: String,
-    valves: String,
-    vvl: String,
-    max_bore: f64,
-    max_stroke: f64,
-    crank: String,
-    conrods: String,
-    pistons: String,
-    vvt: String,
-    aspiration: String,
-    intercooler_setting: f64,
-    fuel_system_type: String,
-    fuel_system: String,
-    intake_manifold: String,
-    intake: String,
-    fuel_type: String,
-    headers: String,
-    exhaust_count: String,
-    exhaust_bypass_valves: String,
-    cat: String,
-    muffler_1: String,
-    muffler_2: String,
-    bore: f64,
-    stroke: f64,
-    capacity: f64,
-    compression: f64,
-    cam_profile_setting: f64,
-    vvl_cam_profile_setting: f64,
-    afr: f64,
-    afr_lean: f64,
-    rpm_limit: f64,
-    ignition_timing_setting: f64,
-    exhaust_diameter: f64,
-    quality_bottom_end: i32,
-    quality_top_end: i32,
-    quality_aspiration: i32,
-    quality_fuel_system: i32,
-    quality_exhaust: i32,
-    adjusted_afr: f64,
-    average_cruise_econ: f64,
-    cooling_required: f64,
-    econ: f64,
-    econ_eff: f64,
-    min_econ: f64,
-    worst_econ: f64,
-    emissions: f64,
-    engineering_cost: f64,
-    engineering_time: f64,
-    idle: f64,
-    idle_speed: f64,
-    mttf: f64,
-    man_hours: f64,
-    material_cost: f64,
-    noise: f64,
-    peak_boost: f64,
-    peak_boost_rpm: f64,
-    performance_index: f64,
-    ron: f64,
-    reliability_post_engineering: f64,
-    responsiveness: f64,
-    service_cost: f64,
-    smoothness: f64,
-    tooling_costs: f64,
-    total_cost: f64,
-    weight: f64,
-    peak_torque_rpm: f64,
-    peak_torque: f64,
-    peak_power: f64,
-    peak_power_rpm: f64,
-    max_rpm: f64,
-    rpm_curve: Vec<f64>,
-    power_curve: Vec<f64>,
-    torque_curve: Vec<f64>,
-    boost_curve: Vec<f64>,
-    econ_curve: Vec<f64>,
-    econ_eff_curve: Vec<f64>
+    pub uuid: String,
+    pub family_name: String,
+    pub variant_name: String,
+    pub family_game_days: i32,
+    pub variant_game_days: i32,
+    pub block_config: String,
+    pub block_material: String,
+    pub block_type: String,
+    pub head_type: String,
+    pub head_material: String,
+    pub valves: String,
+    pub vvl: String,
+    pub max_bore: f64,
+    pub max_stroke: f64,
+    pub crank: String,
+    pub conrods: String,
+    pub pistons: String,
+    pub vvt: String,
+    pub aspiration: String,
+    pub intercooler_setting: f64,
+    pub fuel_system_type: String,
+    pub fuel_system: String,
+    pub intake_manifold: String,
+    pub intake: String,
+    pub fuel_type: String,
+    pub headers: String,
+    pub exhaust_count: String,
+    pub exhaust_bypass_valves: String,
+    pub cat: String,
+    pub muffler_1: String,
+    pub muffler_2: String,
+    pub bore: f64,
+    pub stroke: f64,
+    pub capacity: f64,
+    pub compression: f64,
+    pub cam_profile_setting: f64,
+    pub vvl_cam_profile_setting: f64,
+    pub afr: f64,
+    pub afr_lean: f64,
+    pub rpm_limit: f64,
+    pub ignition_timing_setting: f64,
+    pub exhaust_diameter: f64,
+    pub quality_bottom_end: i32,
+    pub quality_top_end: i32,
+    pub quality_aspiration: i32,
+    pub quality_fuel_system: i32,
+    pub quality_exhaust: i32,
+    pub adjusted_afr: f64,
+    pub average_cruise_econ: f64,
+    pub cooling_required: f64,
+    pub econ: f64,
+    pub econ_eff: f64,
+    pub min_econ: f64,
+    pub worst_econ: f64,
+    pub emissions: f64,
+    pub engineering_cost: f64,
+    pub engineering_time: f64,
+    pub idle: f64,
+    pub idle_speed: f64,
+    pub mttf: f64,
+    pub man_hours: f64,
+    pub material_cost: f64,
+    pub noise: f64,
+    pub peak_boost: f64,
+    pub peak_boost_rpm: f64,
+    pub performance_index: f64,
+    pub ron: f64,
+    pub reliability_post_engineering: f64,
+    pub responsiveness: f64,
+    pub service_cost: f64,
+    pub smoothness: f64,
+    pub tooling_costs: f64,
+    pub total_cost: f64,
+    pub weight: f64,
+    pub peak_torque_rpm: f64,
+    pub peak_torque: f64,
+    pub peak_power: f64,
+    pub peak_power_rpm: f64,
+    pub max_rpm: f64,
+    pub rpm_curve: Vec<f64>,
+    pub power_curve: Vec<f64>,
+    pub torque_curve: Vec<f64>,
+    pub boost_curve: Vec<f64>,
+    pub econ_curve: Vec<f64>,
+    pub econ_eff_curve: Vec<f64>
 }
 
 impl EngineV1 {
@@ -272,6 +273,15 @@ pub fn get_db_path() -> Option<OsString> {
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn get_db_path_4_2() -> Option<OsString> {
+    let sandbox_path = BaseDirs::new()?.cache_dir().join(PathBuf::from_iter(sandbox_dir_4_2()));
+    match sandbox_path.is_file() {
+        true => Some(sandbox_path.into_os_string()),
+        false => None
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub fn get_db_path() -> Option<OsString> {
     let sandbox_path = steam::get_wine_documents_dir(STEAM_GAME_ID)?.join(PathBuf::from_iter(legacy_sandbox_path()));
@@ -332,8 +342,15 @@ mod tests {
 
     #[test]
     fn get_sandbox_db_path() -> Result<(), String> {
-        let paht = PathBuf::from(get_db_path().unwrap());
-        println!("Sandbox path is {}", paht.display());
+        let path = PathBuf::from(get_db_path_4_2().unwrap());
+        println!("Sandbox path is {}", path.display());
+        Ok(())
+    }
+
+    #[test]
+    fn get_legacy_sandbox_db_path() -> Result<(), String> {
+        let path = PathBuf::from(get_db_path().unwrap());
+        println!("Sandbox path is {}", path.display());
         Ok(())
     }
 }
