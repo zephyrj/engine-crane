@@ -11,10 +11,11 @@ use toml::value::Table;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::lut_utils;
-use crate::assetto_corsa::lut_utils::load_lut_from_path;
+use crate::assetto_corsa::lut_utils::{load_lut_from_path, LutType};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{get_mandatory_property, Ini, IniUpdater};
 use crate::assetto_corsa::traits::{MandatoryDataSection, CarIniData, OptionalDataSection};
+use crate::assetto_corsa::structs::LutProperty;
 
 
 struct UiData {
@@ -212,55 +213,6 @@ struct FuelConsumptionFlowRate {
     base_data: ExtendedFuelConsumptionBaseData,
     max_fuel_flow_lut: Option<String>,
     max_fuel_flow: i32
-}
-
-#[derive(Debug)]
-pub struct PowerCurve {
-    pub lut_path: PathBuf,
-    pub torque_curve: Vec<(i32, i32)>
-}
-
-impl PowerCurve {
-    const DEFAULT_LUT_NAME: &'static str = "power.lut";
-
-    pub fn new(lut_path: &Path) -> PowerCurve {
-        PowerCurve{
-            lut_path: PathBuf::from(lut_path),
-            torque_curve: Vec::new()
-        }
-    }
-
-    pub fn load_from_lut(lut_path: &Path) -> Result<PowerCurve> {
-        Ok(PowerCurve {
-            lut_path: PathBuf::from(lut_path.as_os_str()),
-            torque_curve: match load_lut_from_path::<i32, i32>(lut_path) {
-                Ok(vec) => { vec },
-                Err(err_str) => {
-                    return Err(Error::new(ErrorKind::InvalidCar, err_str ));
-                }
-            }
-        })
-    }
-
-    pub fn write_lut(&self) -> std::result::Result<(), String> {
-        lut_utils::write_lut_to_path(&self.torque_curve, PathBuf::from(&self.lut_path).as_path())?;
-        Ok(())
-    }
-}
-
-impl MandatoryDataSection for PowerCurve {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
-        let power_lut_path: String = get_mandatory_property(parent_data.ini_data(), "HEADER", "POWER_CURVE")?;
-        PowerCurve::load_from_lut(parent_data.data_dir().join(Path::new(power_lut_path.as_str())).as_path())
-    }
-}
-
-impl IniUpdater for PowerCurve {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        let lut_filename = self.lut_path.file_name().unwrap_or(OsStr::new(PowerCurve::DEFAULT_LUT_NAME)).to_str().unwrap_or(PowerCurve::DEFAULT_LUT_NAME);
-        ini_utils::set_value(ini_data, "HEADER", "POWER_CURVE", lut_filename);
-        Ok(())
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -547,6 +499,10 @@ impl TurboController {
         }
     }
 
+    pub fn index(&self) -> isize {
+        self.index
+    }
+
     fn get_controller_section_name(index: isize) -> String {
         format!("CONTROLLER_{}", index)
     }
@@ -586,10 +542,10 @@ impl TurboControllers {
         }
     }
 
-    pub fn load_all_from_ini_dir(data_dir: &Path, ini_data: &Ini) -> Result<Option<HashMap<isize, TurboControllers>>> {
+    pub fn load_all_from_ini_dir(data_dir: &Path, ini_data: &Ini) -> Result<HashMap<isize, TurboControllers>> {
         let turbo_count: isize = Turbo::count_turbo_sections(ini_data);
         if turbo_count == 0 {
-            return Ok(None);
+            return Ok(HashMap::new());
         }
         let mut out_map = HashMap::new();
         for turbo_idx in 0..turbo_count {
@@ -599,7 +555,7 @@ impl TurboControllers {
                     out_map.insert(turbo_idx, turbo_ctrls); }
             }
         }
-        Ok(Some(out_map))
+        Ok(out_map)
     }
 
     fn load_controller_index_from_dir(index: isize, data_dir: &Path) -> Result<Option<TurboControllers>> {
@@ -630,13 +586,26 @@ impl TurboControllers {
         ))
     }
 
-    pub fn add_controller(&mut self, controller: TurboController) {
-        self.controllers.push(controller)
+    pub fn add_controller(&mut self, controller: TurboController) -> Result<()> {
+        controller.update_ini(&mut self.ini_config).map_err(|err_str| {
+            Error::new(ErrorKind::InvalidUpdate,
+                       format!("Failed to add turbo controller with index {} to {}. {}",
+                                      controller.index(), TurboControllers::get_controller_ini_filename(self.index), err_str ))
+        })?;
+        self.controllers.push(controller);
+        Ok(())
     }
 
     pub fn write(&self) -> Result<()> {
         self.ini_config.write(&self.ini_path).map_err(|io_err|{
             Error::from_io_error(io_err, format!("Failed to write {}", self.ini_path.display()).as_str())
+        })?;
+        Ok(())
+    }
+
+    pub fn delete_ini_file(&self) -> Result<()> {
+        std::fs::remove_file(&self.ini_path).map_err(|io_err|{
+            Error::from_io_error(io_err, format!("Failed to delete {}", self.ini_path.display()).as_str())
         })?;
         Ok(())
     }
@@ -660,6 +629,12 @@ impl TurboControllers {
             controller.update_ini(&mut self.ini_config)?;
         }
         Ok(())
+    }
+}
+
+impl Display for TurboControllers {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\n{}", self.ini_path.display(), self.ini_config.to_string())
     }
 }
 
@@ -822,19 +797,21 @@ impl IniUpdater for Turbo {
 pub struct Engine {
     data_dir: PathBuf,
     ini_data: Ini,
-    power: PowerCurve,
-    turbo_controllers: Option<HashMap<isize, TurboControllers>>
+    power_curve: LutProperty<i32, i32>,
+    turbo_controllers: HashMap<isize, TurboControllers>
 }
 
 impl Engine {
     const INI_FILENAME: &'static str = "engine.ini";
 
     pub fn load_from_ini_string(ini_data: String) -> Engine {
+        let ini_data = Ini::load_from_string(ini_data);
+        let power_curve= LutProperty::path_only(String::from("HEADER"), String::from("POWER_CURVE"), &ini_data).unwrap();
         Engine {
             data_dir: PathBuf::from(""),
-            ini_data: Ini::load_from_string(ini_data),
-            power: PowerCurve::new(Path::new("")),
-            turbo_controllers: None
+            ini_data,
+            power_curve,
+            turbo_controllers: HashMap::new()
         }
     }
 
@@ -845,14 +822,14 @@ impl Engine {
                 return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
             }
         };
-        let power_lut_path = ini_data.get_value("HEADER", "POWER_CURVE").ok_or_else(||{
-            Error::new(ErrorKind::InvalidUpdate, format!("Cannot find a lut for power curve"))
+        let power_curve = LutProperty::mandatory_from_ini(String::from("HEADER"), String::from("POWER_CURVE"), &ini_data, data_dir).map_err(|err|{
+            Error::new(ErrorKind::InvalidCar, format!("Cannot find a lut for power curve. {}", err.to_string()))
         })?;
         let turbo_controllers = TurboControllers::load_all_from_ini_dir(data_dir, &ini_data)?;
         let eng = Engine {
             data_dir: PathBuf::from(data_dir),
             ini_data,
-            power: PowerCurve::load_from_lut(data_dir.join(power_lut_path).as_path())?,
+            power_curve,
             turbo_controllers
         };
         Ok(eng)
@@ -864,6 +841,34 @@ impl Engine {
         })
     }
 
+    pub fn update_power_curve(&mut self, power_curve: Vec<(i32, i32)>) -> Result<Vec<(i32, i32)>> {
+        let ret = self.power_curve.update(power_curve);
+        self.power_curve.update_ini(&mut self.ini_data).map_err(|err_str|{
+            Error::new(ErrorKind::InvalidUpdate, err_str)
+        })?;
+        Ok(ret)
+    }
+
+    pub fn add_turbo_controllers(&mut self, turbo_idx: isize, turbo_ctrl: TurboControllers) -> Option<TurboControllers> {
+        self.turbo_controllers.insert(turbo_idx, turbo_ctrl)
+    }
+
+    pub fn remove_turbo_controllers(&mut self, turbo_idx: isize) -> Result<Option<TurboControllers>> {
+        if let Some(old) = self.turbo_controllers.remove(&turbo_idx) {
+            old.delete_ini_file()?;
+            return Ok(Some(old));
+        }
+        Ok(None)
+    }
+
+    pub fn clear_turbo_controllers(&mut self) -> Result<()> {
+        let idx_vec: Vec<isize> = self.turbo_controllers.keys().map(|k| { *k }).into_iter().collect();
+        for idx in idx_vec {
+            self.remove_turbo_controllers(idx)?;
+        }
+        Ok(())
+    }
+
     pub fn metadata(&self) -> Result<Option<Metadata>> {
         Metadata::load_from_dir(Path::new(&self.data_dir.as_os_str()))
     }
@@ -873,20 +878,13 @@ impl Engine {
             Error::from_io_error(io_err,
                                  format!("Failed to write engine ini data. {}", self.data_dir.join(Engine::INI_FILENAME).display()).as_str())
         })?;
-        self.power.write_lut().map_err(|err| {
-            Error::new(ErrorKind::IOError, format!("Failed to write {}. {}",
-                                                   self.power.lut_path.display(),
-                                                   err))
+        self.power_curve.write().map_err(|err| {
+            Error::new(ErrorKind::IOError, format!("Failed to write power curve. {}", err))
         })?;
-        match &self.turbo_controllers {
-            None => { Ok(()) }
-            Some(controller_map) => {
-                for controller_file in controller_map.values() {
-                    controller_file.write()?;
-                }
-                Ok(())
-            }
+        for controller_file in self.turbo_controllers.values() {
+            controller_file.write()?;
         }
+        Ok(())
     }
 }
 
@@ -903,7 +901,7 @@ impl CarIniData for Engine {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, EngineData, PowerCurve, Turbo};
+    use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, EngineData, Turbo};
     use crate::assetto_corsa::ini_utils::IniUpdater;
     use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, MandatoryDataSection};
 
@@ -954,9 +952,6 @@ RPM_DAMAGE_K=1
         match Engine::load_from_dir(&path) {
             Ok(engine) => {
                 let metadata = engine.metadata().map_err(|err|{
-                    err.to_string()
-                })?;
-                let power_curve = extract_mandatory_section::<PowerCurve>(&engine).map_err(|err|{
                     err.to_string()
                 })?;
                 let coast_curve = extract_mandatory_section::<CoastCurve>(&engine).map_err(|err|{
