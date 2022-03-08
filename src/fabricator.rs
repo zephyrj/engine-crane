@@ -89,17 +89,17 @@ impl AcEngineParameterCalculatorV1 {
         return Some((fuel_use_per_sec * 1000f64) / self.engine_sqlite_data.peak_power_rpm)
     }
 
-    pub fn naturally_aspirated_torque_curve(&self, mechanical_efficiency: f64) -> Vec<(i32, f64)> {
+    pub fn naturally_aspirated_torque_curve(&self) -> Vec<(i32, f64)> {
         let mut out_vec = Vec::new();
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
-                out_vec.push(((*rpm as i32), (self.engine_sqlite_data.torque_curve[idx] * mechanical_efficiency)) );
+                out_vec.push(((*rpm as i32), (self.engine_sqlite_data.torque_curve[idx])) );
             }
         }
         else {
             for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
                 let boost_pressure = vec![0.0, self.engine_sqlite_data.boost_curve[idx]].into_iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                out_vec.push(((*rpm as i32), ((self.engine_sqlite_data.torque_curve[idx] / 1f64+boost_pressure) * mechanical_efficiency)) );
+                out_vec.push(((*rpm as i32), (self.engine_sqlite_data.torque_curve[idx] / 1f64+boost_pressure)) );
             }
         }
         out_vec
@@ -109,22 +109,7 @@ impl AcEngineParameterCalculatorV1 {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
-        let mut lut: Vec<(f64, f64)> = Vec::new();
-        for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
-            lut.push((*rpm, (self.engine_sqlite_data.boost_curve[idx])));
-        }
-        let controller = TurboController::new(
-            out_path,
-            0,
-            ControllerInput::Rpms,
-            ControllerCombinator::Add,
-            lut,
-            0.95,
-            10000_f64,
-            0_f64
-        );
-        let mut controllers = TurboControllers::new(out_path, 0);
-        controllers.add_controller(controller);
+
         let section = TurboSection::new(
             out_path,
             0,
@@ -140,6 +125,30 @@ impl AcEngineParameterCalculatorV1 {
         );
         None
     }
+
+    pub fn create_turbo_controllers(&self, out_path: &Path) -> Option<assetto_corsa::engine::TurboControllers> {
+        if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
+            return None;
+        }
+
+        let mut lut: Vec<(f64, f64)> = Vec::new();
+        for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
+            lut.push((*rpm, (self.engine_sqlite_data.boost_curve[idx].r)));
+        }
+        let controller = TurboController::new(
+            out_path,
+            0,
+            ControllerInput::Rpms,
+            ControllerCombinator::Add,
+            lut,
+            0.95,
+            10000_f64,
+            0_f64
+        );
+        let mut controllers = TurboControllers::new(out_path, 0);
+        controllers.add_controller(controller).unwrap();
+        Some(controllers)
+    }
 }
 
 pub fn build_ac_engine_from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<(), String>{
@@ -148,7 +157,8 @@ pub fn build_ac_engine_from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<(), S
     println!("idle speed = {}", calculator.idle_speed().unwrap());
     println!("limiter = {}", calculator.limiter().unwrap());
     println!("basic fuel consumption = {}", calculator.basic_fuel_consumption().unwrap());
-    println!("na torque curve = {:?}", calculator.naturally_aspirated_torque_curve(DriveType::RWD.mechanical_efficiency()));
+    println!("na torque curve = {:?}", calculator.naturally_aspirated_torque_curve());
+    println!("turbo controllers = {}", calculator.create_turbo_controllers(PathBuf::from("").as_path()).unwrap());
     Ok(())
 }
 
