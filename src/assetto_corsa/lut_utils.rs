@@ -1,16 +1,17 @@
 use std::{fmt, io};
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use csv::Terminator;
 
-struct LutFile<K, V>
+#[derive(Debug)]
+pub struct LutFile<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
 {
-    path: PathBuf,
+    pub path: PathBuf,
     data: Vec<(K,V)>
 }
 
@@ -19,21 +20,82 @@ impl<K, V> LutFile<K, V>
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
 {
+    pub fn new(path: &Path) -> LutFile<K, V> {
+        LutFile {
+            path: path.to_path_buf(),
+            data: Vec::new()
+        }
+    }
+
     pub fn from_path(lut_path: &Path) -> Result<LutFile<K, V>, String> {
         Ok(LutFile {
             path: lut_path.to_path_buf(),
             data: load_lut_from_path::<K, V>(lut_path)?
         })
     }
+    
+    pub fn update(&mut self, data: Vec<(K,V)>) -> Vec<(K,V)> {
+        std::mem::replace(&mut self.data, data)
+    }
+
+    pub fn write(&self) -> Result<(), String> {
+        write_lut_to_path(&self.data, self.path.as_path())?;
+        Ok(())
+    }
 }
 
-enum LutType<K, V>
+#[derive(Debug)]
+pub struct InlineLut<K, V>
+    where
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+{
+    data: Vec<(K,V)>
+}
+
+impl<K, V> InlineLut<K, V>
+    where
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+{
+    pub fn new() -> InlineLut<K, V> {
+        InlineLut { data: Vec::new() }
+    }
+
+    pub fn from_property_value(property_value: String) -> Result<InlineLut<K, V>, String> {
+        let data_slice = &property_value[1..(property_value.len() - 1)];
+        let data = load_lut_from_reader::<K, V, _>(data_slice.as_bytes(), b'=', Terminator::Any(b'|'))?;
+        Ok(InlineLut { data })
+    }
+
+    pub fn update(&mut self, data: Vec<(K,V)>) -> Vec<(K,V)> {
+        std::mem::replace(&mut self.data, data)
+    }
+}
+
+impl<K, V> Display for InlineLut<K, V>
+    where
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}",
+               write_lut_to_property_value(&self.data, b'=', Terminator::Any(b'|')).map_err(
+                   |err| { fmt::Error }
+               )?)
+    }
+}
+
+
+#[derive(Debug)]
+pub enum LutType<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
 {
     File(LutFile<K,V>),
-    Inline(Vec<(K,V)>)
+    Inline(InlineLut<K,V>),
+    PathOnly(PathBuf)
 }
 
 impl<K, V> LutType<K, V>
@@ -41,11 +103,14 @@ impl<K, V> LutType<K, V>
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
 {
+    pub fn path_only(path: PathBuf) -> LutType<K,V> {
+        LutType::PathOnly(path)
+    }
+
     pub fn load_from_property_value(property_value: String, data_dir: &Path) -> Result<LutType<K, V>, String>{
         return match property_value.starts_with("(") {
             true => {
-                let data_slice = &property_value[1..(property_value.len() - 1)];
-                Ok(LutType::Inline(load_lut_from_reader::<K, V, _>(data_slice.as_bytes(), b'=', Terminator::Any(b'|'))?))
+                Ok(LutType::Inline(InlineLut::from_property_value(property_value)?))
             }
             false => {
                 Ok(LutType::File(LutFile::from_path(data_dir.join(property_value.as_str()).as_path())?))
@@ -127,15 +192,15 @@ pub fn write_lut_to_path<K, V>(data: &Vec<(K,V)>, path: &Path) -> Result<(), Str
       V: std::fmt::Display
 {
     let mut writer = csv::WriterBuilder::new().has_headers(false).delimiter(b'|').from_path(path).map_err(
-        |err| { format!("Couldn't write lut. {}", err.to_string()) }
+        |err| { format!("Couldn't write {}. {}", path.to_path_buf().display(), err.to_string()) }
     )?;
     for (key, val) in data {
         writer.write_record(&[key.to_string(), val.to_string()]).map_err(|err| {
-            format!("Couldn't write lut. {}", err.to_string())
+            format!("Couldn't write {}. {}", path.to_path_buf().display(), err.to_string())
         })?;
     }
     writer.flush().map_err(
-        |err| { format!("Couldn't write lut. {}", err.to_string()) }
+        |err| { format!("Couldn't write {}. {}", path.to_path_buf().display(), err.to_string()) }
     )?;
     Ok(())
 }
