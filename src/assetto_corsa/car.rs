@@ -454,6 +454,10 @@ impl Car {
         ini_utils::get_value(&self.ini_config, "FUEL","CONSUMPTION")
     }
 
+    pub fn set_fuel_consumption(&mut self, consumption: f64) {
+        ini_utils::set_float(&mut self.ini_config, "FUEL","CONSUMPTION", consumption, 4);
+    }
+
     pub fn write(&self) -> Result<()> {
         let out_path = self.root_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
         self.ini_config.write(&out_path).map_err(|err| {
@@ -461,6 +465,14 @@ impl Car {
                                  format!("Failed to parse {}", out_path.display()).as_str())
         })?;
         self.ui_info.write()
+    }
+
+    pub fn drivetrain(&self) -> &Drivetrain {
+        &self.drivetrain
+    }
+
+    pub fn mut_engine(&mut self) -> &mut Engine {
+        &mut self.engine
     }
 
     pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
