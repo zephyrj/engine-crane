@@ -428,6 +428,12 @@ impl Ini {
         None
     }
 
+    pub fn remove_section(&mut self, section_name: &str) {
+        if self.sections.contains_key(section_name) {
+            self.sections.remove(section_name);
+        }
+    }
+
     /// Set a ini property value to the provided String.
     /// Returns the previous value of the property as `Some(value)` where value is a `String` or
     /// `None` if this operation added a new property
