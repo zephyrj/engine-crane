@@ -1,6 +1,6 @@
 mod error;
-mod traits;
-mod structs;
+pub(crate) mod traits;
+pub(crate) mod structs;
 mod file_utils;
 mod lut_utils;
 mod ini_utils;

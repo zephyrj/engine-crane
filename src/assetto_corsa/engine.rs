@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::{fs, io};
-use std::ffi::{OsStr, OsString};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -11,9 +10,9 @@ use toml::value::Table;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::lut_utils;
-use crate::assetto_corsa::lut_utils::{load_lut_from_path, LutType};
+use crate::assetto_corsa::lut_utils::{InlineLut, load_lut_from_path, LutType};
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::{get_mandatory_property, Ini, IniUpdater};
+use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::traits::{MandatoryDataSection, CarIniData, OptionalDataSection};
 use crate::assetto_corsa::structs::LutProperty;
 
@@ -25,7 +24,7 @@ struct UiData {
     max_power: String
 }
 
-enum Source {
+pub enum Source {
     AssettoCorsa,
     Automation
 }
@@ -61,6 +60,14 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    pub fn new() -> Metadata {
+        Metadata {
+            toml_config: toml::Value::Table(toml::map::Map::new()),
+            boost_curve_data: None,
+            fuel_flow_data: None
+        }
+    }
+
     fn load_from_dir(data_dir: &Path) -> Result<Option<Metadata>>{
         let metadata_path = Path::new(data_dir).join("engine-metadata.toml");
         if !metadata_path.exists() {
@@ -137,38 +144,49 @@ impl Metadata {
         }
     }
 
-    fn latest_version() -> isize {
+    fn latest_version() -> i64 {
         2
     }
 
-    fn version(&self) -> isize {
+    pub fn version(&self) -> i64 {
         if let Some(version_field) = self.toml_config.get("version") {
             if let Some(version_num) = version_field.as_integer() {
-                return version_num as isize;
+                return version_num;
             }
         }
         1
     }
 
-    fn source(&self) -> Option<Source> {
+    pub fn set_version(&mut self, version: i64) {
+        self.set_int_value(String::from("version"), version);
+    }
+
+    pub fn source(&self) -> Option<Source> {
         if let Some(source_field) = self.toml_config.get("source") {
             if let Some(source) = source_field.as_str() {
                 return Source::from_str(source)
             }
         }
         None
+    }
 
+    pub fn set_source(&mut self, source: Source) {
+        self.set_string_value(String::from("source"), source.to_string());
     }
 
     fn ui_data(&self) -> Option<UiData> {
         None
     }
 
-    fn mass_kg(&self) -> Option<i64> {
+    pub fn mass_kg(&self) -> Option<i64> {
         if let Some(mass_field) = self.toml_config.get("mass_kg") {
             return mass_field.as_integer() ;
         }
         None
+    }
+
+    pub fn set_mass_kg(&mut self, mass: i64) {
+        self.set_int_value(String::from("mass_kg"), mass);
     }
 
     fn boost_curve_data(&self) -> Option<&Vec<(i32, f64)>> {
@@ -193,12 +211,63 @@ impl Metadata {
         }
         None
     }
+
+    pub fn set_string_value(&mut self, key: String, val: String) -> Option<toml::Value> {
+        self.toml_config.as_table_mut().unwrap().insert(key, toml::Value::String(val))
+    }
+
+    pub fn set_int_value(&mut self, key: String, val: i64) -> Option<toml::Value> {
+        self.toml_config.as_table_mut().unwrap().insert(key, toml::Value::Integer(val))
+    }
 }
 
-struct ExtendedFuelConsumptionBaseData {
-    idle_throttle: f64,
-    idle_cutoff: i32,
-    mechanical_efficiency: f64
+#[derive(Debug)]
+pub struct ExtendedFuelConsumptionBaseData {
+    idle_throttle: Option<f64>,
+    idle_cutoff: Option<i32>,
+    mechanical_efficiency: Option<f64>
+}
+
+impl ExtendedFuelConsumptionBaseData {
+    pub fn new(idle_throttle: Option<f64>,
+               idle_cutoff: Option<i32>,
+               mechanical_efficiency: Option<f64>) -> ExtendedFuelConsumptionBaseData {
+        ExtendedFuelConsumptionBaseData { idle_throttle, idle_cutoff, mechanical_efficiency }
+    }
+}
+
+impl MandatoryDataSection for ExtendedFuelConsumptionBaseData {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<ExtendedFuelConsumptionBaseData> where Self: Sized {
+        let ini_data = parent_data.ini_data();
+        Ok(ExtendedFuelConsumptionBaseData {
+            idle_throttle: ini_utils::get_value(ini_data, "ENGINE_DATA", "IDLE_THROTTLE"),
+            idle_cutoff: ini_utils::get_value(ini_data, "ENGINE_DATA", "IDLE_CUTOFF"),
+            mechanical_efficiency: ini_utils::get_value(ini_data, "ENGINE_DATA", "MECHANICAL_EFFICIENCY")
+        })
+    }
+}
+
+impl IniUpdater for ExtendedFuelConsumptionBaseData {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        if let Some(idle_throttle) = self.idle_throttle {
+            ini_utils::set_float(ini_data, "ENGINE_DATA", "IDLE_THROTTLE", idle_throttle, 3);
+        } else if ini_data.section_contains_property("ENGINE_DATA", "IDLE_THROTTLE") {
+            ini_data.remove_value("ENGINE_DATA", "IDLE_THROTTLE");
+        }
+
+        if let Some(idle_cutoff) = self.idle_cutoff {
+            ini_utils::set_value(ini_data, "ENGINE_DATA", "IDLE_CUTOFF", idle_cutoff);
+        } else if ini_data.section_contains_property("ENGINE_DATA", "IDLE_CUTOFF") {
+            ini_data.remove_value("ENGINE_DATA", "IDLE_CUTOFF");
+        }
+
+        if let Some(mechanical_efficiency) = self.mechanical_efficiency {
+            ini_utils::set_float(ini_data, "ENGINE_DATA", "MECHANICAL_EFFICIENCY", mechanical_efficiency, 3);
+        } else if ini_data.section_contains_property("ENGINE_DATA", "MECHANICAL_EFFICIENCY") {
+            ini_data.remove_value("ENGINE_DATA", "MECHANICAL_EFFICIENCY");
+        }
+        Ok(())
+    }
 }
 
 struct FuelConsumptionEfficiency {
@@ -209,19 +278,72 @@ struct FuelConsumptionEfficiency {
     turbo_efficiency: Option<f64>
 }
 
-struct FuelConsumptionFlowRate {
+#[derive(Debug)]
+pub struct FuelConsumptionFlowRate {
     base_data: ExtendedFuelConsumptionBaseData,
-    max_fuel_flow_lut: Option<String>,
+    max_fuel_flow_lut: Option<LutProperty<i32, i32>>,
     max_fuel_flow: i32
+}
+
+impl FuelConsumptionFlowRate {
+    const SECTION_NAME: &'static str = "FUEL_CONSUMPTION";
+
+    pub fn new(idle_throttle: f64,
+               idle_cutoff: i32,
+               mechanical_efficiency: f64,
+               max_fuel_flow_lut: Option<Vec<(i32, i32)>>,
+               max_fuel_flow: i32) -> FuelConsumptionFlowRate
+    {
+        FuelConsumptionFlowRate{
+            base_data: ExtendedFuelConsumptionBaseData {
+                idle_throttle: Some(idle_throttle),
+                idle_cutoff: Some(idle_cutoff),
+                mechanical_efficiency: Some(mechanical_efficiency)
+            },
+            max_fuel_flow_lut: match max_fuel_flow_lut {
+                None => { None }
+                Some(lut_vec) => {
+                    Some(LutProperty::new(
+                        LutType::Inline(InlineLut::from_vec(lut_vec)),
+                        String::from(Self::SECTION_NAME),
+                        String::from("MAX_FUEL_FLOW_LUT")))
+            }},
+            max_fuel_flow
+        }
+    }
+}
+
+impl OptionalDataSection for FuelConsumptionFlowRate {
+    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Option<Self>> where Self: Sized {
+        let ini_data = parent_data.ini_data();
+        if !ini_data.contains_section(Self::SECTION_NAME) {
+            return Ok(None)
+        }
+        let max_fuel_flow_lut = LutProperty::optional_from_ini(
+            String::from(Self::SECTION_NAME),
+            String::from("MAX_FUEL_FLOW_LUT"),
+            ini_data,
+            parent_data.data_dir()
+        ).map_err(|err_str| {
+            Error::new(ErrorKind::InvalidCar,
+                       format!("Error loading fuel flow consumption lut. {}", err_str))
+        })?;
+
+        Ok(Some(FuelConsumptionFlowRate{
+            base_data: ExtendedFuelConsumptionBaseData::load_from_parent(parent_data)?,
+            max_fuel_flow_lut,
+            max_fuel_flow: 0
+        }))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EngineData {
-    altitude_sensitivity: f64,
-    inertia: f64,
-    limiter: i32,
-    limiter_hz: i32,
-    minimum: i32
+    pub altitude_sensitivity: f64,
+    pub inertia: f64,
+    pub limiter: i32,
+    pub limiter_hz: i32,
+    pub minimum: i32
 }
 
 impl EngineData {
@@ -254,34 +376,55 @@ impl IniUpdater for EngineData {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Damage {
-    turbo_boost_threshold: f64,
-    turbo_damage_k: i32,
     rpm_threshold: i32,
-    rpm_damage_k: i32
+    rpm_damage_k: i32,
+    turbo_boost_threshold: Option<f64>,
+    turbo_damage_k: Option<i32>
 }
 
 impl Damage {
     const SECTION_NAME: &'static str = "DAMAGE";
+
+    pub fn new(rpm_threshold: i32,
+               rpm_damage_k: i32,
+               turbo_boost_threshold: Option<f64>,
+               turbo_damage_k: Option<i32>) -> Damage {
+        Damage{rpm_threshold, rpm_damage_k, turbo_boost_threshold, turbo_damage_k, }
+    }
 }
 
 impl MandatoryDataSection for Damage {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         Ok(Damage{
-            turbo_boost_threshold: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD")?,
-            turbo_damage_k: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "TURBO_DAMAGE_K")?,
             rpm_threshold: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "RPM_THRESHOLD")?,
             rpm_damage_k: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "RPM_DAMAGE_K")?,
+            turbo_boost_threshold: ini_utils::get_value(ini_data, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD"),
+            turbo_damage_k: ini_utils::get_value(ini_data, Self::SECTION_NAME, "TURBO_DAMAGE_K"),
         })
     }
 }
 
 impl IniUpdater for Damage {
     fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        ini_utils::set_float(ini_data, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD", self.turbo_boost_threshold, 2);
-        ini_utils::set_value(ini_data, Self::SECTION_NAME, "TURBO_DAMAGE_K", self.turbo_damage_k);
         ini_utils::set_value(ini_data, Self::SECTION_NAME, "RPM_THRESHOLD", self.rpm_threshold);
         ini_utils::set_value(ini_data, Self::SECTION_NAME, "RPM_DAMAGE_K", self.rpm_damage_k);
+        match self.turbo_boost_threshold {
+            None => {
+                ini_data.remove_value(Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD");
+            }
+            Some(turbo_boost_threshold) => {
+                ini_utils::set_float(ini_data, Self::SECTION_NAME, "TURBO_BOOST_THRESHOLD", turbo_boost_threshold, 2);
+            }
+        }
+        match self.turbo_damage_k {
+            None => {
+                ini_data.remove_value(Self::SECTION_NAME, "TURBO_DAMAGE_K");
+            }
+            Some(turbo_damage_k) => {
+                ini_utils::set_value(ini_data, Self::SECTION_NAME, "TURBO_DAMAGE_K", turbo_damage_k);
+            }
+        }
         Ok(())
     }
 }
@@ -326,6 +469,17 @@ pub struct CoastCurve {
     reference_rpm: i32,
     torque: i32,
     non_linearity: f64
+}
+
+impl CoastCurve {
+    pub fn new_from_coast_ref(reference_rpm: i32, torque: i32, non_linearity: f64) -> CoastCurve {
+        CoastCurve {
+            curve_data_source: CoastSource::FromCoastRef,
+            reference_rpm,
+            torque,
+            non_linearity
+        }
+    }
 }
 
 impl MandatoryDataSection for CoastCurve {
@@ -640,7 +794,6 @@ impl Display for TurboControllers {
 
 #[derive(Debug)]
 pub struct TurboSection {
-    data_dir: PathBuf,
     index: isize,
     lag_dn: f64,
     lag_up: f64,
@@ -653,9 +806,8 @@ pub struct TurboSection {
 }
 
 impl TurboSection {
-    pub fn from_defaults(out_dir: &Path, index: isize) -> TurboSection {
+    pub fn from_defaults(index: isize) -> TurboSection {
         TurboSection {
-            data_dir: PathBuf::from(out_dir),
             index,
             lag_dn: 0.99,
             lag_up: 0.965,
@@ -668,8 +820,7 @@ impl TurboSection {
         }
     }
 
-    pub fn new(out_dir: &Path,
-               index: isize,
+    pub fn new(index: isize,
                lag_dn: f64,
                lag_up: f64,
                max_boost: f64,
@@ -680,7 +831,6 @@ impl TurboSection {
                cockpit_adjustable: i32) -> TurboSection
     {
         TurboSection {
-            data_dir: PathBuf::from(out_dir),
             index,
             lag_dn,
             lag_up,
@@ -693,12 +843,10 @@ impl TurboSection {
         }
     }
 
-    pub fn load_from_ini(data_dir: &Path,
-                         idx: isize,
+    pub fn load_from_ini(idx: isize,
                          ini: &Ini) -> Result<TurboSection> {
         let section_name = TurboSection::get_ini_section_name(idx);
         Ok(TurboSection {
-            data_dir: PathBuf::from(data_dir),
             index: idx,
             lag_dn: ini_utils::get_mandatory_property(ini, &section_name, "LAG_DN")?,
             lag_up: ini_utils::get_mandatory_property(ini, &section_name, "LAG_UP")?,
@@ -719,8 +867,8 @@ impl TurboSection {
 impl IniUpdater for TurboSection {
     fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
         let section_name = TurboSection::get_ini_section_name(self.index);
-        ini_utils::set_float(ini_data, &section_name, "LAG_DN", self.lag_dn, 2);
-        ini_utils::set_float(ini_data, &section_name, "LAG_UP", self.lag_up, 2);
+        ini_utils::set_float(ini_data, &section_name, "LAG_DN", self.lag_dn, 3);
+        ini_utils::set_float(ini_data, &section_name, "LAG_UP", self.lag_up, 3);
         ini_utils::set_float(ini_data, &section_name, "MAX_BOOST", self.max_boost, 2);
         ini_utils::set_float(ini_data, &section_name, "WASTEGATE", self.wastegate, 2);
         ini_utils::set_float(ini_data, &section_name, "DISPLAY_MAX_BOOST", self.display_max_boost, 2);
@@ -733,8 +881,7 @@ impl IniUpdater for TurboSection {
 
 #[derive(Debug)]
 pub struct Turbo {
-    data_dir: PathBuf,
-    bov_pressure_threshold: Option<f64>,
+    pub bov_pressure_threshold: Option<f64>,
     sections: Vec<TurboSection>
 }
 
@@ -746,14 +893,12 @@ impl OptionalDataSection for Turbo {
             return Ok(None);
         }
 
-        let data_dir = parent_data.data_dir();
         let pressure_threshold = ini_utils::get_value(ini_data, "BOV", "PRESSURE_THRESHOLD");
         let mut section_vec: Vec<TurboSection> = Vec::new();
         for idx in 0..turbo_count {
-            section_vec.push(TurboSection::load_from_ini(data_dir, idx, ini_data)?);
+            section_vec.push(TurboSection::load_from_ini( idx, ini_data)?);
         }
         Ok(Some(Turbo{
-            data_dir: PathBuf::from(data_dir),
             bov_pressure_threshold: pressure_threshold,
             sections: section_vec
         }))
@@ -761,18 +906,25 @@ impl OptionalDataSection for Turbo {
 }
 
 impl Turbo {
-    pub fn new(out_path: &Path) -> Turbo {
+    pub fn new() -> Turbo {
         Turbo {
-            data_dir: PathBuf::from(out_path),
             bov_pressure_threshold: None,
             sections: Vec::new()
         }
     }
 
+    pub fn add_section(&mut self, section: TurboSection) {
+        self.sections.push(section)
+    }
+
+    pub fn clear_sections(&mut self) {
+        self.sections.clear()
+    }
+
     fn count_turbo_sections(ini: &Ini) -> isize {
         let mut count = 0;
         loop {
-            if !ini.contains_section(format!("TURBO_{}", count).as_str()) {
+            if !ini.contains_section(TurboSection::get_ini_section_name(count).as_str()) {
                 return count;
             }
             count += 1;
@@ -784,13 +936,19 @@ impl IniUpdater for Turbo {
     fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
         if let Some(bov_pressure_threshold) = self.bov_pressure_threshold {
             ini_utils::set_float(ini_data, "BOV", "PRESSURE_THRESHOLD", bov_pressure_threshold, 2);
+        } else {
+            ini_data.remove_section("BOV");
         }
-
+        for idx in 0..Turbo::count_turbo_sections(ini_data) {
+            ini_data.remove_section(TurboSection::get_ini_section_name(idx).as_str())
+        }
         for section in &self.sections {
             section.update_ini(ini_data)?;
         }
         Ok(())
     }
+
+
 }
 
 #[derive(Debug)]
@@ -874,9 +1032,10 @@ impl Engine {
     }
 
     pub fn write(&mut self) -> Result<()> {
-        self.ini_data.write(self.data_dir()).map_err(|io_err| {
+        let out_path = self.data_dir.join(Engine::INI_FILENAME);
+        self.ini_data.write(out_path.as_path()).map_err(|io_err| {
             Error::from_io_error(io_err,
-                                 format!("Failed to write engine ini data. {}", self.data_dir.join(Engine::INI_FILENAME).display()).as_str())
+                                 format!("Failed to write engine ini data. {}", out_path.display()).as_str())
         })?;
         self.power_curve.write().map_err(|err| {
             Error::new(ErrorKind::IOError, format!("Failed to write power curve. {}", err))
@@ -1017,8 +1176,8 @@ RPM_DAMAGE_K=1
 
     #[test]
     fn update_damage() -> Result<(), String> {
-        let new_turbo_boost_threshold = 1.9;
-        let new_turbo_damage_k = 10;
+        let new_turbo_boost_threshold = Some(1.9);
+        let new_turbo_damage_k = Some(10);
         let new_rpm_threshold = 7000;
         let rpm_damage_k = 2;
 

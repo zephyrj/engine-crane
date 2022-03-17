@@ -1,14 +1,10 @@
-use std::cmp::max;
 use std::fmt::{Display, Formatter};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use iced::keyboard::KeyCode::P;
-use serde_hjson::Map;
-use toml::Value;
+use std::path::{Path};
 use crate::{assetto_corsa, automation, beam_ng};
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::drivetrain::DriveType;
-use crate::assetto_corsa::engine::{ControllerCombinator, ControllerInput, TurboController, TurboControllers, TurboSection};
+use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
+use crate::assetto_corsa::traits::{CarIniData, extract_mandatory_section, extract_optional_section};
 use crate::automation::car::CarFile;
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid};
 use crate::beam_ng::ModData;
@@ -33,6 +29,16 @@ impl Display for ACEngineParameterVersion {
     }
 }
 
+pub fn round_float_to(float: f64, decimal_places: u32) -> f64 {
+    let precision_base: u64 = 10;
+    let precision_factor = precision_base.pow(decimal_places) as f64;
+    (float * precision_factor).round() / precision_factor
+}
+
+pub fn normalise_boost_value(boost_value: f64, decimal_places: u32) -> f64 {
+    round_float_to(vec![0.0, boost_value].into_iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap(), decimal_places)
+}
+
 #[derive(Debug)]
 struct AcEngineParameterCalculatorV1 {
     automation_car_file: CarFile,
@@ -42,10 +48,12 @@ struct AcEngineParameterCalculatorV1 {
 
 impl AcEngineParameterCalculatorV1 {
     pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<AcEngineParameterCalculatorV1, String> {
+        println!("BeamNG mod path: {}", beam_ng_mod_path.to_path_buf().display());
         let mod_data = beam_ng::extract_mod_data(beam_ng_mod_path)?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
         let engine_jbeam_data = mod_data.engine_jbeam_data;
         let uid = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("UID").unwrap().value.as_str().unwrap();
+        println!("Engine uuid: {}", uid);
         let engine_sqlite_data = match load_engine_by_uuid(uid)? {
             None => { return Err(String::from("No engine found")); }
             Some(eng) => { eng }
@@ -67,8 +75,8 @@ impl AcEngineParameterCalculatorV1 {
         values.into_iter().max_by(|a, b| a.partial_cmp(b).unwrap())
     }
 
-    pub fn limiter(&self) -> Option<f64> {
-        Some(self.engine_sqlite_data.max_rpm)
+    pub fn limiter(&self) -> f64 {
+        self.engine_sqlite_data.max_rpm
     }
 
     pub fn basic_fuel_consumption(&self) -> Option<f64> {
@@ -89,41 +97,100 @@ impl AcEngineParameterCalculatorV1 {
         return Some((fuel_use_per_sec * 1000f64) / self.engine_sqlite_data.peak_power_rpm)
     }
 
-    pub fn naturally_aspirated_torque_curve(&self) -> Vec<(i32, f64)> {
+    fn get_fuel_use_per_sec_at_rpm(&self, rpm_index: usize) -> f64 {
+        // https://en.wikipedia.org/wiki/Brake-specific_fuel_consumption
+        // BSFC (g/J) = fuel_consumption (g/s) / power (watts)
+        // fuel_consumption (g/s) = BSFC * power (watts)
+        // BSFC value stored in econ curve as g/kWh
+        // BSFC [g/(kW⋅h)] = BSFC [g/J] × (3.6 × 106)
+        (self.engine_sqlite_data.econ_curve[rpm_index] / 3600000_f64) *
+            (self.engine_sqlite_data.power_curve[rpm_index] * 1000_f64) // power curve contains kW
+    }
+
+    pub fn fuel_flow_consumption(&self, mechanical_efficiency: f64) -> assetto_corsa::engine::FuelConsumptionFlowRate {
+        // The lut values should be: rpm, kg/hr
+        // The max-flow should be weighted to the upper end of the rev-range as racing is usually done in that range.
+        // This is probably enough of a fallback as this will only be used if a lut isn't found and that will be
+        // calculated below
+        let max_flow_entry_index = (self.engine_sqlite_data.rpm_curve.len() as f64 * 0.70).round() as usize;
+        let max_fuel_flow = (self.get_fuel_use_per_sec_at_rpm(max_flow_entry_index) * 3.6).round() as i32;
+
+        let mut max_flow_lut: Vec<(i32, i32)> = Vec::new();
+        for (rpm_idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
+            max_flow_lut.push((*rpm as i32, (self.get_fuel_use_per_sec_at_rpm(rpm_idx) * 3.6).round() as i32))
+        }
+        assetto_corsa::engine::FuelConsumptionFlowRate::new(
+            0.03,
+            (self.idle_speed().unwrap() + 100_f64).round() as i32,
+            mechanical_efficiency,
+            Some(max_flow_lut),
+            max_fuel_flow
+        )
+    }
+
+    pub fn naturally_aspirated_wheel_torque_curve(&self, drivetrain_efficiency: f64) -> Vec<(i32, i32)> {
         let mut out_vec = Vec::new();
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
-                out_vec.push(((*rpm as i32), (self.engine_sqlite_data.torque_curve[idx])) );
+                let wheel_torque = self.engine_sqlite_data.torque_curve[idx] * drivetrain_efficiency;
+                out_vec.push(((*rpm as i32), wheel_torque.round() as i32));
             }
         }
         else {
             for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
                 let boost_pressure = vec![0.0, self.engine_sqlite_data.boost_curve[idx]].into_iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                out_vec.push(((*rpm as i32), (self.engine_sqlite_data.torque_curve[idx] / 1f64+boost_pressure)) );
+                out_vec.push(((*rpm as i32), ((self.engine_sqlite_data.torque_curve[idx] / 1f64+boost_pressure) * drivetrain_efficiency).round() as i32));
             }
         }
+        // Taper curve down to 0
+        let mut rpm_increment = 100;
+        {
+            let last_item = out_vec.last().unwrap();
+            let penultimate_item = out_vec.get(out_vec.len()-2).unwrap();
+            rpm_increment = last_item.0 - penultimate_item.0;
+        }
+        out_vec.push((out_vec.last().unwrap().0 + rpm_increment, out_vec.last().unwrap().1/2));
+        out_vec.push((out_vec.last().unwrap().0 + rpm_increment, 0));
         out_vec
     }
 
-    pub fn create_turbo_section(&self, out_path: &Path) -> Option<Vec<assetto_corsa::engine::Turbo>> {
+    pub fn get_max_boost_params(&self, decimal_place_precision: u32) -> (i32, f64) {
+        let (ref_rpm_idx, max_boost) = self.engine_sqlite_data.boost_curve.iter().enumerate().fold(
+            (0 as usize, normalise_boost_value(self.engine_sqlite_data.boost_curve[0], decimal_place_precision)),
+            |(idx_max, max_val), (idx, val)| {
+                let boost_value = normalise_boost_value(*val, decimal_place_precision);
+                if boost_value > max_val {
+                    (idx, boost_value)
+                } else {
+                    (idx_max, max_val)
+                }
+            }
+        );
+        (self.engine_sqlite_data.rpm_curve[ref_rpm_idx].round() as i32,
+         round_float_to(max_boost, decimal_place_precision))
+    }
+
+    pub fn create_turbo(&self) -> Option<assetto_corsa::engine::Turbo> {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
-
-        let section = TurboSection::new(
-            out_path,
+        // todo update this to take into account the boost amount set and ignore any overboost that may skew the turbo
+        // todo calculation
+        let (ref_rpm, max_boost) = self.get_max_boost_params(3);
+        let mut t = Turbo::new();
+        t.add_section(TurboSection::new(
             0,
             // TODO work out how to better approximate these
             0.99,
             0.965,
-            self.engine_sqlite_data.peak_boost,
-            self.engine_sqlite_data.peak_boost,
-            (self.engine_sqlite_data.peak_boost * 10_f64).ceil() / 10_f64,
-            self.engine_sqlite_data.peak_boost_rpm.round() as i32,
+            max_boost,
+            max_boost,
+            (max_boost * 10_f64).ceil() / 10_f64,
+            ref_rpm,
             2.5,
-            0
+            0)
         );
-        None
+        Some(t)
     }
 
     pub fn create_turbo_controllers(&self, out_path: &Path) -> Option<assetto_corsa::engine::TurboControllers> {
@@ -133,7 +200,11 @@ impl AcEngineParameterCalculatorV1 {
 
         let mut lut: Vec<(f64, f64)> = Vec::new();
         for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
-            lut.push((*rpm, (self.engine_sqlite_data.boost_curve[idx].r)));
+            let mut boost_val = 0.0;
+            if self.engine_sqlite_data.boost_curve[idx] > boost_val {
+                boost_val = round_float_to(self.engine_sqlite_data.boost_curve[idx], 3);
+            }
+            lut.push((*rpm, boost_val));
         }
         let controller = TurboController::new(
             out_path,
@@ -149,29 +220,125 @@ impl AcEngineParameterCalculatorV1 {
         controllers.add_controller(controller).unwrap();
         Some(controllers)
     }
+
+    pub fn coast_data(&self) -> Option<assetto_corsa::engine::CoastCurve> {
+        //   The following data is available from the engine.jbeam exported file
+        //   The dynamic friction torque on the engine in Nm/s.
+        //   This is a friction torque which increases proportional to engine AV (rad/s).
+        //   AV = (2pi * RPM) / 60
+        //   friction torque = (AV * dynamicFriction) + 2*staticFriction
+        //
+        //   #### NOTE ####
+        //   I'm assuming that all of the sources of friction are being taken into account in the BeamNG parameters used above
+        //   this may not be correct.
+        let eng_map = self.engine_jbeam_data.get("Camso_Engine")?.as_object()?.get("mainEngine")?.as_object()?;
+        let dynamic_friction = eng_map.get("dynamicFriction")?.as_f64().unwrap();
+        let static_friction = eng_map.get("friction")?.as_f64().unwrap();
+        let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm * 2_f64 * std::f64::consts::PI) / 60_f64;
+        let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + (2_f64 * static_friction);
+        Some(CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
+                                            friction_torque.round() as i32,
+                                            0.0))
+    }
+
+    pub fn damage(&self) -> assetto_corsa::engine::Damage {
+        let (_, max_boost) = self.get_max_boost_params(2);
+        Damage::new(
+            (self.limiter()+200_f64).round() as i32,
+            1,
+            Some(max_boost.ceil()),
+            match self.engine_sqlite_data.aspiration.as_str() {
+                "Aspiration_Natural" => { Some(0) },
+                _ => { Some(4) }
+            }
+        )
+    }
+
+    pub fn create_metadata(&self) -> assetto_corsa::engine::Metadata {
+        let mut m = Metadata::new();
+        m.set_version(2);
+        m.set_source(assetto_corsa::engine::Source::Automation);
+        m.set_mass_kg(self.engine_sqlite_data.weight.round() as i64);
+        m
+    }
 }
 
-pub fn build_ac_engine_from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<(), String>{
+pub fn build_ac_engine_from_beam_ng_mod(beam_ng_mod_path: &Path, drive_type: assetto_corsa::drivetrain::DriveType) -> Result<(), String>{
     let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
-    println!("inertia = {}", calculator.inertia().unwrap());
-    println!("idle speed = {}", calculator.idle_speed().unwrap());
-    println!("limiter = {}", calculator.limiter().unwrap());
-    println!("basic fuel consumption = {}", calculator.basic_fuel_consumption().unwrap());
-    println!("na torque curve = {:?}", calculator.naturally_aspirated_torque_curve());
-    println!("turbo controllers = {}", calculator.create_turbo_controllers(PathBuf::from("").as_path()).unwrap());
+    Ok(())
+}
+
+pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path, ac_car_path: &Path) -> Result<(), String> {
+    let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
+    let mut ac_car = Car::load_from_path(ac_car_path).unwrap();
+    ac_car.set_fuel_consumption(calculator.basic_fuel_consumption().unwrap());
+    let drive_type = &extract_mandatory_section::<assetto_corsa::drivetrain::Traction>(ac_car.drivetrain()).unwrap().drive_type;
+
+    let engine = ac_car.mut_engine();
+    engine.clear_turbo_controllers().unwrap();
+    let mut engine_data = extract_mandatory_section::<assetto_corsa::engine::EngineData>(engine).unwrap();
+    let inetia = calculator.inertia().unwrap();
+    println!("{}", inetia);
+    engine_data.inertia = inetia;
+    let limiter = calculator.limiter().round() as i32;
+    println!("{}", limiter);
+    engine_data.limiter = limiter;
+    engine_data.minimum = calculator.idle_speed().unwrap().round() as i32;
+    engine.update_component(&engine_data).unwrap();
+    engine.update_component(&calculator.damage()).unwrap();
+    engine.update_component(&calculator.coast_data().unwrap()).unwrap();
+    engine.update_power_curve(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
+    match calculator.create_turbo() {
+        None => {
+            if let Some(mut old_turbo) = extract_optional_section::<Turbo>(engine).unwrap() {
+                old_turbo.clear_sections();
+                old_turbo.bov_pressure_threshold = None;
+                engine.update_component(&old_turbo).unwrap();
+            }
+        }
+        Some(new_turbo) => {
+            engine.update_component(&new_turbo).unwrap();
+            if let Some(turbo_ctrl) = calculator.create_turbo_controllers(engine.data_dir()) {
+                engine.add_turbo_controllers(0, turbo_ctrl);
+            }
+        }
+    }
+    println!("{}", engine.ini_data());
+    engine.write().unwrap();
+    ac_car.write().unwrap();
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use crate::assetto_corsa::car::create_new_car_spec;
     use crate::beam_ng::get_mod_list;
-    use crate::fabricator::build_ac_engine_from_beam_ng_mod;
+    use crate::fabricator::{AcEngineParameterCalculatorV1, build_ac_engine_from_beam_ng_mod, swap_automation_engine_into_ac_car};
 
     #[test]
     fn load_mods() -> Result<(), String> {
         let mods = get_mod_list().unwrap();
-        build_ac_engine_from_beam_ng_mod(PathBuf::from(&mods[0]).as_path());
+        let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(PathBuf::from(&mods[0]).as_path())?;
+        std::fs::write("inertia.txt",format!("{}", calculator.inertia().unwrap()));
+        std::fs::write("idle.txt",format!("{}", calculator.idle_speed().unwrap()));
+        std::fs::write("limiter.txt",format!("{}", calculator.limiter()));
+        std::fs::write("fuel_cons.txt",format!("{}", calculator.basic_fuel_consumption().unwrap()));
+        std::fs::write("torque_curve.txt",format!("{:?}", calculator.naturally_aspirated_wheel_torque_curve(0.85)));
+        std::fs::write("turbo_ctrl.txt",format!("{}", calculator.create_turbo_controllers(PathBuf::from("").as_path()).unwrap()));
+        std::fs::write("turbo.txt",format!("{:?}", calculator.create_turbo().unwrap()));
+        std::fs::write("coast.txt",format!("{:?}", calculator.coast_data().unwrap()));
+        std::fs::write("metadata.txt",format!("{:?}", calculator.create_metadata()));
+        std::fs::write("fuel_flow.txt", format!("{:?}", calculator.fuel_flow_consumption(0.75))).unwrap();
+        std::fs::write("damage.txt", format!("{:?}", calculator.damage())).unwrap();
         Ok(())
+    }
+
+    #[test]
+    fn clone_and_swap_test() -> Result<(), String> {
+        let new_car_path = create_new_car_spec("zephyr_za401", "test").unwrap();
+        let mods = get_mod_list().unwrap();
+        swap_automation_engine_into_ac_car(PathBuf::from(&mods[0]).as_path(),
+                                           new_car_path.as_path())
     }
 }
