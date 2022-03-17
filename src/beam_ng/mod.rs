@@ -131,13 +131,30 @@ pub fn extract_mod_data(mod_path: &Path) -> Result<ModData, String> {
 }
 
 mod tests {
+    use std::ffi::OsString;
     use std::path::PathBuf;
-    use crate::beam_ng::get_mod_path;
+    use crate::beam_ng::{get_mod_list, get_mod_path};
 
     #[test]
     fn get_beam_ng_mod_path() -> Result<(), String> {
         let path = PathBuf::from(get_mod_path().unwrap());
         println!("BeamNG mod path is {}", path.display());
+        Ok(())
+    }
+
+    #[test]
+    fn get_beam_ng_mod_list() -> Result<(), String> {
+        let path = PathBuf::from(get_mod_path().unwrap());
+        match get_mod_list() {
+            None => {
+                println!("No mods found in {}", path.display());
+            }
+            Some(path_list) => {
+                for p in path_list {
+                    println!("{}", PathBuf::from(p).display())
+                }
+            }
+        }
         Ok(())
     }
 }
