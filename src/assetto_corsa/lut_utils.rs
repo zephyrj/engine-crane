@@ -20,10 +20,10 @@ impl<K, V> LutFile<K, V>
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
 {
-    pub fn new(path: &Path) -> LutFile<K, V> {
+    pub fn new(path: &Path, data: Vec<(K, V)>) -> LutFile<K, V> {
         LutFile {
             path: path.to_path_buf(),
-            data: Vec::new()
+            data
         }
     }
 
@@ -60,6 +60,10 @@ impl<K, V> InlineLut<K, V>
 {
     pub fn new() -> InlineLut<K, V> {
         InlineLut { data: Vec::new() }
+    }
+
+    pub fn from_vec(data: Vec<(K,V)>) -> InlineLut<K,V> {
+        InlineLut { data }
     }
 
     pub fn from_property_value(property_value: String) -> Result<InlineLut<K, V>, String> {
