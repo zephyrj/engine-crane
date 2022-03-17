@@ -228,7 +228,7 @@ pub fn load_engines() -> HashMap<String, EngineV1> {
 }
 
 pub fn load_engine_by_uuid(uuid: &str) -> Result<Option<EngineV1>, String> {
-    let conn = Connection::open(get_db_path().unwrap()).unwrap();
+    let conn = Connection::open(get_db_path_4_2().unwrap()).unwrap();
     let mut stmt = conn.prepare(load_engine_by_uuid_query()).unwrap();
     let engs = stmt.query_map(&[(":uid", uuid)],
                                                          EngineV1::load_from_row).unwrap();
