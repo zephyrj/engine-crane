@@ -58,7 +58,7 @@ impl Display for DriveType {
 
 #[derive(Debug)]
 pub struct Traction {
-    drive_type: DriveType
+    pub drive_type: DriveType
 }
 
 impl MandatoryDataSection for Traction {
