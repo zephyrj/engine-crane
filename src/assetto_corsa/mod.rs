@@ -57,7 +57,7 @@ pub fn get_root_sfx_path() -> Result<PathBuf> {
     }
 }
 
-pub fn get_list_of_installed_cars() -> Result<Vec<OsString>> {
+pub fn get_list_of_installed_cars() -> Result<Vec<PathBuf>> {
     let car_dir = match get_installed_cars_path() {
         Some(path) => path,
         None => return Err(Error::new(ErrorKind::NotInstalled,
@@ -71,11 +71,11 @@ pub fn get_list_of_installed_cars() -> Result<Vec<OsString>> {
                                                     e.to_string()))))
     };
 
-    let cars: Vec<OsString> = dir_entries.filter_map(|e| {
+    let cars = dir_entries.filter_map(|e| {
         match e {
             Ok(dir_entry) => {
                 if dir_entry.path().is_dir() {
-                    Some(dir_entry.path().into_os_string())
+                    Some(dir_entry.path())
                 } else {
                     None
                 }

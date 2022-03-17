@@ -45,14 +45,17 @@ pub fn get_mod_path() -> Option<PathBuf> {
     Some(mod_path_buf)
 }
 
-pub fn get_mod_list() -> Option<Vec<OsString>> {
-    let mod_dir = get_mod_path()?;
+pub fn get_mod_list() -> Vec<PathBuf> {
+    let mod_dir = match get_mod_path() {
+        None => { return Vec::new(); }
+        Some(dir) => { dir }
+    };
     let dir_entries = match fs::read_dir(mod_dir) {
         Ok(entry_list) => entry_list,
-        Err(e) => return None
+        Err(e) => { return Vec::new(); }
     };
 
-    let mods: Vec<OsString> = dir_entries.filter_map(|e| {
+    let mods: Vec<PathBuf> = dir_entries.filter_map(|e| {
         match e {
             Ok(dir_entry) => {
                 if dir_entry.path().is_file() {
@@ -64,7 +67,7 @@ pub fn get_mod_list() -> Option<Vec<OsString>> {
                         },
                         None => return None
                     }
-                    Some(dir_entry.path().into_os_string())
+                    Some(dir_entry.path())
                 } else {
                     None
                 }
@@ -72,7 +75,7 @@ pub fn get_mod_list() -> Option<Vec<OsString>> {
             _ => None
         }
     }).collect();
-    Some(mods)
+    mods
 }
 
 #[derive(Debug)]
@@ -145,14 +148,12 @@ mod tests {
     #[test]
     fn get_beam_ng_mod_list() -> Result<(), String> {
         let path = PathBuf::from(get_mod_path().unwrap());
-        match get_mod_list() {
-            None => {
-                println!("No mods found in {}", path.display());
-            }
-            Some(path_list) => {
-                for p in path_list {
-                    println!("{}", PathBuf::from(p).display())
-                }
+        let mods = get_mod_list();
+        if mods.len() == 0 {
+            println!("No mods found in {}", path.display());
+        } else {
+            for p in mods {
+                println!("{}", p.display())
             }
         }
         Ok(())

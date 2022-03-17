@@ -174,8 +174,7 @@ impl AcEngineParameterCalculatorV1 {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
-        // todo update this to take into account the boost amount set and ignore any overboost that may skew the turbo
-        // todo calculation
+        // todo update this to take into account the boost amount set and ignore any overboost that may skew the turbo section calculation
         let (ref_rpm, max_boost) = self.get_max_boost_params(3);
         let mut t = Turbo::new();
         t.add_section(TurboSection::new(
@@ -318,8 +317,8 @@ mod tests {
 
     #[test]
     fn load_mods() -> Result<(), String> {
-        let mods = get_mod_list().unwrap();
-        let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(PathBuf::from(&mods[0]).as_path())?;
+        let mods = get_mod_list();
+        let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(mods[0].as_path())?;
         std::fs::write("inertia.txt",format!("{}", calculator.inertia().unwrap()));
         std::fs::write("idle.txt",format!("{}", calculator.idle_speed().unwrap()));
         std::fs::write("limiter.txt",format!("{}", calculator.limiter()));
@@ -337,8 +336,8 @@ mod tests {
     #[test]
     fn clone_and_swap_test() -> Result<(), String> {
         let new_car_path = create_new_car_spec("zephyr_za401", "test").unwrap();
-        let mods = get_mod_list().unwrap();
-        swap_automation_engine_into_ac_car(PathBuf::from(&mods[0]).as_path(),
+        let mods = get_mod_list();
+        swap_automation_engine_into_ac_car(mods[0].as_path(),
                                            new_car_path.as_path())
     }
 }
