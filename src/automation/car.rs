@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::default::Default;
+use std::fmt::{Display, Formatter};
 use std::mem;
 
 
@@ -48,22 +49,47 @@ pub enum AttributeValue {
 }
 
 impl AttributeValue {
-    pub fn as_str(&self) -> Option<&str> {
+    pub fn as_str(&self) -> &str {
         return match self {
-            AttributeValue::Blob(_) => { None }
-            AttributeValue::Text(t) => { Some(t.as_str()) }
-            AttributeValue::Number(_) => { None }
-            AttributeValue::False => { Some("false") }
-            AttributeValue::True => { Some("true") }
+            AttributeValue::Blob(_) => { "BLOB" }
+            AttributeValue::Text(t) => { t.as_str() }
+            AttributeValue::Number(num) => { "" }
+            AttributeValue::False => { "false" }
+            AttributeValue::True => { "true" }
         }
     }
+    
+    pub fn as_num(&self) -> Result<f64, String> {
+        return match self {
+            AttributeValue::Number(num) => { Ok(*num) },
+            _ => { Err(String::from("Not a number")) }
+        }
+    }
+}
 
+impl Display for AttributeValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            AttributeValue::Blob(_) => { String::from("BLOB") }
+            AttributeValue::Text(t) => { t.clone() }
+            AttributeValue::Number(num) => { num.to_string() }
+            AttributeValue::False => { String::from("false") }
+            AttributeValue::True => { String::from("true") }
+        };
+        write!(f, "{}", str)
+    }
 }
 
 #[derive(Debug)]
 pub struct Attribute {
     pub name: String,
     pub value: AttributeValue
+}
+
+impl Display for Attribute {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} = {}", self.name.as_str(), self.value)
+    }
 }
 
 #[derive(Debug)]
@@ -73,6 +99,19 @@ pub struct Section {
     attributes: HashMap<String, Attribute>,
     sections: HashMap<String, Section>,
     stack: Vec<String>
+}
+
+impl Display for Section {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]\n", self.name.as_str())?;
+        for (_, attr) in &self.attributes {
+            write!(f, "{}\n", attr)?;
+        }
+        for (_, section) in &self.sections {
+            write!(f, "  {}\n", section)?;
+        }
+        Ok(())
+    }
 }
 
 impl Section {
@@ -137,6 +176,18 @@ pub struct CarFile {
     attributes: HashMap<String, Attribute>,
     sections: HashMap<String, Section>,
     stack: Vec<String>
+}
+
+impl Display for CarFile {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for (_, attr) in &self.attributes {
+            write!(f, "{}\n", attr)?;
+        }
+        for (_, section) in &self.sections {
+            write!(f, "{}\n", section)?;
+        }
+        Ok(())
+    }
 }
 
 impl CarFile {

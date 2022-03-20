@@ -7,6 +7,33 @@ use rusqlite::{Connection, params, Row};
 use crate::steam;
 use crate::automation::{STEAM_GAME_ID};
 
+pub enum SandboxVersion {
+    Legacy,
+    FourDotTwo
+}
+
+impl SandboxVersion {
+    pub fn from_version_number(version_num: i32) -> SandboxVersion {
+        if version_num < 2111220000 {
+            return SandboxVersion::Legacy;
+        }
+        return SandboxVersion::FourDotTwo;
+    }
+
+    pub fn get_path(&self) -> Option<OsString> {
+        return match self {
+            SandboxVersion::Legacy => { get_db_path() }
+            SandboxVersion::FourDotTwo => { get_db_path_4_2() }
+        }
+    }
+}
+
+impl Default for SandboxVersion {
+    fn default() -> Self {
+        SandboxVersion::FourDotTwo
+    }
+}
+
 #[derive(Debug)]
 pub struct EngineV1 {
     pub uuid: String,
@@ -227,8 +254,8 @@ pub fn load_engines() -> HashMap<String, EngineV1> {
     out_map
 }
 
-pub fn load_engine_by_uuid(uuid: &str) -> Result<Option<EngineV1>, String> {
-    let conn = Connection::open(get_db_path_4_2().unwrap()).unwrap();
+pub fn load_engine_by_uuid(uuid: &str, version: SandboxVersion) -> Result<Option<EngineV1>, String> {
+    let conn = Connection::open(version.get_path().unwrap()).unwrap();
     let mut stmt = conn.prepare(load_engine_by_uuid_query()).unwrap();
     let engs = stmt.query_map(&[(":uid", uuid)],
                                                          EngineV1::load_from_row).unwrap();

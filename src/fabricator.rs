@@ -6,7 +6,7 @@ use crate::assetto_corsa::drivetrain::DriveType;
 use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
 use crate::assetto_corsa::traits::{CarIniData, extract_mandatory_section, extract_optional_section};
 use crate::automation::car::CarFile;
-use crate::automation::sandbox::{EngineV1, load_engine_by_uuid};
+use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 use crate::beam_ng::ModData;
 
 enum ACEngineParameterVersion {
@@ -99,9 +99,11 @@ impl AcEngineParameterCalculatorV1 {
         let mod_data = beam_ng::extract_mod_data(beam_ng_mod_path)?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
         let engine_jbeam_data = mod_data.engine_jbeam_data;
-        let uid = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("UID").unwrap().value.as_str().unwrap();
+        let uid = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("UID").unwrap().value.as_str();
+        let version = automation_car_file.get_section("Car").unwrap().get_attribute("Version").unwrap().value.as_num().unwrap();
         println!("Engine uuid: {}", uid);
-        let engine_sqlite_data = match load_engine_by_uuid(uid)? {
+        println!("Engine version: {}", version);
+        let engine_sqlite_data = match load_engine_by_uuid(uid, SandboxVersion::from_version_number(version as i32))? {
             None => { return Err(String::from("No engine found")); }
             Some(eng) => { eng }
         };
@@ -365,8 +367,11 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path, ac_car_path: 
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::fs;
+    use std::fs::File;
+    use std::path::{Path, PathBuf};
     use crate::assetto_corsa::car::create_new_car_spec;
+    use crate::{automation, beam_ng};
     use crate::beam_ng::get_mod_list;
     use crate::fabricator::{AcEngineParameterCalculatorV1, AssettoCorsaCarSettings, build_ac_engine_from_beam_ng_mod, swap_automation_engine_into_ac_car};
 
@@ -395,5 +400,14 @@ mod tests {
         swap_automation_engine_into_ac_car(mods[0].as_path(),
                                            new_car_path.as_path(),
                                            AssettoCorsaCarSettings::default())
+    }
+
+    #[test]
+    fn dump_automation_car_file() -> Result<(), String> {
+        let mods = get_mod_list();
+        let mod_data = beam_ng::extract_mod_data(mods[0].as_path())?;
+        let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
+        fs::write(Path::new("car_temp.toml"), format!("{}", automation_car_file));
+        Ok(())
     }
 }
