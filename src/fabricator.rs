@@ -29,15 +29,30 @@ impl Display for ACEngineParameterVersion {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AssettoCorsaPhysicsLevel {
     BaseGame,
     CspExtendedPhysics
 }
 
+impl AssettoCorsaPhysicsLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AssettoCorsaPhysicsLevel::BaseGame => { "Base game physics"}
+            AssettoCorsaPhysicsLevel::CspExtendedPhysics => { "CSP extended physics" }
+        }
+    }
+}
+
 impl Default for AssettoCorsaPhysicsLevel {
     fn default() -> Self {
         AssettoCorsaPhysicsLevel::BaseGame
+    }
+}
+
+impl Display for AssettoCorsaPhysicsLevel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -190,9 +205,9 @@ impl AcEngineParameterCalculatorV1 {
         let (ref_rpm_idx, max_boost) = self.engine_sqlite_data.boost_curve.iter().enumerate().fold(
             (0 as usize, normalise_boost_value(self.engine_sqlite_data.boost_curve[0], decimal_place_precision)),
             |(idx_max, max_val), (idx, val)| {
-                let boost_value = normalise_boost_value(*val, decimal_place_precision);
+                let boost_value = normalise_boost_value(*val, 2);
                 if boost_value > max_val {
-                    (idx, boost_value)
+                    (idx, *val)
                 } else {
                     (idx_max, max_val)
                 }

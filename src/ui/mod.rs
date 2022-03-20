@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, text_input, TextInput, Row, button, Button, Color, HorizontalAlignment};
 use crate::{assetto_corsa, beam_ng, fabricator};
 use crate::automation;
-use crate::fabricator::AssettoCorsaCarSettings;
+use crate::fabricator::{AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
 
 pub fn launch() -> Result<(), Error> {
     CarSelector::run((Settings::default()))
@@ -15,13 +15,16 @@ pub fn launch() -> Result<(), Error> {
 pub struct CarSelector {
     available_cars: Vec<String>,
     available_mods: Vec<String>,
+    available_physics: Vec<AssettoCorsaPhysicsLevel>,
     current_car: Option<String>,
     current_mod: Option<String>,
     current_new_spec_name: String,
+    current_minimum_physics: AssettoCorsaPhysicsLevel,
     car_pick_list: pick_list::State<String>,
     new_spec_name: text_input::State,
     mod_pick_list: pick_list::State<String>,
     swap_button: button::State,
+    minimum_physics_pick_list: pick_list::State<AssettoCorsaPhysicsLevel>,
     status_message: String
 }
 
@@ -42,6 +45,7 @@ pub enum Message {
     CarSelected(String),
     NameEntered(String),
     ModSelected(String),
+    PhysicsLevelSelected(AssettoCorsaPhysicsLevel),
     SwapButtonPressed
 }
 
@@ -59,6 +63,7 @@ impl Sandbox for CarSelector {
         CarSelector {
             available_cars: to_filename_vec(&assetto_corsa::get_list_of_installed_cars().unwrap()),
             available_mods: mods,
+            available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame, AssettoCorsaPhysicsLevel::CspExtendedPhysics],
             ..Default::default() }
     }
 
@@ -78,6 +83,9 @@ impl Sandbox for CarSelector {
             Message::NameEntered(new_car_name) => {
                 self.current_new_spec_name = new_car_name
             },
+            Message::PhysicsLevelSelected(new_physics_level) => {
+                self.current_minimum_physics = new_physics_level;
+            }
             Message::SwapButtonPressed => {
                 if self.current_car.is_none() {
                     self.status_message = String::from("Please select an Assetto Corsa car");
@@ -92,7 +100,9 @@ impl Sandbox for CarSelector {
                 if let Some(mod_name) = &self.current_mod {
                     mod_path = mod_path.join(Path::new(mod_name.as_str()));
                 }
-                match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(), new_car_path.as_path(), AssettoCorsaCarSettings::default()) {
+                match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
+                                                                     new_car_path.as_path(),
+                                                                     AssettoCorsaCarSettings::from_physics_level(self.current_minimum_physics)) {
                     Ok(_) => { self.status_message = format!("Created {} successfully", new_car_path.display()) }
                     Err(err_str) => { self.status_message = err_str }
                 }
@@ -150,10 +160,17 @@ impl Sandbox for CarSelector {
         let swap_button = Button::new(&mut self.swap_button, Text::new("Swap"))
             .min_width(60)
             .on_press(Message::SwapButtonPressed);
+        let physics_pick_list = PickList::new(
+            &mut self.minimum_physics_pick_list,
+            &self.available_physics,
+            Some(self.current_minimum_physics),
+            Message::PhysicsLevelSelected
+        );
         let control_row = Row::new()
             .align_items(Align::Start)
             .padding(20)
-            .push(swap_button);
+            .push(swap_button)
+            .push(physics_pick_list);
 
         let mut layout = Column::new().width(Length::Fill)
             .align_items(Align::Start)
