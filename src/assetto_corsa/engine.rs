@@ -229,6 +229,8 @@ pub struct ExtendedFuelConsumptionBaseData {
 }
 
 impl ExtendedFuelConsumptionBaseData {
+    const SECTION_NAME: &'static str = "ENGINE_DATA";
+
     pub fn new(idle_throttle: Option<f64>,
                idle_cutoff: Option<i32>,
                mechanical_efficiency: Option<f64>) -> ExtendedFuelConsumptionBaseData {
@@ -240,9 +242,9 @@ impl MandatoryDataSection for ExtendedFuelConsumptionBaseData {
     fn load_from_parent(parent_data: &dyn CarIniData) -> Result<ExtendedFuelConsumptionBaseData> where Self: Sized {
         let ini_data = parent_data.ini_data();
         Ok(ExtendedFuelConsumptionBaseData {
-            idle_throttle: ini_utils::get_value(ini_data, "ENGINE_DATA", "IDLE_THROTTLE"),
-            idle_cutoff: ini_utils::get_value(ini_data, "ENGINE_DATA", "IDLE_CUTOFF"),
-            mechanical_efficiency: ini_utils::get_value(ini_data, "ENGINE_DATA", "MECHANICAL_EFFICIENCY")
+            idle_throttle: ini_utils::get_value(ini_data, Self::SECTION_NAME, "IDLE_THROTTLE"),
+            idle_cutoff: ini_utils::get_value(ini_data, Self::SECTION_NAME, "IDLE_CUTOFF"),
+            mechanical_efficiency: ini_utils::get_value(ini_data, Self::SECTION_NAME, "MECHANICAL_EFFICIENCY")
         })
     }
 }
@@ -250,21 +252,21 @@ impl MandatoryDataSection for ExtendedFuelConsumptionBaseData {
 impl IniUpdater for ExtendedFuelConsumptionBaseData {
     fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
         if let Some(idle_throttle) = self.idle_throttle {
-            ini_utils::set_float(ini_data, "ENGINE_DATA", "IDLE_THROTTLE", idle_throttle, 3);
-        } else if ini_data.section_contains_property("ENGINE_DATA", "IDLE_THROTTLE") {
-            ini_data.remove_value("ENGINE_DATA", "IDLE_THROTTLE");
+            ini_utils::set_float(ini_data, Self::SECTION_NAME, "IDLE_THROTTLE", idle_throttle, 3);
+        } else if ini_data.section_contains_property(Self::SECTION_NAME, "IDLE_THROTTLE") {
+            ini_data.remove_value(Self::SECTION_NAME, "IDLE_THROTTLE");
         }
 
         if let Some(idle_cutoff) = self.idle_cutoff {
-            ini_utils::set_value(ini_data, "ENGINE_DATA", "IDLE_CUTOFF", idle_cutoff);
-        } else if ini_data.section_contains_property("ENGINE_DATA", "IDLE_CUTOFF") {
-            ini_data.remove_value("ENGINE_DATA", "IDLE_CUTOFF");
+            ini_utils::set_value(ini_data, Self::SECTION_NAME, "IDLE_CUTOFF", idle_cutoff);
+        } else if ini_data.section_contains_property(Self::SECTION_NAME, "IDLE_CUTOFF") {
+            ini_data.remove_value(Self::SECTION_NAME, "IDLE_CUTOFF");
         }
 
         if let Some(mechanical_efficiency) = self.mechanical_efficiency {
-            ini_utils::set_float(ini_data, "ENGINE_DATA", "MECHANICAL_EFFICIENCY", mechanical_efficiency, 3);
-        } else if ini_data.section_contains_property("ENGINE_DATA", "MECHANICAL_EFFICIENCY") {
-            ini_data.remove_value("ENGINE_DATA", "MECHANICAL_EFFICIENCY");
+            ini_utils::set_float(ini_data, Self::SECTION_NAME, "MECHANICAL_EFFICIENCY", mechanical_efficiency, 3);
+        } else if ini_data.section_contains_property(Self::SECTION_NAME, "MECHANICAL_EFFICIENCY") {
+            ini_data.remove_value(Self::SECTION_NAME, "MECHANICAL_EFFICIENCY");
         }
         Ok(())
     }
@@ -329,11 +331,28 @@ impl OptionalDataSection for FuelConsumptionFlowRate {
                        format!("Error loading fuel flow consumption lut. {}", err_str))
         })?;
 
+        let mut max_fuel_flow = 0;
+        if let Some(val) = ini_utils::get_value(ini_data, Self::SECTION_NAME, "MAX_FUEL_FLOW") {
+            max_fuel_flow = val;
+        }
         Ok(Some(FuelConsumptionFlowRate{
             base_data: ExtendedFuelConsumptionBaseData::load_from_parent(parent_data)?,
             max_fuel_flow_lut,
-            max_fuel_flow: 0
+            max_fuel_flow
         }))
+    }
+}
+
+impl IniUpdater for FuelConsumptionFlowRate {
+    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+        self.base_data.update_ini(ini_data)?;
+        ini_data.remove_section(Self::SECTION_NAME);
+        ini_utils::set_value(ini_data, Self::SECTION_NAME, "MAX_FUEL_FLOW", self.max_fuel_flow);
+        ini_utils::set_value(ini_data, Self::SECTION_NAME, "LOG_FUEL_FLOW", 0);
+        if let Some(flow_lut) = &self.max_fuel_flow_lut {
+            flow_lut.update_ini(ini_data)?;
+        }
+        Ok(())
     }
 }
 
@@ -1060,8 +1079,10 @@ impl CarIniData for Engine {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, EngineData, Turbo};
+    use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, EngineData, ExtendedFuelConsumptionBaseData, FuelConsumptionFlowRate, Turbo};
     use crate::assetto_corsa::ini_utils::IniUpdater;
+    use crate::assetto_corsa::lut_utils::{InlineLut, LutType};
+    use crate::assetto_corsa::structs::LutProperty;
     use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, MandatoryDataSection};
 
     const TURBO_NO_CTRL_DATA: &'static str = r#"
@@ -1194,6 +1215,37 @@ RPM_DAMAGE_K=1
             assert_eq!(damage.rpm_damage_k, rpm_damage_k, "rpm_damage_k is correct");
         })
     }
+
+    #[test]
+    fn update_fuel_flow_rate() -> Result<(), String> {
+        let new_mechanical_efficiency = 0.85;
+        let new_idle_throttle = 0.04;
+        let new_idle_cutoff = 1100;
+        let new_max_fuel_flow = 100;
+        let fuel_flow_vec = vec![(1000, 10), (2000, 20), (3000, 30), (4000, 40), (5000, 50), (6000, 60)];
+
+        let mut engine = Engine::load_from_ini_string(String::from(TURBO_NO_CTRL_DATA));
+        engine.update_component(&FuelConsumptionFlowRate::new(
+            new_idle_throttle,
+            new_idle_cutoff,
+            new_mechanical_efficiency,
+            Some(fuel_flow_vec.clone()),
+            new_max_fuel_flow
+        )).map_err(|err| format!("{}", err.to_string()))?;
+
+        let ini_string = engine.ini_data.to_string();
+        let engine = Engine::load_from_ini_string(ini_string);
+        let component = extract_optional_section::<FuelConsumptionFlowRate>(&engine).map_err(|err| format!("{}", err.to_string()))?.unwrap();
+        assert_eq!(component.base_data.mechanical_efficiency, Some(new_mechanical_efficiency), "mechanical_efficiency is correct");
+        assert_eq!(component.base_data.idle_cutoff, Some(new_idle_cutoff), "idle_cutoff is correct");
+        assert_eq!(component.base_data.idle_throttle, Some(new_idle_throttle), "idle_throttle is correct");
+        assert_eq!(component.max_fuel_flow, new_max_fuel_flow, "max_fuel_flow is correct");
+        assert!(component.max_fuel_flow_lut.is_some());
+        let lut = component.max_fuel_flow_lut.unwrap();
+        assert_eq!(fuel_flow_vec, lut.to_vec(), "max_fuel_flow_lut is correct");
+        Ok(())
+    }
+
 
     fn component_update_test<T: IniUpdater + MandatoryDataSection, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
         let mut engine = Engine::load_from_ini_string(String::from(TURBO_NO_CTRL_DATA));
