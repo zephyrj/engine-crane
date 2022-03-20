@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, text_input, TextInput, Row, button, Button, Color, HorizontalAlignment};
 use crate::{assetto_corsa, beam_ng, fabricator};
 use crate::automation;
+use crate::fabricator::AssettoCorsaCarSettings;
 
 pub fn launch() -> Result<(), Error> {
     CarSelector::run((Settings::default()))
@@ -91,7 +92,7 @@ impl Sandbox for CarSelector {
                 if let Some(mod_name) = &self.current_mod {
                     mod_path = mod_path.join(Path::new(mod_name.as_str()));
                 }
-                match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(), new_car_path.as_path()) {
+                match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(), new_car_path.as_path(), AssettoCorsaCarSettings::default()) {
                     Ok(_) => { self.status_message = format!("Created {} successfully", new_car_path.display()) }
                     Err(err_str) => { self.status_message = err_str }
                 }

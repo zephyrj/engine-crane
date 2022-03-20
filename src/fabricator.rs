@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::path::{Path};
 use crate::{assetto_corsa, automation, beam_ng};
-use crate::assetto_corsa::car::Car;
+use crate::assetto_corsa::car::{Car, CarVersion};
 use crate::assetto_corsa::drivetrain::DriveType;
 use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
 use crate::assetto_corsa::traits::{CarIniData, extract_mandatory_section, extract_optional_section};
@@ -26,6 +26,38 @@ impl ACEngineParameterVersion {
 impl Display for ACEngineParameterVersion {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+#[derive(Debug)]
+pub enum AssettoCorsaPhysicsLevel {
+    BaseGame,
+    CspExtendedPhysics
+}
+
+impl Default for AssettoCorsaPhysicsLevel {
+    fn default() -> Self {
+        AssettoCorsaPhysicsLevel::BaseGame
+    }
+}
+
+pub struct AssettoCorsaCarSettings {
+    pub minimum_physics_level: AssettoCorsaPhysicsLevel,
+}
+
+impl AssettoCorsaCarSettings {
+    pub fn from_physics_level(level: AssettoCorsaPhysicsLevel) -> AssettoCorsaCarSettings {
+        AssettoCorsaCarSettings {
+            minimum_physics_level: level,
+        }
+    }
+}
+
+impl Default for AssettoCorsaCarSettings {
+    fn default() -> AssettoCorsaCarSettings {
+        AssettoCorsaCarSettings{
+            ..Default::default()
+        }
     }
 }
 
@@ -267,12 +299,20 @@ pub fn build_ac_engine_from_beam_ng_mod(beam_ng_mod_path: &Path, drive_type: ass
     Ok(())
 }
 
-pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path, ac_car_path: &Path) -> Result<(), String> {
+pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path, ac_car_path: &Path, settings: AssettoCorsaCarSettings) -> Result<(), String> {
     let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
     let mut ac_car = Car::load_from_path(ac_car_path).unwrap();
-    ac_car.set_fuel_consumption(calculator.basic_fuel_consumption().unwrap());
     let drive_type = &extract_mandatory_section::<assetto_corsa::drivetrain::Traction>(ac_car.drivetrain()).unwrap().drive_type;
-
+    match settings.minimum_physics_level {
+        AssettoCorsaPhysicsLevel::BaseGame => {
+            ac_car.set_fuel_consumption(calculator.basic_fuel_consumption().unwrap());
+        }
+        AssettoCorsaPhysicsLevel::CspExtendedPhysics => {
+            ac_car.set_version(CarVersion::CspExtendedPhysics);
+            ac_car.clear_fuel_consumption();
+            ac_car.mut_engine().update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency()));
+        }
+    }
     let engine = ac_car.mut_engine();
     engine.clear_turbo_controllers().unwrap();
     let mut engine_data = extract_mandatory_section::<assetto_corsa::engine::EngineData>(engine).unwrap();
@@ -313,7 +353,7 @@ mod tests {
     use std::path::PathBuf;
     use crate::assetto_corsa::car::create_new_car_spec;
     use crate::beam_ng::get_mod_list;
-    use crate::fabricator::{AcEngineParameterCalculatorV1, build_ac_engine_from_beam_ng_mod, swap_automation_engine_into_ac_car};
+    use crate::fabricator::{AcEngineParameterCalculatorV1, AssettoCorsaCarSettings, build_ac_engine_from_beam_ng_mod, swap_automation_engine_into_ac_car};
 
     #[test]
     fn load_mods() -> Result<(), String> {
@@ -338,6 +378,7 @@ mod tests {
         let new_car_path = create_new_car_spec("zephyr_za401", "test").unwrap();
         let mods = get_mod_list();
         swap_automation_engine_into_ac_car(mods[0].as_path(),
-                                           new_car_path.as_path())
+                                           new_car_path.as_path(),
+                                           AssettoCorsaCarSettings::default())
     }
 }
