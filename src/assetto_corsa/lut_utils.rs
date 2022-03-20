@@ -9,7 +9,8 @@ use csv::Terminator;
 pub struct LutFile<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        (K, V): Clone
 {
     pub path: PathBuf,
     data: Vec<(K,V)>
@@ -18,7 +19,8 @@ pub struct LutFile<K, V>
 impl<K, V> LutFile<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        (K, V): Clone
 {
     pub fn new(path: &Path, data: Vec<(K, V)>) -> LutFile<K, V> {
         LutFile {
@@ -42,13 +44,18 @@ impl<K, V> LutFile<K, V>
         write_lut_to_path(&self.data, self.path.as_path())?;
         Ok(())
     }
+
+    pub fn to_vec(&self) -> Vec<(K,V)> {
+        self.data.clone()
+    }
 }
 
 #[derive(Debug)]
 pub struct InlineLut<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        (K, V): Clone
 {
     data: Vec<(K,V)>
 }
@@ -56,7 +63,8 @@ pub struct InlineLut<K, V>
 impl<K, V> InlineLut<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        (K, V): Clone
 {
     pub fn new() -> InlineLut<K, V> {
         InlineLut { data: Vec::new() }
@@ -75,12 +83,17 @@ impl<K, V> InlineLut<K, V>
     pub fn update(&mut self, data: Vec<(K,V)>) -> Vec<(K,V)> {
         std::mem::replace(&mut self.data, data)
     }
+
+    pub fn to_vec(&self) -> Vec<(K,V)> {
+        self.data.clone()
+    }
 }
 
 impl<K, V> Display for InlineLut<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        (K, V): Clone
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}",
@@ -95,7 +108,8 @@ impl<K, V> Display for InlineLut<K, V>
 pub enum LutType<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        (K, V): Clone
 {
     File(LutFile<K,V>),
     Inline(InlineLut<K,V>),
@@ -105,7 +119,8 @@ pub enum LutType<K, V>
 impl<K, V> LutType<K, V>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        (K, V): Clone
 {
     pub fn path_only(path: PathBuf) -> LutType<K,V> {
         LutType::PathOnly(path)
@@ -126,7 +141,7 @@ impl<K, V> LutType<K, V>
 pub fn load_lut_from_path<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
 {
     let file = match File::open(lut_path) {
         Ok(file) => { file }

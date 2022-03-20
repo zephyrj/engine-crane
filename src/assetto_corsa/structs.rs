@@ -9,8 +9,8 @@ use crate::assetto_corsa::lut_utils::LutType;
 #[derive(Debug)]
 pub struct LutProperty<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug
 {
     lut: LutType<K, V>,
     section_name: String,
@@ -19,8 +19,8 @@ pub struct LutProperty<K, V>
 
 impl<K,V> LutProperty<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug
 {
     pub fn new(lut: LutType<K,V>, section_name: String, property_name: String) -> LutProperty<K,V> {
         LutProperty{ lut, section_name, property_name }
@@ -78,6 +78,14 @@ impl<K,V> LutProperty<K, V>
         }
     }
 
+    pub fn to_vec(&self) -> Vec<(K, V)> {
+        match &self.lut {
+            LutType::File(lut_file) => { lut_file.to_vec() }
+            LutType::Inline(inline_lut) => { inline_lut.to_vec() }
+            LutType::PathOnly(_) => { Vec::new() }
+        }
+    }
+
     pub fn write(&self) -> std::result::Result<(), String> {
         return match &self.lut {
             LutType::File(lut_file) => { lut_file.write() },
@@ -88,8 +96,8 @@ impl<K,V> LutProperty<K, V>
 
 impl<K, V> IniUpdater for LutProperty<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug
 {
     fn update_ini(&self, ini_data: &mut Ini) -> Result<(), String> {
         match &self.lut {
