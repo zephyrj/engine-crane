@@ -429,6 +429,10 @@ impl Car {
     pub fn version(&self) -> Option<CarVersion> {
         ini_utils::get_value(&self.ini_config, "HEADER", "VERSION")
     }
+    
+    pub fn set_version(&mut self, version: CarVersion) {
+        ini_utils::set_value(&mut self.ini_config, "HEADER", "VERSION", version);
+    }
 
     pub fn screen_name(&self) -> Option<String> {
         ini_utils::get_value(&self.ini_config, "INFO","SCREEN_NAME")
@@ -456,6 +460,10 @@ impl Car {
 
     pub fn set_fuel_consumption(&mut self, consumption: f64) {
         ini_utils::set_float(&mut self.ini_config, "FUEL","CONSUMPTION", consumption, 4);
+    }
+    
+    pub fn clear_fuel_consumption(&mut self) {
+        self.ini_config.remove_value("FUEL", "CONSUMPTION");
     }
 
     pub fn write(&self) -> Result<()> {
