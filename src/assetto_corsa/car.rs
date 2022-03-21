@@ -5,6 +5,7 @@ use std::default::Default;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::{BufReader, BufRead, LineWriter, Write, BufWriter};
+use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use serde_json::Value;
@@ -75,10 +76,15 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
     Ok(())
 }
 
-pub fn update_car_name(car_path: &Path, new_name: &str) -> Result<()> {
+pub fn update_car_name(car_path: &Path, new_suffix: &str) -> Result<()> {
     let mut new_car = Car::load_from_path(car_path)?;
-    new_car.set_screen_name(new_name);
-    new_car.ui_info.set_name(new_name.to_string());
+    let existing_name = match new_car.screen_name() {
+        None => { String::from(car_path.file_name().unwrap().to_str().unwrap()) }
+        Some(name) => { name }
+    };
+    let new_name = existing_name.add(format!(" {}", new_suffix).as_str());
+    new_car.set_screen_name(new_name.as_str());
+    new_car.ui_info.set_name(new_name);
     new_car.write()?;
     Ok(())
 }
@@ -154,9 +160,7 @@ pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Resu
         println!("Warning: {}", err.to_string());
     }
     let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
-    let cloned_car_name = new_car_path.file_name().unwrap().to_str().unwrap();
     fix_car_specific_filenames(new_car_path, existing_car_name)?;
-    update_car_name(new_car_path, cloned_car_name)?;
     update_car_sfx(new_car_path, existing_car_name)?;
     Ok(())
 }
@@ -175,14 +179,14 @@ pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<P
         return Err(Error::new(ErrorKind::NoSuchCar,
                               format!("Can't find {}", existing_car_path.display())));
     }
-    let new_car_name = format!("{}_{}", existing_car_name, spec_name);
+    let new_car_name = format!("{}_{}", existing_car_name, spec_name.to_lowercase());
     let new_car_path = installed_cars_path.join(&new_car_name);
     if new_car_path.exists() {
         return Err(Error::new(ErrorKind::CarAlreadyExists,
                               format!("{}", new_car_path.display())));
     }
-
     clone_existing_car(existing_car_path.as_path(), new_car_path.as_path())?;
+    update_car_name(new_car_path.as_path(), spec_name)?;
     Ok(new_car_path)
 }
 
