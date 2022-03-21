@@ -5,7 +5,7 @@ use crate::assetto_corsa::car::{Car, CarVersion};
 use crate::assetto_corsa::drivetrain::DriveType;
 use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
 use crate::assetto_corsa::traits::{CarIniData, extract_mandatory_section, extract_optional_section};
-use crate::automation::car::CarFile;
+use crate::automation::car::{Attribute, CarFile};
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 use crate::beam_ng::ModData;
 
@@ -99,8 +99,9 @@ impl AcEngineParameterCalculatorV1 {
         let mod_data = beam_ng::extract_mod_data(beam_ng_mod_path)?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
         let engine_jbeam_data = mod_data.engine_jbeam_data;
-        let uid = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("UID").unwrap().value.as_str();
-        let version = automation_car_file.get_section("Car").unwrap().get_attribute("Version").unwrap().value.as_num().unwrap();
+        let variant_info = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
+        let uid = variant_info.get_attribute("UID").unwrap().value.as_str();
+        let version = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap();
         println!("Engine uuid: {}", uid);
         println!("Engine version: {}", version);
         let engine_sqlite_data = match load_engine_by_uuid(uid, SandboxVersion::from_version_number(version as i32))? {
@@ -204,6 +205,9 @@ impl AcEngineParameterCalculatorV1 {
     }
 
     pub fn get_max_boost_params(&self, decimal_place_precision: u32) -> (i32, f64) {
+        if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
+            return (0, 0.0);
+        }
         let (ref_rpm_idx, max_boost) = self.engine_sqlite_data.boost_curve.iter().enumerate().fold(
             (0 as usize, normalise_boost_value(self.engine_sqlite_data.boost_curve[0], decimal_place_precision)),
             |(idx_max, max_val), (idx, val)| {
