@@ -513,10 +513,75 @@ impl Car {
     }
 }
 
+/// Credit for this goes to Luigi Auriemma (me@aluigi.org)
+/// This is derived from his quickBMS script which can be found at:
+/// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143
+pub fn derive_acd_extraction_key(folder_name: &str) -> String {
+    let mut key_list: Vec<String> = Vec::with_capacity(8);
+    let mut push_key_component = |val: i64| { key_list.push((val & 0xff).to_string()) };
+
+    let mut key_1 = 0_i64;
+    folder_name.chars().for_each(|c| key_1 += u64::from(c) as i64);
+    push_key_component(key_1);
+
+    let mut key_2: i64 = 0;
+    for idx in (0..folder_name.len()-1).step_by(2) {
+        key_2 *= u64::from(folder_name.chars().nth(idx).unwrap()) as i64;
+        key_2 -= u64::from(folder_name.chars().nth(idx+1).unwrap()) as i64;
+    }
+    push_key_component(key_2);
+
+    let mut key_3: i64 = 0;
+    for idx in (1..folder_name.len()-3).step_by(3) {
+        key_3 *= u64::from(folder_name.chars().nth(idx).unwrap()) as i64;
+        key_3 /= (u64::from(folder_name.chars().nth(idx+1).unwrap()) as i64) + 0x1b;
+        key_3 += -0x1b - u64::from(folder_name.chars().nth(idx-1).unwrap()) as i64;
+    }
+    push_key_component(key_3);
+
+    let mut key_4 = 0x1683_i64;
+    folder_name[1..].chars().for_each(|c| key_4 -= u64::from(c) as i64);
+    push_key_component(key_4);
+
+    let mut key_5 = 0x42_i64;
+    for idx in (1..folder_name.len()-4).step_by(4) {
+        let mut tmp = u64::from(folder_name.chars().nth(idx).unwrap()) as i64 + 0xf;
+        tmp *= key_5;
+        let mut tmp2 = u64::from(folder_name.chars().nth(idx-1).unwrap()) as i64 + 0xf;
+        tmp2 *= tmp;
+        tmp2 += 0x16;
+        key_5 = tmp2;
+    }
+    push_key_component(key_5);
+
+    let mut key_6 = 0x65_i64;
+    folder_name[0..folder_name.len()-2].chars().step_by(2).for_each(|c| key_6 -= u64::from(c) as i64 );
+    push_key_component(key_6);
+
+    let mut key_7 = 0xab_i64;
+    folder_name[0..folder_name.len()-2].chars().step_by(2).for_each(|c| key_7 %= u64::from(c) as i64 );
+    push_key_component(key_7);
+
+    let mut key_8 = 0xab;
+    for idx in (0..folder_name.len()-1) {
+        key_8 /= u64::from(folder_name.chars().nth(idx).unwrap()) as i64;
+        key_8 += u64::from(folder_name.chars().nth(idx+1).unwrap()) as i64
+    }
+    push_key_component(key_8);
+
+    key_list.join("-")
+}
+
+pub fn extract_data_acd(acd_path: &Path) {
+    let folder_name = String::from(acd_path.parent().unwrap().file_name().unwrap().to_str().unwrap());
+    let extraction_key = derive_acd_extraction_key(&folder_name);
+}
+
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use crate::assetto_corsa::car::{Car, create_new_car_spec};
+    use crate::assetto_corsa::car::{Car, create_new_car_spec, derive_acd_extraction_key, extract_data_acd};
 
     #[test]
     fn load_car() -> Result<(), String> {
@@ -542,5 +607,16 @@ mod tests {
     fn clone_car() {
         let new_car_path = create_new_car_spec("zephyr_za401", "test").unwrap();
         println!("{}", new_car_path.display());
+    }
+
+    #[test]
+    fn derive_acd_key() {
+        assert_eq!(derive_acd_extraction_key("abarth500"), "7-248-6-221-246-250-21-49");
+    }
+
+    #[test]
+    fn extract_acd() {
+        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500/data.acd");
+        extract_data_acd(path);
     }
 }
