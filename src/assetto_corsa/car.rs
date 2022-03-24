@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::fs;
+use std::{fs, mem};
 use std::default::Default;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
-use std::io::{BufReader, BufRead, LineWriter, Write, BufWriter};
+use std::io::{BufReader, BufRead, LineWriter, Write, BufWriter, Read};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -563,7 +563,7 @@ pub fn derive_acd_extraction_key(folder_name: &str) -> String {
     push_key_component(key_7);
 
     let mut key_8 = 0xab;
-    for idx in (0..folder_name.len()-1) {
+    for idx in 0..folder_name.len()-1 {
         key_8 /= u64::from(folder_name.chars().nth(idx).unwrap()) as i64;
         key_8 += u64::from(folder_name.chars().nth(idx+1).unwrap()) as i64
     }
@@ -572,9 +572,50 @@ pub fn derive_acd_extraction_key(folder_name: &str) -> String {
     key_list.join("-")
 }
 
-pub fn extract_data_acd(acd_path: &Path) {
+/// Credit for this goes to Luigi Auriemma (me@aluigi.org)
+/// This is derived from his quickBMS script which can be found at:
+/// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143
+pub fn extract_data_acd(acd_path: &Path, output_directory_path: &Path) {
     let folder_name = String::from(acd_path.parent().unwrap().file_name().unwrap().to_str().unwrap());
     let extraction_key = derive_acd_extraction_key(&folder_name);
+
+    let f = File::open(acd_path).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut packed_buffer = Vec::new();
+    reader.read_to_end(&mut packed_buffer).unwrap();
+    if !output_directory_path.is_dir() {
+        std::fs::create_dir(output_directory_path).unwrap();
+    }
+
+    type LengthField = u32;
+    let mut current_pos: usize = 0;
+    while current_pos < packed_buffer.len() {
+        // 4 bytes contain the length of filename
+        let filename_len = LengthField::from_le_bytes(packed_buffer[current_pos..(current_pos+mem::size_of::<LengthField>())].try_into().expect("Failed to parse filename length"));
+        current_pos += mem::size_of::<LengthField>();
+
+        // The next 'filename_len' bytes are the filename
+        let filename = String::from_utf8(packed_buffer[current_pos..(current_pos + filename_len as usize)].to_owned()).expect("Failed to parse filename");
+        current_pos += filename_len as usize;
+
+        // The next 4 bytes contain the length of the file content
+        let mut content_length = LengthField::from_le_bytes(packed_buffer[current_pos..(current_pos+mem::size_of::<LengthField>())].try_into().expect("Failed to parse filename length"));
+        current_pos += mem::size_of::<LengthField>();
+
+        // The file content is spread out such that each byte of content is stored in 4 bytes.
+        // Read each single byte of content, subtract the value of the extraction key from it and store it.
+        // Move along the packed data by 4 bytes to the next byte of content, increment the extraction key position by 1 and repeat
+        // Loop back to the start of the extraction key if we hit the end.
+        // Repeat until we have read the full content for the file
+        let mut unpacked_buffer: Vec<u8> = Vec::new();
+        let mut key_byte_iter = extraction_key.chars().cycle();
+        packed_buffer[current_pos..current_pos+(content_length*4) as usize].iter().step_by(4).for_each(|byte|{
+            unpacked_buffer.push(byte - u32::from(key_byte_iter.next().unwrap()) as u8);
+        });
+        println!("{} - {} bytes", filename, content_length);
+        fs::write(output_directory_path.join(filename), unpacked_buffer).unwrap();
+        current_pos += (content_length*4) as usize;
+    }
 }
 
 
@@ -617,6 +658,7 @@ mod tests {
     #[test]
     fn extract_acd() {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500/data.acd");
-        extract_data_acd(path);
+        let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500/data");
+        extract_data_acd(path, out_path);
     }
 }
