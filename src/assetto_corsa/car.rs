@@ -156,10 +156,17 @@ pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Resu
                            err.to_string()))
     })?;
 
+    let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
+    let data_path = new_car_path.join("data");
+    if !data_path.exists() {
+        let acd_path = new_car_path.join("data.acd");
+        extract_data_acd(acd_path.as_path(),
+                         data_path.as_path(),
+                         Some(existing_car_name));
+    }
     if let Some(err) = delete_data_acd_file(new_car_path).err(){
         println!("Warning: {}", err.to_string());
     }
-    let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
     fix_car_specific_filenames(new_car_path, existing_car_name)?;
     update_car_sfx(new_car_path, existing_car_name)?;
     Ok(())
@@ -575,9 +582,13 @@ pub fn derive_acd_extraction_key(folder_name: &str) -> String {
 /// Credit for this goes to Luigi Auriemma (me@aluigi.org)
 /// This is derived from his quickBMS script which can be found at:
 /// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143
-pub fn extract_data_acd(acd_path: &Path, output_directory_path: &Path) {
-    let folder_name = String::from(acd_path.parent().unwrap().file_name().unwrap().to_str().unwrap());
-    let extraction_key = derive_acd_extraction_key(&folder_name);
+pub fn extract_data_acd(acd_path: &Path, output_directory_path: &Path, folder_name_override: Option<&str>) {
+    let folder_name = if let Some(folder_name) = folder_name_override {
+        folder_name
+    } else {
+        acd_path.parent().unwrap().file_name().unwrap().to_str().unwrap()
+    };
+    let extraction_key = derive_acd_extraction_key(folder_name);
 
     let f = File::open(acd_path).unwrap();
     let mut reader = BufReader::new(f);
@@ -603,9 +614,9 @@ pub fn extract_data_acd(acd_path: &Path, output_directory_path: &Path) {
         current_pos += mem::size_of::<LengthField>();
 
         // The file content is spread out such that each byte of content is stored in 4 bytes.
-        // Read each single byte of content, subtract the value of the extraction key from it and store it.
+        // Read each single byte of content, subtract the value of the extraction key from it and store the result
         // Move along the packed data by 4 bytes to the next byte of content, increment the extraction key position by 1 and repeat
-        // Loop back to the start of the extraction key if we hit the end.
+        // Loop back to the start of the extraction key if we hit the end
         // Repeat until we have read the full content for the file
         let mut unpacked_buffer: Vec<u8> = Vec::new();
         let mut key_byte_iter = extraction_key.chars().cycle();
@@ -617,7 +628,6 @@ pub fn extract_data_acd(acd_path: &Path, output_directory_path: &Path) {
         current_pos += (content_length*4) as usize;
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -659,6 +669,6 @@ mod tests {
     fn extract_acd() {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500/data.acd");
         let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500/data");
-        extract_data_acd(path, out_path);
+        extract_data_acd(path, out_path, None);
     }
 }
