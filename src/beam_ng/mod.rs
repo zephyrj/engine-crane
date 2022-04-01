@@ -8,6 +8,7 @@ use directories::BaseDirs;
 use parselnk::Lnk;
 use serde_hjson::Value;
 use crate::steam;
+use tracing::{info, Level};
 
 pub const STEAM_GAME_NAME: &str = "BeamNG.drive";
 pub const STEAM_GAME_ID: i64 = 284160;
@@ -50,6 +51,8 @@ pub fn get_mod_list() -> Vec<PathBuf> {
         None => { return Vec::new(); }
         Some(dir) => { dir }
     };
+    info!("Mod dir is {}", mod_dir.display());
+    
     let dir_entries = match fs::read_dir(mod_dir) {
         Ok(entry_list) => entry_list,
         Err(e) => { return Vec::new(); }

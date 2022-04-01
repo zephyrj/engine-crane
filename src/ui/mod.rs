@@ -6,6 +6,7 @@ use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, S
 use crate::{assetto_corsa, beam_ng, fabricator};
 use crate::automation;
 use crate::fabricator::{AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
+use tracing::{span, Level, info};
 
 pub fn launch() -> Result<(), Error> {
     CarSelector::run((Settings::default()))
@@ -59,10 +60,23 @@ impl Sandbox for CarSelector {
     type Message = Message;
 
     fn new() -> Self {
-        let mods = to_filename_vec(&beam_ng::get_mod_list());
+        let available_mods = {
+            let span = span!(Level::INFO, "Loading beamNG mods");
+            let _enter = span.enter();
+            let mods = to_filename_vec(&beam_ng::get_mod_list());
+            info!("Found {} mods", mods.len());
+            mods
+        };
+        let available_cars = {
+            let span = span!(Level::INFO, "Loading Assetto Corsa cars");
+            let _enter = span.enter();
+            let cars = to_filename_vec(&assetto_corsa::get_list_of_installed_cars().unwrap());
+            info!("Found {} cars", cars.len());
+            cars
+        };
         CarSelector {
-            available_cars: to_filename_vec(&assetto_corsa::get_list_of_installed_cars().unwrap()),
-            available_mods: mods,
+            available_cars,
+            available_mods,
             available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame, AssettoCorsaPhysicsLevel::CspExtendedPhysics],
             ..Default::default() }
     }

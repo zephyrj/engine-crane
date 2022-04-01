@@ -15,6 +15,7 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::path::PathBuf;
+use tracing::info;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 
 use crate::steam;
@@ -23,11 +24,15 @@ pub const STEAM_GAME_NAME: &str = "assettocorsa";
 pub const STEAM_GAME_ID: i64 = 244210;
 
 pub fn is_installed() -> bool {
-    if let Some(install_path) = steam::get_game_install_path(STEAM_GAME_NAME) {
+    if let Some(install_path) = get_install_path() {
         install_path.is_dir()
     } else {
         false
     }
+}
+
+pub fn get_install_path() -> Option<PathBuf> {
+    steam::get_game_install_path(STEAM_GAME_NAME)
 }
 
 pub fn get_installed_cars_path() -> Option<PathBuf> {
@@ -63,6 +68,7 @@ pub fn get_list_of_installed_cars() -> Result<Vec<PathBuf>> {
         None => return Err(Error::new(ErrorKind::NotInstalled,
                                       String::from("Assetto Corsa isn't installed")))
     };
+    info!("AC cars directory is {}", car_dir.display());
     let dir_entries = match fs::read_dir(car_dir) {
         Ok(entry_list) => entry_list,
         Err(e) => return Err(Error::new(ErrorKind::NotInstalled,
