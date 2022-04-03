@@ -2,7 +2,7 @@
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
+use crate::assetto_corsa::error::{Result, Error, ErrorKind, PropertyParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
@@ -39,13 +39,13 @@ impl DriveType {
 }
 
 impl FromStr for DriveType {
-    type Err = FieldParseError;
+    type Err = PropertyParseError;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             DriveType::RWD_VALUE => Ok(DriveType::RWD),
             DriveType::FWD_VALUE => Ok(DriveType::FWD),
             DriveType::AWD_VALUE => Ok(DriveType::AWD),
-            _ => Err(FieldParseError::new(s))
+            _ => Err(PropertyParseError::new(s))
         }
     }
 }

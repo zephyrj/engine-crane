@@ -28,9 +28,8 @@ mod fabricator;
 use std::env;
 use std::path::PathBuf;
 use tracing_subscriber;
-use tracing_subscriber::{Registry, prelude::*};
 use tracing_appender;
-use tracing::{info, warn, error, Level};
+use tracing::{info, warn, error};
 
 // -> Result<(), iced::Error>
 fn main() -> Result<(), iced::Error> {

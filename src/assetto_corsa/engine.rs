@@ -7,7 +7,7 @@ use std::str::{FromStr};
 use csv::Terminator;
 use toml::Value;
 use toml::value::Table;
-use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
+use crate::assetto_corsa::error::{Result, Error, ErrorKind, PropertyParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::lut_utils;
 use crate::assetto_corsa::lut_utils::{InlineLut, load_lut_from_path, LutType};
@@ -74,24 +74,8 @@ impl Metadata {
             return Ok(None);
         }
 
-        let metadata_string = match fs::read_to_string(&metadata_path) {
-            Ok(str) => { str }
-            Err(e) => {
-                return Err( Error::new(ErrorKind::InvalidEngineMetadata,
-                                       String::from(format!("Failed to read {}: {}",
-                                                            metadata_path.display(),
-                                                            e.to_string()))) )
-            }
-        };
-        let toml_config = match metadata_string.parse::<Value>() {
-            Ok(decoded_toml) => { decoded_toml },
-            Err(e) => {
-                return Err( Error::new(ErrorKind::InvalidEngineMetadata,
-                                       String::from(format!("Failed to decode {}: {}",
-                                                            metadata_path.display(),
-                                                            e.to_string()))) )
-            }
-        };
+        let metadata_string = fs::read_to_string(&metadata_path)?;
+        let toml_config = metadata_string.parse::<Value>()?;
 
         let meta = Metadata{
             toml_config,
@@ -467,11 +451,11 @@ impl CoastSource {
 }
 
 impl FromStr for CoastSource {
-    type Err = FieldParseError;
+    type Err = PropertyParseError;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             CoastSource::FROM_COAST_REF_VALUE => Ok(CoastSource::FromCoastRef),
-            _ => Err(FieldParseError::new(s))
+            _ => Err(PropertyParseError::new(s))
         }
     }
 }
@@ -557,13 +541,13 @@ impl ControllerInput {
 }
 
 impl FromStr for ControllerInput {
-    type Err = FieldParseError;
+    type Err = PropertyParseError;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             ControllerInput::RPMS_VALUE => Ok(ControllerInput::Rpms),
             ControllerInput::GAS_VALUE => Ok(ControllerInput::Gas),
             ControllerInput::GEAR_VALUE => Ok(ControllerInput::Gear),
-            _ => Err(FieldParseError::new(s))
+            _ => Err(PropertyParseError::new(s))
         }
     }
 }
@@ -599,13 +583,13 @@ pub struct ControllerCombinatorParseError{
 
 
 impl FromStr for ControllerCombinator {
-    type Err = FieldParseError;
+    type Err = PropertyParseError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             ControllerCombinator::ADD_VALUE => Ok(ControllerCombinator::Add),
             ControllerCombinator::MULT_VALUE => Ok(ControllerCombinator::Mult),
-            _ => Err(FieldParseError::new(s))
+            _ => Err(PropertyParseError::new(s))
         }
     }
 }
@@ -636,7 +620,7 @@ impl TurboController {
             data_dir
         ).map_err(
             |err_str| {
-                Error::new(ErrorKind::InvalidEngineTurboController,
+                Error::new(ErrorKind::InvalidCar,
                            format!("Failed to load turbo controller with index {}: {}", idx, err_str ))
             })?;
 
@@ -739,7 +723,7 @@ impl TurboControllers {
                 if err.kind() == io::ErrorKind::NotFound {
                     return Ok(None)
                 }
-                return Err(Error::new(ErrorKind::InvalidEngineTurboController,
+                return Err(Error::new(ErrorKind::InvalidCar,
                                       format!("Failed to load turbo controller with index {}: {}", index, err )));
             }
         };
@@ -770,16 +754,12 @@ impl TurboControllers {
     }
 
     pub fn write(&self) -> Result<()> {
-        self.ini_config.write(&self.ini_path).map_err(|io_err|{
-            Error::from_io_error(io_err, format!("Failed to write {}", self.ini_path.display()).as_str())
-        })?;
+        self.ini_config.write(&self.ini_path)?;
         Ok(())
     }
 
     pub fn delete_ini_file(&self) -> Result<()> {
-        std::fs::remove_file(&self.ini_path).map_err(|io_err|{
-            Error::from_io_error(io_err, format!("Failed to delete {}", self.ini_path.display()).as_str())
-        })?;
+        std::fs::remove_file(&self.ini_path)?;
         Ok(())
     }
 
@@ -1052,10 +1032,7 @@ impl Engine {
 
     pub fn write(&mut self) -> Result<()> {
         let out_path = self.data_dir.join(Engine::INI_FILENAME);
-        self.ini_data.write(out_path.as_path()).map_err(|io_err| {
-            Error::from_io_error(io_err,
-                                 format!("Failed to write engine ini data. {}", out_path.display()).as_str())
-        })?;
+        self.ini_data.write(out_path.as_path())?;
         self.power_curve.write().map_err(|err| {
             Error::new(ErrorKind::IOError, format!("Failed to write power curve. {}", err))
         })?;

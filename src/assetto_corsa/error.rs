@@ -1,5 +1,6 @@
-use std::{error, fmt, result};
+use std::{error, fmt, io, result};
 use std::fmt::{Display, Formatter};
+
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
@@ -12,19 +13,39 @@ impl Error {
     pub(crate) fn new(kind: ErrorKind, details: String) -> Error {
         Error{ kind, details }
     }
-    pub(crate) fn from_io_error(io_err: std::io::Error, failed_operation: &str) -> Error {
-        Error{ kind: ErrorKind::IOError,
-               details: format!("{}. {}", failed_operation, io_err.to_string()) }
-    }
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Operation failed; {} - {}", self.kind.as_str(), self.details)
+        write!(f, "{} - {}", self.kind.as_str(), self.details)
     }
 }
 
 impl error::Error for Error {}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error::new(ErrorKind::IOError, e.to_string())
+    }
+}
+
+impl From<fs_extra::error::Error> for Error {
+    fn from(e: fs_extra::error::Error) -> Self {
+        Error::new(ErrorKind::IOError, e.to_string())
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Self {
+        Error::new(ErrorKind::JsonDecodeError, e.to_string())
+    }
+}
+
+impl From<toml::de::Error> for Error {
+    fn from(e: toml::de::Error) -> Self {
+        Error::new(ErrorKind::TomlDecodeError, e.to_string())
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
@@ -33,9 +54,9 @@ pub enum ErrorKind {
     InvalidCar,
     InvalidUpdate,
     NotInstalled,
-    InvalidEngineMetadata,
-    InvalidEngineTurboController,
     IOError,
+    JsonDecodeError,
+    TomlDecodeError,
     Uncategorized
 }
 
@@ -47,32 +68,31 @@ impl ErrorKind {
             ErrorKind::InvalidCar => "invalid car",
             ErrorKind::InvalidUpdate => "requested update is invalid",
             ErrorKind::NotInstalled => "not installed",
-            ErrorKind::InvalidEngineMetadata => "engine metadata is invalid",
-            ErrorKind::InvalidEngineTurboController => "engine turbo controller is invalid",
             ErrorKind::IOError => "io error",
+            ErrorKind::JsonDecodeError => "json decode error",
+            ErrorKind::TomlDecodeError => "toml decode error",
             ErrorKind::Uncategorized => "uncategorized error"
         }
     }
 }
 
 #[derive(Debug)]
-pub struct FieldParseError {
+pub struct PropertyParseError {
     invalid_value: String
 }
 
-impl FieldParseError {
-    pub fn new(invalid_value: &str) -> FieldParseError {
-        FieldParseError {
+impl PropertyParseError {
+    pub fn new(invalid_value: &str) -> PropertyParseError {
+        PropertyParseError {
             invalid_value: String::from(invalid_value)
         }
     }
 }
 
-impl Display for FieldParseError {
+impl Display for PropertyParseError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Unknown value '{}'", &self.invalid_value)
     }
 }
 
-impl error::Error for FieldParseError {}
-
+impl error::Error for PropertyParseError {}

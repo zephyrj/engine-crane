@@ -9,11 +9,12 @@ use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use serde_json::Value;
+use tracing::{debug, warn};
 use walkdir::WalkDir;
 use crate::assetto_corsa;
 use crate::assetto_corsa::traits::MandatoryCarData;
 use crate::assetto_corsa::drivetrain::Drivetrain;
-use crate::assetto_corsa::error::{Result, Error, ErrorKind, FieldParseError};
+use crate::assetto_corsa::error::{Result, Error, PropertyParseError, ErrorKind};
 use crate::assetto_corsa::engine::{Engine};
 use crate::assetto_corsa::{ini_utils, load_sfx_data};
 use crate::assetto_corsa::ini_utils::Ini;
@@ -21,9 +22,7 @@ use crate::assetto_corsa::ini_utils::Ini;
 pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
     let acd_path = car_path.join("data.acd");
     if acd_path.exists() {
-        std::fs::remove_file(acd_path).map_err(|io_err| {
-            Error::from_io_error(io_err, format!("Failed to delete data.acd file from {}", car_path.display()).as_str())
-        })?;
+        std::fs::remove_file(acd_path)?;
     }
     Ok(())
 }
@@ -41,9 +40,7 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
             (filename_string.ends_with(".kn5") || (filename_string.ends_with(".bank"))) {
             paths_to_update.push(entry.path().to_path_buf());
         } else if filename_string == "lods.ini" {
-            let mut lod_ini = Ini::load_from_file(entry.path()).map_err(|err| {
-                Error::from_io_error(err, "Failed to load lods.ini")
-            })?;
+            let mut lod_ini = Ini::load_from_file(entry.path())?;
             let mut idx = 0;
             loop {
                 let current_lod_name = format!("LOD_{}", idx);
@@ -57,9 +54,7 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
                                      old_value.replace(name_to_change, new_car_name));
                 idx += 1;
             }
-            lod_ini.write(entry.path()).map_err(|err| {
-                Error::from_io_error(err, "Failed to write lods.ini")
-            })?;
+            lod_ini.write(entry.path())?;
         }
     }
 
@@ -68,10 +63,7 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
         let new_filename = path.file_name().unwrap().to_str().unwrap().replace(name_to_change, new_car_name);
         new_path.pop();
         new_path.push(new_filename);
-        std::fs::rename(&path, &new_path).map_err(|err| {
-            Error::new(ErrorKind::Uncategorized,
-                       format!("Failed to rename from {} to {}. {}", path.display(), new_path.display(), err.to_string()))
-        })?;
+        std::fs::rename(&path, &new_path)?;
     }
     Ok(())
 }
@@ -95,11 +87,7 @@ fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
 
     let mut updated_lines: Vec<String> = Vec::new();
     if guids_file_path.exists() {
-        let file = File::open(&guids_file_path).map_err(|err|{
-            Error::new(ErrorKind::Uncategorized,
-                       String::from(
-                           format!("Couldn't open {}. {}", guids_file_path.display(), err.to_string())))
-        })?;
+        let file = File::open(&guids_file_path)?;
 
         updated_lines = BufReader::new(file).lines().into_iter().filter_map(|res| {
             match res {
@@ -117,18 +105,10 @@ fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
         updated_lines = load_sfx_data()?.generate_clone_guid_info(name_to_change, car_name);
     }
 
-    let file = File::create(&guids_file_path).map_err(|err|{
-        Error::new(ErrorKind::Uncategorized,
-                   String::from(
-                       format!("Couldn't re-create {}. {}", guids_file_path.display(), err.to_string())))
-    })?;
+    let file = File::create(&guids_file_path)?;
     let mut file = LineWriter::new(file);
     for line in updated_lines {
-        write!(file, "{}\n", line).map_err(|err|{
-            Error::new(ErrorKind::Uncategorized,
-                       String::from(
-                           format!("Couldn't write to {}. {}", guids_file_path.display(), err.to_string())))
-        })?;
+        write!(file, "{}\n", line)?;
     }
     Ok(())
 }
@@ -136,25 +116,15 @@ fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
 pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Result<()> {
     if existing_car_path == new_car_path {
         return Err(Error::new(ErrorKind::CarAlreadyExists,
-                              format!("Cannot clone car to its existing location. ({})",
-                                             existing_car_path.display())));
+                              format!("Cannot clone car to its existing location. ({})", existing_car_path.display())));
     }
 
-    std::fs::create_dir(&new_car_path).map_err(|err| {
-        Error::new(ErrorKind::Uncategorized,
-                   format!("Failed to create {}. {}", new_car_path.display(), err.to_string()))
-    })?;
+    std::fs::create_dir(&new_car_path)?;
     let mut copy_options = fs_extra::dir::CopyOptions::new();
     copy_options.content_only = true;
     fs_extra::dir::copy(&existing_car_path,
                         &new_car_path,
-                        &copy_options).map_err(|err|{
-        Error::new(ErrorKind::Uncategorized,
-                   format!("Failed to copy contents of {} to {}. {}",
-                           existing_car_path.display(),
-                           new_car_path.display(),
-                           err.to_string()))
-    })?;
+                        &copy_options)?;
 
     let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
     let data_path = new_car_path.join("data");
@@ -165,7 +135,7 @@ pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Resu
                          Some(existing_car_name));
     }
     if let Some(err) = delete_data_acd_file(new_car_path).err(){
-        println!("Warning: {}", err.to_string());
+        warn!("Warning: {}", err.to_string());
     }
     fix_car_specific_filenames(new_car_path, existing_car_name)?;
     update_car_sfx(new_car_path, existing_car_name)?;
@@ -176,21 +146,17 @@ pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<P
     let installed_cars_path = match assetto_corsa::get_installed_cars_path() {
         Some(path) => { path },
         None => {
-            return Err(Error::new(ErrorKind::NoSuchCar,
-                                  String::from("Can't find installed cars path")));
+            return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
         }
     };
-
     let existing_car_path = installed_cars_path.join(existing_car_name);
     if !existing_car_path.exists() {
-        return Err(Error::new(ErrorKind::NoSuchCar,
-                              format!("Can't find {}", existing_car_path.display())));
+        return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
     }
     let new_car_name = format!("{}_{}", existing_car_name, spec_name.to_lowercase());
     let new_car_path = installed_cars_path.join(&new_car_name);
     if new_car_path.exists() {
-        return Err(Error::new(ErrorKind::CarAlreadyExists,
-                              format!("{}", new_car_path.display())));
+        return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
     }
     clone_existing_car(existing_car_path.as_path(), new_car_path.as_path())?;
     update_car_name(new_car_path.as_path(), spec_name)?;
@@ -225,13 +191,13 @@ impl CarVersion {
 }
 
 impl FromStr for CarVersion {
-    type Err = FieldParseError;
+    type Err = PropertyParseError;
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             CarVersion::VERSION_1 => Ok(CarVersion::One),
             CarVersion::VERSION_2 => Ok(CarVersion::Two),
             CarVersion::CSP_EXTENDED_2 => Ok(CarVersion::CspExtendedPhysics),
-            _ => Err(FieldParseError::new(s))
+            _ => Err(PropertyParseError::new(s))
         }
     }
 }
@@ -278,24 +244,12 @@ pub struct UiInfo {
 
 impl UiInfo {
     fn load(ui_json_path: &Path) -> Result<UiInfo> {
-        let ui_info_string = match fs::read_to_string(ui_json_path) {
-            Ok(str) => { str }
-            Err(e) => {
-                return Err( Error::new(ErrorKind::InvalidCar,
-                                       String::from(format!("Failed to read {}: {}",
-                                                            ui_json_path.display(),
-                                                            e.to_string()))) )
-            }
-        };
-        let json_config = match serde_json::from_str(ui_info_string.replace("\r\n", "\n").replace("\n", " ").replace("\t", "  ").as_str()) {
-            Ok(decoded_json) => { decoded_json },
-            Err(e) => {
-                return Err( Error::new(ErrorKind::InvalidCar,
-                                       String::from(format!("Failed to decode {}: {}",
-                                                            ui_json_path.display(),
-                                                            e.to_string()))) )
-            }
-        };
+        let ui_info_string = fs::read_to_string(ui_json_path)?;
+        let json_config = serde_json::from_str(ui_info_string
+            .replace("\r\n", "\n")
+            .replace("\n", " ")
+            .replace("\t", "  ")
+            .as_str())?;
         let ui_info = UiInfo {
             ui_info_path: ui_json_path.to_path_buf(),
             json_config
@@ -304,16 +258,8 @@ impl UiInfo {
     }
 
     pub fn write(&self) -> Result<()> {
-        let writer = BufWriter::new(File::create(&self.ui_info_path).map_err(|err| {
-            Error::from_io_error(err,
-                                 format!("Failed to create {}", &self.ui_info_path.display()).as_str())
-        })?);
-        serde_json::to_writer_pretty(writer, &self.json_config).map_err(|err| {
-            Error::new(ErrorKind::IOError,
-                       format!("Failed to write {}. {}",
-                               &self.ui_info_path.display(),
-                               err.to_string()))
-        })?;
+        let writer = BufWriter::new(File::create(&self.ui_info_path)?);
+        serde_json::to_writer_pretty(writer, &self.json_config)?;
         Ok(())
     }
 
@@ -346,13 +292,10 @@ impl UiInfo {
                         return_vec.push(v);
                     }
                 }
-                Some(return_vec)
-            } else {
-                None
+                return Some(return_vec);
             }
-        } else {
-            None
         }
+        None
     }
 
     pub fn specs(&self) -> Option<HashMap<&str, SpecValue>> {
@@ -364,13 +307,10 @@ impl UiInfo {
                         return_map.insert(k.as_str(), val);
                     }
                 });
-                Some(return_map)
-            } else {
-                None
+                return Some(return_map);
             }
-        } else {
-            None
         }
+        None
     }
 
     pub fn torque_curve(&self) -> Option<Vec<Vec<&str>>> {
@@ -417,13 +357,10 @@ impl UiInfo {
                         outer_vec.push(inner_vec);
                     }
                 });
-                Some(outer_vec)
-            } else {
-                None
+                return Some(outer_vec);
             }
-        } else {
-            None
         }
+        None
     }
 }
 
@@ -479,10 +416,7 @@ impl Car {
 
     pub fn write(&self) -> Result<()> {
         let out_path = self.root_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
-        self.ini_config.write(&out_path).map_err(|err| {
-            Error::from_io_error(err,
-                                 format!("Failed to parse {}", out_path.display()).as_str())
-        })?;
+        self.ini_config.write(&out_path)?;
         self.ui_info.write()
     }
 
@@ -496,22 +430,11 @@ impl Car {
 
     pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
         let ui_info_path = car_folder_path.join(["ui", "ui_car.json"].iter().collect::<PathBuf>());
-        let ui_info = match UiInfo::load(ui_info_path.as_path()) {
-            Ok(result) => result,
-            Err(e) => { return Err(Error::new(ErrorKind::InvalidCar,
-                                              format!("Failed to parse {}: {}",
-                                                      ui_info_path.display(),
-                                                      e.to_string()))) }
-        };
+        let ui_info = UiInfo::load(ui_info_path.as_path())?;
         let car_ini_path = car_folder_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
         let car = Car {
             root_path: car_folder_path.to_path_buf(),
-            ini_config: Ini::load_from_file(car_ini_path.as_path()).map_err(|err| {
-                Error::new(ErrorKind::InvalidCar,
-                           format!("Failed to decode {}: {}",
-                                   car_ini_path.display(),
-                                   err.to_string()))
-            })?,
+            ini_config: Ini::load_from_file(car_ini_path.as_path())?,
             ui_info,
             engine: Engine::load_from_dir(car_folder_path.join("data").as_path())?,
             drivetrain: Drivetrain::load_from_path(car_folder_path.join("data").as_path())?
@@ -623,7 +546,7 @@ pub fn extract_data_acd(acd_path: &Path, output_directory_path: &Path, folder_na
         packed_buffer[current_pos..current_pos+(content_length*4) as usize].iter().step_by(4).for_each(|byte|{
             unpacked_buffer.push(byte - u32::from(key_byte_iter.next().unwrap()) as u8);
         });
-        println!("{} - {} bytes", filename, content_length);
+        debug!("{} - {} bytes", filename, content_length);
         fs::write(output_directory_path.join(filename), unpacked_buffer).unwrap();
         current_pos += (content_length*4) as usize;
     }
