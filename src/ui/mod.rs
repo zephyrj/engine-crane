@@ -6,7 +6,7 @@ use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, S
 use crate::{assetto_corsa, beam_ng, fabricator};
 use crate::automation;
 use crate::fabricator::{AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
-use tracing::{span, Level, info};
+use tracing::{span, Level, info, error};
 
 pub fn launch() -> Result<(), Error> {
     CarSelector::run((Settings::default()))
@@ -67,13 +67,14 @@ impl Sandbox for CarSelector {
             info!("Found {} mods", mods.len());
             mods
         };
-        let available_cars = {
+        let mut available_cars = {
             let span = span!(Level::INFO, "Loading Assetto Corsa cars");
             let _enter = span.enter();
             let cars = to_filename_vec(&assetto_corsa::get_list_of_installed_cars().unwrap());
             info!("Found {} cars", cars.len());
             cars
         };
+        available_cars.sort();
         CarSelector {
             available_cars,
             available_mods,
@@ -108,18 +109,38 @@ impl Sandbox for CarSelector {
                     self.status_message = String::from("Please select an BeamNG mod");
                     return;
                 }
-                let new_car_path = assetto_corsa::car::create_new_car_spec((&self.current_car).as_ref().unwrap().as_str(),
-                                                                           self.current_new_spec_name.as_str()).unwrap();
+
+                let existing_car_name = (&self.current_car).as_ref().unwrap().as_str();
+                let new_spec_name = self.current_new_spec_name.as_str();
+
+                let new_car_path = {
+                    let span = span!(Level::INFO, "Creating new car spec");
+                    let _enter = span.enter();
+                    match assetto_corsa::car::create_new_car_spec(existing_car_name, new_spec_name) {
+                        Ok(path) => { path }
+                        Err(e) => {
+                            error!("Swap failed: {}", e.to_string());
+                            self.status_message = format!("Swap failed: {}", e.to_string());
+                            return;
+                        }
+                    }
+                };
+
                 let mut mod_path = beam_ng::get_mod_path().unwrap();
                 if let Some(mod_name) = &self.current_mod {
                     mod_path = mod_path.join(Path::new(mod_name.as_str()));
                 }
-                match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
-                                                                     new_car_path.as_path(),
-                                                                     AssettoCorsaCarSettings::from_physics_level(self.current_minimum_physics)) {
-                    Ok(_) => { self.status_message = format!("Created {} successfully", new_car_path.display()) }
-                    Err(err_str) => { self.status_message = err_str }
+                {
+                    let span = span!(Level::INFO, "Updating car physics");
+                    let _enter = span.enter();
+                    match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
+                                                                         new_car_path.as_path(),
+                                                                         AssettoCorsaCarSettings::from_physics_level(self.current_minimum_physics)) {
+                        Ok(_) => { self.status_message = format!("Created {} successfully", new_car_path.display()) }
+                        Err(err_str) => { self.status_message = err_str }
+                    }
                 }
+
             }
         }
     }

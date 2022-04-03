@@ -9,7 +9,7 @@ use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use serde_json::Value;
-use tracing::{debug, warn};
+use tracing::{debug, warn, info};
 use walkdir::WalkDir;
 use crate::assetto_corsa;
 use crate::assetto_corsa::traits::MandatoryCarData;
@@ -47,6 +47,7 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
                 if !lod_ini.section_contains_property(&current_lod_name, "FILE") {
                     break
                 }
+                info!("Updating {}", current_lod_name);
                 let old_value: String = ini_utils::get_value(&lod_ini, &current_lod_name, "FILE").unwrap();
                 ini_utils::set_value(&mut lod_ini,
                                      &current_lod_name,
@@ -61,6 +62,7 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
     for path in paths_to_update {
         let mut new_path = path.clone();
         let new_filename = path.file_name().unwrap().to_str().unwrap().replace(name_to_change, new_car_name);
+        info!("Changing {} to {}", path.display(), new_filename);
         new_path.pop();
         new_path.push(new_filename);
         std::fs::rename(&path, &new_path)?;
@@ -74,7 +76,8 @@ pub fn update_car_name(car_path: &Path, new_suffix: &str) -> Result<()> {
         None => { String::from(car_path.file_name().unwrap().to_str().unwrap()) }
         Some(name) => { name }
     };
-    let new_name = existing_name.add(format!(" {}", new_suffix).as_str());
+    let new_name = existing_name.clone().add(format!(" {}", new_suffix).as_str());
+    info!("Updating screen name and ui data from {} to {}", existing_name, new_name);
     new_car.set_screen_name(new_name.as_str());
     new_car.ui_info.set_name(new_name);
     new_car.write()?;
@@ -87,8 +90,8 @@ fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
 
     let mut updated_lines: Vec<String> = Vec::new();
     if guids_file_path.exists() {
+        info!("Updating contents of '{}'. Replacing refs to '{}' with '{}'", guids_file_path.display(), name_to_change, car_name);
         let file = File::open(&guids_file_path)?;
-
         updated_lines = BufReader::new(file).lines().into_iter().filter_map(|res| {
             match res {
                 Ok(string) => Some(string.replace(name_to_change, car_name)),
@@ -100,8 +103,8 @@ fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
                 }
             }
         }).collect();
-
     } else {
+        info!("Generating new '{}' with contents from the installation sfx data", guids_file_path.display());
         updated_lines = load_sfx_data()?.generate_clone_guid_info(name_to_change, car_name);
     }
 
@@ -128,12 +131,18 @@ pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Resu
 
     let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
     let data_path = new_car_path.join("data");
+    let acd_path = new_car_path.join("data.acd");
     if !data_path.exists() {
-        let acd_path = new_car_path.join("data.acd");
+        if !acd_path.exists() {
+            return Err(Error::new(ErrorKind::InvalidCar,
+                                  format!("{} doesn't contain a data dir or data.acd file", existing_car_path.display())));
+        }
+        info!("No data dir present in {}. Data will be extracted from data.acd", new_car_path.display());
         extract_data_acd(acd_path.as_path(),
                          data_path.as_path(),
                          Some(existing_car_name));
     }
+    info!("Deleting {} as data will be invalid after clone completion", acd_path.display());
     if let Some(err) = delete_data_acd_file(new_car_path).err(){
         warn!("Warning: {}", err.to_string());
     }
@@ -158,6 +167,7 @@ pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<P
     if new_car_path.exists() {
         return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
     }
+    info!("Cloning {} to {}", existing_car_path.display(), new_car_path.display());
     clone_existing_car(existing_car_path.as_path(), new_car_path.as_path())?;
     update_car_name(new_car_path.as_path(), spec_name)?;
     Ok(new_car_path)

@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::path::{Path};
+use tracing::{debug, error, info};
 use crate::{assetto_corsa, automation, beam_ng};
 use crate::assetto_corsa::car::{Car, CarVersion};
 use crate::assetto_corsa::drivetrain::DriveType;
@@ -95,17 +96,21 @@ struct AcEngineParameterCalculatorV1 {
 
 impl AcEngineParameterCalculatorV1 {
     pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<AcEngineParameterCalculatorV1, String> {
-        println!("BeamNG mod path: {}", beam_ng_mod_path.to_path_buf().display());
+        info!("Creating AC parameter calculator for {}", beam_ng_mod_path.to_path_buf().display());
         let mod_data = beam_ng::extract_mod_data(beam_ng_mod_path)?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
         let engine_jbeam_data = mod_data.engine_jbeam_data;
         let variant_info = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
         let uid = variant_info.get_attribute("UID").unwrap().value.as_str();
-        let version = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap();
-        println!("Engine uuid: {}", uid);
-        println!("Engine version: {}", version);
-        let engine_sqlite_data = match load_engine_by_uuid(uid, SandboxVersion::from_version_number(version as i32))? {
-            None => { return Err(String::from("No engine found")); }
+        let version_num = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap();
+        info!("Engine uuid: {}", uid);
+        info!("Engine version number: {}", version_num);
+        let version = SandboxVersion::from_version_number(version_num as i32);
+        info!("Deduced as {}", version);
+        let engine_sqlite_data = match load_engine_by_uuid(uid, version)? {
+            None => {
+                return Err(format!("No engine found with uuid {}", uid));
+            }
             Some(eng) => { eng }
         };
         Ok(AcEngineParameterCalculatorV1 {
@@ -315,55 +320,62 @@ impl AcEngineParameterCalculatorV1 {
     }
 }
 
-pub fn build_ac_engine_from_beam_ng_mod(beam_ng_mod_path: &Path, drive_type: assetto_corsa::drivetrain::DriveType) -> Result<(), String>{
-    let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
-    Ok(())
-}
-
 pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path, ac_car_path: &Path, settings: AssettoCorsaCarSettings) -> Result<(), String> {
     let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
+    
+    info!("Loading car {}", ac_car_path.display());
     let mut ac_car = Car::load_from_path(ac_car_path).unwrap();
     let drive_type = &extract_mandatory_section::<assetto_corsa::drivetrain::Traction>(ac_car.drivetrain()).unwrap().drive_type;
+    info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, drive_type.mechanical_efficiency());
     match settings.minimum_physics_level {
         AssettoCorsaPhysicsLevel::BaseGame => {
+            info!("Using base game physics");
             ac_car.set_fuel_consumption(calculator.basic_fuel_consumption().unwrap());
         }
         AssettoCorsaPhysicsLevel::CspExtendedPhysics => {
+            info!("Using CSP extended physics");
             ac_car.set_version(CarVersion::CspExtendedPhysics);
             ac_car.clear_fuel_consumption();
             ac_car.mut_engine().update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency()));
         }
     }
+    
     let engine = ac_car.mut_engine();
+    info!("Clearing existing turbo controllers");
     engine.clear_turbo_controllers().unwrap();
+    
     let mut engine_data = extract_mandatory_section::<assetto_corsa::engine::EngineData>(engine).unwrap();
-    let inetia = calculator.inertia().unwrap();
-    println!("{}", inetia);
-    engine_data.inertia = inetia;
+    let inertia = calculator.inertia().unwrap();
+    engine_data.inertia = inertia;
     let limiter = calculator.limiter().round() as i32;
-    println!("{}", limiter);
     engine_data.limiter = limiter;
     engine_data.minimum = calculator.idle_speed().unwrap().round() as i32;
     engine.update_component(&engine_data).unwrap();
     engine.update_component(&calculator.damage()).unwrap();
     engine.update_component(&calculator.coast_data().unwrap()).unwrap();
     engine.update_power_curve(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
+    
     match calculator.create_turbo() {
         None => {
+            info!("The new engine doesn't have a turbo");
             if let Some(mut old_turbo) = extract_optional_section::<Turbo>(engine).unwrap() {
+                info!("Removing old engine turbo parameters");
                 old_turbo.clear_sections();
                 old_turbo.bov_pressure_threshold = None;
                 engine.update_component(&old_turbo).unwrap();
             }
         }
         Some(new_turbo) => {
+            info!("The new engine has a turbo");
             engine.update_component(&new_turbo).unwrap();
             if let Some(turbo_ctrl) = calculator.create_turbo_controllers(engine.data_dir()) {
+                info!("Adding turbo controller with index 0");
                 engine.add_turbo_controllers(0, turbo_ctrl);
             }
         }
     }
-    println!("{}", engine.ini_data());
+
+    info!("Writing ini files");
     engine.write().unwrap();
     ac_car.write().unwrap();
     Ok(())
@@ -377,7 +389,7 @@ mod tests {
     use crate::assetto_corsa::car::create_new_car_spec;
     use crate::{automation, beam_ng};
     use crate::beam_ng::get_mod_list;
-    use crate::fabricator::{AcEngineParameterCalculatorV1, AssettoCorsaCarSettings, build_ac_engine_from_beam_ng_mod, swap_automation_engine_into_ac_car};
+    use crate::fabricator::{AcEngineParameterCalculatorV1, AssettoCorsaCarSettings, swap_automation_engine_into_ac_car};
 
     #[test]
     fn load_mods() -> Result<(), String> {

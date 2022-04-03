@@ -8,7 +8,7 @@ use directories::BaseDirs;
 use parselnk::Lnk;
 use serde_hjson::Value;
 use crate::steam;
-use tracing::{info, Level};
+use tracing::{debug, info, Level};
 
 pub const STEAM_GAME_NAME: &str = "BeamNG.drive";
 pub const STEAM_GAME_ID: i64 = 284160;
@@ -97,9 +97,12 @@ pub fn load_mod_data(mod_name: &str) -> Result<ModData, String> {
 }
 
 pub fn extract_mod_data(mod_path: &Path) -> Result<ModData, String> {
+    debug!("Opening {}", mod_path.display());
     let zipfile = std::fs::File::open(mod_path).map_err(|err| {
         format!("Failed to open {}. {}", mod_path.display(), err.to_string())
     })?;
+
+    debug!("Extracting {}", mod_path.display());
     let mut archive = zip::ZipArchive::new(zipfile).map_err(|err| {
         format!("Failed to read archive {}. {}", mod_path.display(), err.to_string())
     })?;
@@ -113,6 +116,7 @@ pub fn extract_mod_data(mod_path: &Path) -> Result<ModData, String> {
         if file_path.ends_with(".car") {
             match archive.by_name(file_path) {
                 Ok(mut file) => {
+                    debug!("Found .car file data at {}", file_path);
                     file.read_to_end(&mut car_data).unwrap();
                 },
                 Err(err) => {
@@ -122,6 +126,7 @@ pub fn extract_mod_data(mod_path: &Path) -> Result<ModData, String> {
         } else if file_path.ends_with("camso_engine.jbeam") {
             match archive.by_name(file_path) {
                 Ok(mut file) => {
+                    debug!("Found engine data at {}", file_path);
                     file.read_to_end(&mut jbeam_data).unwrap();
                 },
                 Err(err) => {

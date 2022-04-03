@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use directories::{BaseDirs, UserDirs};
+use fs_extra::dir::DirEntryAttr::Path;
 use rusqlite::{Connection, params, Row};
+use tracing::info;
 
 use crate::steam;
 use crate::automation::{STEAM_GAME_ID};
@@ -26,11 +29,24 @@ impl SandboxVersion {
             SandboxVersion::FourDotTwo => { get_db_path_4_2() }
         }
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SandboxVersion::Legacy => { "pre 4.2" }
+            SandboxVersion::FourDotTwo => { "post 4.2" }
+        }
+    }
 }
 
 impl Default for SandboxVersion {
     fn default() -> Self {
         SandboxVersion::FourDotTwo
+    }
+}
+
+impl Display for SandboxVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -255,7 +271,9 @@ pub fn load_engines() -> HashMap<String, EngineV1> {
 }
 
 pub fn load_engine_by_uuid(uuid: &str, version: SandboxVersion) -> Result<Option<EngineV1>, String> {
-    let conn = Connection::open(version.get_path().unwrap()).unwrap();
+    let db_path = version.get_path().unwrap();
+    info!("Loading {} from {}", uuid, PathBuf::from(&db_path).display());
+    let conn = Connection::open(db_path).unwrap();
     let mut stmt = conn.prepare(load_engine_by_uuid_query()).unwrap();
     let engs = stmt.query_map(&[(":uid", uuid)],
                                                          EngineV1::load_from_row).unwrap();
