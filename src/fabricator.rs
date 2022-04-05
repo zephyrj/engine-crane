@@ -1,8 +1,8 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, format, Formatter};
 use std::path::{Path};
 use tracing::{debug, error, info};
 use crate::{assetto_corsa, automation, beam_ng};
-use crate::assetto_corsa::car::{Car, CarVersion};
+use crate::assetto_corsa::car::{Car, CarVersion, SpecValue};
 use crate::assetto_corsa::drivetrain::DriveType;
 use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
 use crate::assetto_corsa::traits::{CarIniData, extract_mandatory_section, extract_optional_section};
@@ -183,6 +183,33 @@ impl AcEngineParameterCalculatorV1 {
         )
     }
 
+    /// Return a vector containing pairs of RPM, Torque (NM)
+    pub fn engine_torque_curve(&self) -> Vec<(i32, i32)> {
+        let mut out_vec = Vec::new();
+        for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
+            out_vec.push(((*rpm as i32), self.engine_sqlite_data.torque_curve[idx].round() as i32));
+        }
+        out_vec
+    }
+
+    pub fn peak_torque(&self) -> i32 {
+        self.engine_sqlite_data.peak_torque.round() as i32
+    }
+
+    /// Return a vector containing pairs of RPM, Power (BHP)
+    pub fn engine_power_curve(&self) -> Vec<(i32, i32)> {
+        let mut out_vec = Vec::new();
+        let kw_to_bhp = |power_kw: f64| { power_kw * 0.745699872 };
+        for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
+            out_vec.push(((*rpm as i32), kw_to_bhp(self.engine_sqlite_data.power_curve[idx]).round() as i32));
+        }
+        out_vec
+    }
+
+    pub fn peak_power(&self) -> i32 {
+        self.engine_sqlite_data.peak_power.round() as i32
+    }
+
     pub fn naturally_aspirated_wheel_torque_curve(&self, drivetrain_efficiency: f64) -> Vec<(i32, i32)> {
         let mut out_vec = Vec::new();
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
@@ -339,45 +366,67 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path, ac_car_path: 
             ac_car.mut_engine().update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency()));
         }
     }
-    
-    let engine = ac_car.mut_engine();
-    info!("Clearing existing turbo controllers");
-    engine.clear_turbo_controllers().unwrap();
-    
-    let mut engine_data = extract_mandatory_section::<assetto_corsa::engine::EngineData>(engine).unwrap();
-    let inertia = calculator.inertia().unwrap();
-    engine_data.inertia = inertia;
-    let limiter = calculator.limiter().round() as i32;
-    engine_data.limiter = limiter;
-    engine_data.minimum = calculator.idle_speed().unwrap().round() as i32;
-    engine.update_component(&engine_data).unwrap();
-    engine.update_component(&calculator.damage()).unwrap();
-    engine.update_component(&calculator.coast_data().unwrap()).unwrap();
-    engine.update_power_curve(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
-    
-    match calculator.create_turbo() {
-        None => {
-            info!("The new engine doesn't have a turbo");
-            if let Some(mut old_turbo) = extract_optional_section::<Turbo>(engine).unwrap() {
-                info!("Removing old engine turbo parameters");
-                old_turbo.clear_sections();
-                old_turbo.bov_pressure_threshold = None;
-                engine.update_component(&old_turbo).unwrap();
+
+    {
+        let engine = ac_car.mut_engine();
+        info!("Clearing existing turbo controllers");
+        engine.clear_turbo_controllers().unwrap();
+
+        let mut engine_data = extract_mandatory_section::<assetto_corsa::engine::EngineData>(engine).unwrap();
+        let inertia = calculator.inertia().unwrap();
+        engine_data.inertia = inertia;
+        let limiter = calculator.limiter().round() as i32;
+        engine_data.limiter = limiter;
+        engine_data.minimum = calculator.idle_speed().unwrap().round() as i32;
+        engine.update_component(&engine_data).unwrap();
+        engine.update_component(&calculator.damage()).unwrap();
+        engine.update_component(&calculator.coast_data().unwrap()).unwrap();
+        engine.update_power_curve(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
+
+        match calculator.create_turbo() {
+            None => {
+                info!("The new engine doesn't have a turbo");
+                if let Some(mut old_turbo) = extract_optional_section::<Turbo>(engine).unwrap() {
+                    info!("Removing old engine turbo parameters");
+                    old_turbo.clear_sections();
+                    old_turbo.bov_pressure_threshold = None;
+                    engine.update_component(&old_turbo).unwrap();
+                }
+            }
+            Some(new_turbo) => {
+                info!("The new engine has a turbo");
+                engine.update_component(&new_turbo).unwrap();
+                if let Some(turbo_ctrl) = calculator.create_turbo_controllers(engine.data_dir()) {
+                    info!("Adding turbo controller with index 0");
+                    engine.add_turbo_controllers(0, turbo_ctrl);
+                }
             }
         }
-        Some(new_turbo) => {
-            info!("The new engine has a turbo");
-            engine.update_component(&new_turbo).unwrap();
-            if let Some(turbo_ctrl) = calculator.create_turbo_controllers(engine.data_dir()) {
-                info!("Adding turbo controller with index 0");
-                engine.add_turbo_controllers(0, turbo_ctrl);
-            }
-        }
+
+        info!("Writing engine ini files");
+        engine.write().unwrap();
     }
 
-    info!("Writing ini files");
-    engine.write().unwrap();
+    info!("Updating ui components");
+    let mass = ac_car.total_mass().unwrap();
+    ac_car.ui_info.update_power_curve(calculator.engine_power_curve());
+    ac_car.ui_info.update_torque_curve(calculator.engine_torque_curve());
+    ac_car.ui_info.update_spec("bhp", format!("{}bhp", calculator.peak_power()));
+    ac_car.ui_info.update_spec("torque", format!("{}Nm", calculator.peak_torque()));
+    ac_car.ui_info.update_spec("weight", format!("{}kg", mass));
+    ac_car.ui_info.update_spec("pwratio", format!("{}kg/hp", round_float_to(mass as f64 / (calculator.peak_power() as f64), 2)));
+
+    let blank = String::from("---");
+    ac_car.ui_info.update_spec("acceleration", blank.clone());
+    ac_car.ui_info.update_spec("range", blank.clone());
+    ac_car.ui_info.update_spec("topspeed", blank);
+
+    info!("Writing car ui files");
+    ac_car.ui_info.write().unwrap();
+
+    info!("Writing car ini files");
     ac_car.write().unwrap();
+
     Ok(())
 }
 

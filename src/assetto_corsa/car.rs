@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use std::{fs, mem};
 use std::default::Default;
 
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Display, format, Formatter};
 use std::fs::File;
 use std::io::{BufReader, BufRead, LineWriter, Write, BufWriter, Read};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use serde_json::Value;
+use derive_new::new;
+use serde_json::{json, Map, Value};
 use tracing::{debug, warn, info};
 use walkdir::WalkDir;
 use crate::assetto_corsa;
@@ -255,7 +256,7 @@ pub struct UiInfo {
 impl UiInfo {
     fn load(ui_json_path: &Path) -> Result<UiInfo> {
         let ui_info_string = fs::read_to_string(ui_json_path)?;
-        let json_config = serde_json::from_str(ui_info_string
+        let json_config: serde_json::Value = serde_json::from_str(ui_info_string
             .replace("\r\n", "\n")
             .replace("\n", " ")
             .replace("\t", "  ")
@@ -323,12 +324,28 @@ impl UiInfo {
         None
     }
 
+    pub fn update_spec(&mut self, spec_key: &str, val: String) {
+        let obj = self.json_config.as_object_mut().unwrap();
+        let value = obj.get_mut("specs").unwrap();
+        let map = value.as_object_mut().unwrap();
+        map.remove(spec_key);
+        map.insert(String::from(spec_key), serde_json::Value::String(val));
+    }
+
     pub fn torque_curve(&self) -> Option<Vec<Vec<&str>>> {
         self.load_curve_data("torqueCurve")
     }
 
+    pub fn update_torque_curve(&mut self, new_curve_data: Vec<(i32, i32)>) {
+        self.update_curve_data("torqueCurve", new_curve_data)
+    }
+
     pub fn power_curve(&self) -> Option<Vec<Vec<&str>>> {
         self.load_curve_data("powerCurve")
+    }
+
+    pub fn update_power_curve(&mut self, new_curve_data: Vec<(i32, i32)>) {
+        self.update_curve_data("powerCurve", new_curve_data)
     }
 
     fn get_json_string(&self, key: &str) -> Option<&str> {
@@ -345,7 +362,8 @@ impl UiInfo {
             Some(val) => {
                 match val {
                     Value::String(str) => {
-                        std::mem::replace(str, value); }
+                        std::mem::replace(str, value);
+                    }
                     _ => {}
                 }
             }
@@ -371,6 +389,27 @@ impl UiInfo {
             }
         }
         None
+    }
+
+    fn update_curve_data(&mut self, key: &str, new_curve_data: Vec<(i32, i32)>) {
+        let mut data_vec: Vec<serde_json::Value> = Vec::new();
+        for (rpm, power_bhp) in new_curve_data {
+            data_vec.push(json!([format!("{}", rpm), format!("{}", power_bhp)]));
+        }
+        match self.json_config.get_mut(key) {
+            None => {
+                let map = self.json_config.as_object_mut().unwrap();
+                map.insert(String::from(key),
+                           serde_json::Value::Array(data_vec));
+            }
+            Some(val) => {
+                let mut torque_array = val.as_array_mut().unwrap();
+                torque_array.clear();
+                for val in data_vec {
+                    torque_array.push(val);
+                }
+            }
+        }
     }
 }
 
