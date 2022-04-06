@@ -1,11 +1,12 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::num::ParseIntError;
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, text_input, TextInput, Row, button, Button, Color, HorizontalAlignment};
 use crate::{assetto_corsa, beam_ng, fabricator};
 use crate::automation;
-use crate::fabricator::{AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
+use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
 use tracing::{span, Level, info, error};
 
 pub fn launch() -> Result<(), Error> {
@@ -20,12 +21,14 @@ pub struct CarSelector {
     current_car: Option<String>,
     current_mod: Option<String>,
     current_new_spec_name: String,
+    current_engine_weight: Option<String>,
     current_minimum_physics: AssettoCorsaPhysicsLevel,
     car_pick_list: pick_list::State<String>,
     new_spec_name: text_input::State,
     mod_pick_list: pick_list::State<String>,
     swap_button: button::State,
     minimum_physics_pick_list: pick_list::State<AssettoCorsaPhysicsLevel>,
+    current_engine_weight_input: text_input::State,
     status_message: String
 }
 
@@ -47,6 +50,7 @@ pub enum Message {
     NameEntered(String),
     ModSelected(String),
     PhysicsLevelSelected(AssettoCorsaPhysicsLevel),
+    OldEngineWeightEntered(String),
     SwapButtonPressed
 }
 
@@ -130,41 +134,55 @@ impl Sandbox for CarSelector {
                 if let Some(mod_name) = &self.current_mod {
                     mod_path = mod_path.join(Path::new(mod_name.as_str()));
                 }
+
                 {
                     let span = span!(Level::INFO, "Updating car physics");
                     let _enter = span.enter();
+                    let current_engine_weight =
+                        if let Some(weight_string) = &self.current_engine_weight {
+                            match weight_string.parse::<u32>() {
+                                Ok(val) => {
+                                    Some(val)
+                                }
+                                Err(_) => {
+                                    None
+                                }
+                            }
+                        } else {
+                        None
+                    };
                     match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
                                                                          new_car_path.as_path(),
-                                                                         AssettoCorsaCarSettings::from_physics_level(self.current_minimum_physics)) {
+                                                                         AssettoCorsaCarSettings::from_physics_level(self.current_minimum_physics),
+                                                                         AdditionalAcCarData::new(current_engine_weight)) {
                         Ok(_) => { self.status_message = format!("Created {} successfully", new_car_path.display()) }
                         Err(err_str) => { self.status_message = err_str }
                     }
                 }
 
             }
+            Message::OldEngineWeightEntered(old_weight) => {
+                if old_weight.is_empty() {
+                    self.current_engine_weight = None;
+                    return;
+                }
+                match old_weight.parse::<u32>() {
+                    Ok(_) => {
+                        self.current_engine_weight = Some(old_weight);
+                    }
+                    Err(_) => {
+                        self.status_message = format!("Old weight must be an integer");
+                        self.current_engine_weight = None;
+                    }
+                }
+            }
         }
     }
 
     fn view(&mut self) -> Element<Message> {
-        let placeholder = match self.current_new_spec_name.as_str() {
-            "" => { "Enter new car name" }
-            s => { s }
-        };
-        let input = TextInput::new(
-            &mut self.new_spec_name,
-            placeholder,
-            &self.current_new_spec_name,
-            Message::NameEntered,
-        );
-        let car_name_container = Column::new()
-            .align_items(Align::Center)
-            .padding(10)
-            .push(Text::new("New spec name (this will be appended to the created car)"))
-            .push(input);
-
         let car_select_container = Column::new()
             .align_items(Align::Center)
-            .padding(10)
+            //.padding(10)
             .push(Text::new("Assetto Corsa car"))
             .push(PickList::new(
                 &mut self.car_pick_list,
@@ -181,16 +199,48 @@ impl Sandbox for CarSelector {
                 self.current_mod.clone(),
                 Message::ModSelected
             ));
+        let current_weight_value = match &self.current_engine_weight {
+            None => { "" }
+            Some(string) => {
+                string.as_str()
+            }
+        };
+        let weight_input_container = Column::new()
+            //.align_items(Align::Center)
+            .push(Text::new("Existing engine weight in Kgs (Optional)"))
+            .push(TextInput::new(
+                &mut self.current_engine_weight_input,
+                "",
+                current_weight_value,
+                Message::OldEngineWeightEntered,
+            ).width(Length::Units(100)));
         let select_container = Column::new()
-            .align_items(Align::Center)
-            .spacing(10)
+            //.align_items(Align::)
+            .padding(10)
+            .spacing(20)
             .push(car_select_container)
-            .push(mod_select_container);
+            .push(mod_select_container)
+            .push(weight_input_container);
 
+        let placeholder = match self.current_new_spec_name.as_str() {
+            "" => { "Enter new car name" }
+            s => { s }
+        };
+        let input = TextInput::new(
+            &mut self.new_spec_name,
+            placeholder,
+            &self.current_new_spec_name,
+            Message::NameEntered,
+        ).width(Length::Units(500));
+        let car_name_container = Column::new()
+            .align_items(Align::Center)
+            .padding(10)
+            .push(Text::new("New spec name (this will be appended to the created car)"))
+            .push(input);
         let selection_row = Row::new()
             .align_items(Align::Center)
-            .push(select_container)
-            .push(car_name_container);
+            .push(select_container.width(Length::FillPortion(1)))
+            .push(car_name_container.width(Length::FillPortion(1)));
 
         let swap_button = Button::new(&mut self.swap_button, Text::new("Swap"))
             .min_width(60)

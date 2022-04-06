@@ -443,6 +443,10 @@ impl Car {
         ini_utils::get_value(&self.ini_config, "BASIC","TOTALMASS")
     }
 
+    pub fn set_total_mass(&mut self, new_mass: u32) {
+        ini_utils::set_value(&mut self.ini_config, "BASIC","TOTALMASS", new_mass);
+    }
+
     pub fn default_fuel(&self) -> Option<u32> {
         ini_utils::get_value(&self.ini_config, "FUEL","FUEL")
     }

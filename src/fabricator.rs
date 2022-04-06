@@ -1,5 +1,7 @@
 use std::fmt::{Display, format, Formatter};
+use std::num;
 use std::path::{Path};
+use iced::keyboard::KeyCode::N;
 use tracing::{debug, error, info};
 use crate::{assetto_corsa, automation, beam_ng};
 use crate::assetto_corsa::car::{Car, CarVersion, SpecValue};
@@ -77,6 +79,24 @@ impl Default for AssettoCorsaCarSettings {
     }
 }
 
+pub struct AdditionalAcCarData {
+    engine_weight: Option<u32>
+}
+
+impl AdditionalAcCarData {
+    pub fn new(engine_weight: Option<u32>) -> AdditionalAcCarData {
+        AdditionalAcCarData{engine_weight}
+    }
+
+    pub fn default() -> AdditionalAcCarData {
+        AdditionalAcCarData{engine_weight: None}
+    }
+
+    pub fn engine_weight(&self) -> Option<u32> {
+        self.engine_weight
+    }
+}
+
 pub fn round_float_to(float: f64, decimal_places: u32) -> f64 {
     let precision_base: u64 = 10;
     let precision_factor = precision_base.pow(decimal_places) as f64;
@@ -118,6 +138,10 @@ impl AcEngineParameterCalculatorV1 {
             engine_jbeam_data,
             engine_sqlite_data
         })
+    }
+
+    pub fn engine_weight(&self) -> u32 {
+        self.engine_sqlite_data.weight.round() as u32
     }
 
     pub fn inertia(&self) -> Option<f64> {
@@ -347,7 +371,10 @@ impl AcEngineParameterCalculatorV1 {
     }
 }
 
-pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path, ac_car_path: &Path, settings: AssettoCorsaCarSettings) -> Result<(), String> {
+pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
+                                          ac_car_path: &Path,
+                                          settings: AssettoCorsaCarSettings,
+                                          additional_car_data: AdditionalAcCarData) -> Result<(), String> {
     let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
     
     info!("Loading car {}", ac_car_path.display());
@@ -363,7 +390,24 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path, ac_car_path: 
             info!("Using CSP extended physics");
             ac_car.set_version(CarVersion::CspExtendedPhysics);
             ac_car.clear_fuel_consumption();
-            ac_car.mut_engine().update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency()));
+            ac_car.mut_engine().update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency())).map_err(|err| {
+                error!("Failed to update fuel consumption. {}", err.to_string());
+                err.to_string()
+            })?;
+        }
+    }
+
+    if let Some(current_engine_weight) = additional_car_data.engine_weight() {
+        if let Some(current_car_mass) = ac_car.total_mass() {
+            let new_engine_delta: i32 = calculator.engine_weight() as i32 - current_engine_weight as i32;
+            if new_engine_delta < 0 && new_engine_delta.abs() as u32 >= current_car_mass {
+                error!("Invalid existing engine weight ({}). Would result in negative total mass", current_engine_weight);
+            }
+            let new_mass = (current_car_mass as i32 + new_engine_delta) as u32;
+            info!("Updating total mass to {} based off a provided existing engine weight of {}", new_mass, current_engine_weight);
+            ac_car.set_total_mass(new_mass);
+        } else {
+            error!("Existing car doesn't have a total mass property")
         }
     }
 
@@ -438,7 +482,7 @@ mod tests {
     use crate::assetto_corsa::car::create_new_car_spec;
     use crate::{automation, beam_ng};
     use crate::beam_ng::get_mod_list;
-    use crate::fabricator::{AcEngineParameterCalculatorV1, AssettoCorsaCarSettings, swap_automation_engine_into_ac_car};
+    use crate::fabricator::{AcEngineParameterCalculatorV1, AdditionalAcCarData, AssettoCorsaCarSettings, swap_automation_engine_into_ac_car};
 
     #[test]
     fn load_mods() -> Result<(), String> {
@@ -464,7 +508,8 @@ mod tests {
         let mods = get_mod_list();
         swap_automation_engine_into_ac_car(mods[0].as_path(),
                                            new_car_path.as_path(),
-                                           AssettoCorsaCarSettings::default())
+                                           AssettoCorsaCarSettings::default(),
+                                           AdditionalAcCarData::default())
     }
 
     #[test]
