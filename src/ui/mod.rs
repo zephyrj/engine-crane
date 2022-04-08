@@ -223,7 +223,7 @@ impl Sandbox for CarSelector {
             .push(weight_input_container);
 
         let placeholder = match self.current_new_spec_name.as_str() {
-            "" => { "Enter new car name" }
+            "" => { "Enter new spec name" }
             s => { s }
         };
         let input = TextInput::new(
