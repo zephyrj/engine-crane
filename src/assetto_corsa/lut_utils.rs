@@ -173,6 +173,10 @@ pub fn load_lut_from_reader<K, V, R>(lut_reader: R, delimiter: u8, terminator: T
     Ok(lut_data)
 }
 
+fn remove_whitespace(s: &str) -> String {
+    s.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
 pub fn load_lut_from_property_value<K, V>(property_value: String, data_dir: &Path) -> Result<Vec<(K, V)>, String>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
@@ -193,7 +197,7 @@ pub fn parse_lut_element<T>(record: &csv::StringRecord, index: usize) -> Result<
     where
         T: std::str::FromStr + Display, <T as FromStr>::Err: fmt::Debug
 {
-    match record.get(index).unwrap().parse::<T>() {
+    match remove_whitespace(record.get(index).unwrap()).parse::<T>() {
         Ok(s) => { Ok(s) },
         Err(e) => {
             let mut err_str = String::from("Invalid lut types, Cannot convert first item");
