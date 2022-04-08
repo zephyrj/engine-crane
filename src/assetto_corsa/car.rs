@@ -163,7 +163,11 @@ pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<P
     if !existing_car_path.exists() {
         return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
     }
-    let new_car_name = format!("{}_{}", existing_car_name, spec_name.to_lowercase());
+    let new_car_name = format!(
+        "{}_{}",
+        existing_car_name,
+        spec_name.to_lowercase().split_whitespace().collect::<Vec<&str>>().join("_")
+    );
     let new_car_path = installed_cars_path.join(&new_car_name);
     if new_car_path.exists() {
         return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
