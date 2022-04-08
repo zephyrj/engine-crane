@@ -267,12 +267,13 @@ impl AcEngineParameterCalculatorV1 {
         let (ref_rpm_idx, max_boost) = self.engine_sqlite_data.boost_curve.iter().enumerate().fold(
             (0 as usize, normalise_boost_value(self.engine_sqlite_data.boost_curve[0], decimal_place_precision)),
             |(idx_max, max_val), (idx, val)| {
-                let boost_value = normalise_boost_value(*val, 2);
-                if boost_value > max_val {
-                    (idx, *val)
-                } else {
-                    (idx_max, max_val)
+                if normalise_boost_value(*val, 2) > max_val {
+                    if normalise_boost_value(*val, 1) > normalise_boost_value(max_val, 1) {
+                        return (idx, *val);
+                    }
+                    return (idx_max, *val);
                 }
+                (idx_max, max_val)
             }
         );
         (self.engine_sqlite_data.rpm_curve[ref_rpm_idx].round() as i32,
