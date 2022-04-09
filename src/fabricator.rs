@@ -237,15 +237,20 @@ impl AcEngineParameterCalculatorV1 {
     pub fn naturally_aspirated_wheel_torque_curve(&self, drivetrain_efficiency: f64) -> Vec<(i32, i32)> {
         let mut out_vec = Vec::new();
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
+            info!("Writing torque curve for NA engine");
             for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
                 let wheel_torque = self.engine_sqlite_data.torque_curve[idx] * drivetrain_efficiency;
                 out_vec.push(((*rpm as i32), wheel_torque.round() as i32));
             }
         }
         else {
+            info!("Writing torque curve for Turbo engine");
             for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
                 let boost_pressure = vec![0.0, self.engine_sqlite_data.boost_curve[idx]].into_iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                out_vec.push(((*rpm as i32), ((self.engine_sqlite_data.torque_curve[idx] / 1f64+boost_pressure) * drivetrain_efficiency).round() as i32));
+                info!("Adjusting {}@{} for boost pressure {}", self.engine_sqlite_data.torque_curve[idx], *rpm as i32, 1f64+boost_pressure);
+                let adjusted_value = ((self.engine_sqlite_data.torque_curve[idx] / (1f64+boost_pressure)) * drivetrain_efficiency).round() as i32;
+                info!("Adjusted value = {}", adjusted_value);
+                out_vec.push(((*rpm as i32), adjusted_value));
             }
         }
         // Taper curve down to 0
