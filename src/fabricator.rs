@@ -107,6 +107,10 @@ pub fn normalise_boost_value(boost_value: f64, decimal_places: u32) -> f64 {
     round_float_to(vec![0.0, boost_value].into_iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap(), decimal_places)
 }
 
+pub fn kw_to_bhp(power_kw: f64) -> f64 {
+    power_kw * 1.341
+}
+
 #[derive(Debug)]
 struct AcEngineParameterCalculatorV1 {
     automation_car_file: CarFile,
@@ -221,17 +225,16 @@ impl AcEngineParameterCalculatorV1 {
     }
 
     /// Return a vector containing pairs of RPM, Power (BHP)
-    pub fn engine_power_curve(&self) -> Vec<(i32, i32)> {
+    pub fn engine_bhp_power_curve(&self) -> Vec<(i32, i32)> {
         let mut out_vec = Vec::new();
-        let kw_to_bhp = |power_kw: f64| { power_kw * 1.341 };
         for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
             out_vec.push(((*rpm as i32), kw_to_bhp(self.engine_sqlite_data.power_curve[idx]).round() as i32));
         }
         out_vec
     }
 
-    pub fn peak_power(&self) -> i32 {
-        self.engine_sqlite_data.peak_power.round() as i32
+    pub fn peak_bhp(&self) -> i32 {
+        kw_to_bhp(self.engine_sqlite_data.peak_power).round() as i32
     }
 
     pub fn naturally_aspirated_wheel_torque_curve(&self, drivetrain_efficiency: f64) -> Vec<(i32, i32)> {
@@ -459,12 +462,12 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
 
     info!("Updating ui components");
     let mass = ac_car.total_mass().unwrap();
-    ac_car.ui_info.update_power_curve(calculator.engine_power_curve());
+    ac_car.ui_info.update_power_curve(calculator.engine_bhp_power_curve());
     ac_car.ui_info.update_torque_curve(calculator.engine_torque_curve());
-    ac_car.ui_info.update_spec("bhp", format!("{}bhp", calculator.peak_power()));
+    ac_car.ui_info.update_spec("bhp", format!("{}bhp", calculator.peak_bhp()));
     ac_car.ui_info.update_spec("torque", format!("{}Nm", calculator.peak_torque()));
     ac_car.ui_info.update_spec("weight", format!("{}kg", mass));
-    ac_car.ui_info.update_spec("pwratio", format!("{}kg/hp", round_float_to(mass as f64 / (calculator.peak_power() as f64), 2)));
+    ac_car.ui_info.update_spec("pwratio", format!("{}kg/hp", round_float_to(mass as f64 / (calculator.peak_bhp() as f64), 2)));
 
     let blank = String::from("---");
     ac_car.ui_info.update_spec("acceleration", blank.clone());
