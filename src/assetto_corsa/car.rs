@@ -481,6 +481,10 @@ impl Car {
         &self.drivetrain
     }
 
+    pub fn mut_drivetrain(&mut self) -> &mut Drivetrain {
+        &mut self.drivetrain
+    }
+
     pub fn mut_engine(&mut self) -> &mut Engine {
         &mut self.engine
     }

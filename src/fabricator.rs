@@ -457,7 +457,32 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         }
 
         info!("Writing engine ini files");
-        engine.write().unwrap();
+        engine.write().map_err(|err| {
+            error!("{}", err.to_string());
+            format!("Swap failed. {}", err.to_string())
+        })?;
+    }
+
+    {
+        info!("Updating drivetrain ini files");
+        let drivetrain = ac_car.mut_drivetrain();
+        match extract_mandatory_section::<assetto_corsa::drivetrain::AutoShifter>(drivetrain) {
+            Ok(mut autoshifter) => {
+                let limiter = calculator.limiter().round() as i32;
+                autoshifter.up = (limiter / 100) * 97;
+                autoshifter.down = (limiter / 100) * 70;
+                if drivetrain.update_subcomponent(&autoshifter).is_err() {
+                    error!("Failed to update drivetrain autoshifer")
+                }
+            }
+            Err(_) => {}
+        }
+
+        info!("Writing drivetrain ini files");
+        match drivetrain.write() {
+            Err(err) => { error!("Failed to write drivetrain.ini. {}", err.to_string())},
+            _ => {}
+        }
     }
 
     info!("Updating ui components");
