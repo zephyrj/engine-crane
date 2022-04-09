@@ -71,7 +71,7 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
     Ok(())
 }
 
-pub fn update_car_name(car_path: &Path, new_suffix: &str) -> Result<()> {
+pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_name: &str) -> Result<()> {
     let mut new_car = Car::load_from_path(car_path)?;
     let existing_name = match new_car.screen_name() {
         None => { String::from(car_path.file_name().unwrap().to_str().unwrap()) }
@@ -81,6 +81,15 @@ pub fn update_car_name(car_path: &Path, new_suffix: &str) -> Result<()> {
     info!("Updating screen name and ui data from {} to {}", existing_name, new_name);
     new_car.set_screen_name(new_name.as_str());
     new_car.ui_info.set_name(new_name);
+    match new_car.ui_info.parent() {
+        None => {
+            info!("Updating parent name");
+            new_car.ui_info.set_parent(String::from(parent_car_folder_name));
+        }
+        Some(existing_parent) => {
+            info!("Parent name already set to {}", existing_parent);
+        }
+    }
     new_car.write()?;
     Ok(())
 }
@@ -174,7 +183,7 @@ pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<P
     }
     info!("Cloning {} to {}", existing_car_path.display(), new_car_path.display());
     clone_existing_car(existing_car_path.as_path(), new_car_path.as_path())?;
-    update_car_name(new_car_path.as_path(), spec_name)?;
+    update_car_ui_data(new_car_path.as_path(), spec_name, existing_car_name)?;
     Ok(new_car_path)
 }
 
@@ -286,6 +295,14 @@ impl UiInfo {
         self.set_json_string("name", name);
     }
 
+    pub fn parent(&self) -> Option<&str> {
+        self.get_json_string("parent")
+    }
+
+    pub fn set_parent(&mut self, parent: String) {
+        self.set_json_string("parent", parent);
+    }
+
     pub fn brand(&self) -> Option<&str> {
         self.get_json_string("brand")
     }
@@ -362,7 +379,11 @@ impl UiInfo {
 
     fn set_json_string(&mut self, key: &str, value: String) {
         match self.json_config.get_mut(key) {
-            None => {}
+            None => {
+                if let Some(obj) = self.json_config.as_object_mut() {
+                    obj.insert(String::from(key), serde_json::Value::String(value));
+                }
+            }
             Some(val) => {
                 match val {
                     Value::String(str) => {
@@ -651,8 +672,8 @@ mod tests {
 
     #[test]
     fn extract_acd() {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500/data.acd");
-        let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500/data");
+        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data.acd");
+        let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data");
         extract_data_acd(path, out_path, None);
     }
 }
