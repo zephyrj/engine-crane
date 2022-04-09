@@ -223,7 +223,7 @@ impl AcEngineParameterCalculatorV1 {
     /// Return a vector containing pairs of RPM, Power (BHP)
     pub fn engine_power_curve(&self) -> Vec<(i32, i32)> {
         let mut out_vec = Vec::new();
-        let kw_to_bhp = |power_kw: f64| { power_kw * 0.745699872 };
+        let kw_to_bhp = |power_kw: f64| { power_kw * 1.341 };
         for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
             out_vec.push(((*rpm as i32), kw_to_bhp(self.engine_sqlite_data.power_curve[idx]).round() as i32));
         }
