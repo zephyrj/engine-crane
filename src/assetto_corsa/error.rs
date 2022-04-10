@@ -47,6 +47,13 @@ impl From<toml::de::Error> for Error {
     }
 }
 
+impl From<crate::assetto_corsa::acd_utils::AcdError> for Error {
+    fn from(e: crate::assetto_corsa::acd_utils::AcdError) -> Self {
+        Error::new(ErrorKind::AcdError, e.to_string())
+    }
+}
+
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ErrorKind {
     NoSuchCar,
@@ -57,6 +64,7 @@ pub enum ErrorKind {
     IOError,
     JsonDecodeError,
     TomlDecodeError,
+    AcdError,
     Uncategorized
 }
 
@@ -71,6 +79,7 @@ impl ErrorKind {
             ErrorKind::IOError => "io error",
             ErrorKind::JsonDecodeError => "json decode error",
             ErrorKind::TomlDecodeError => "toml decode error",
+            ErrorKind::AcdError => "acd decode error",
             ErrorKind::Uncategorized => "uncategorized error"
         }
     }

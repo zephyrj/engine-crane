@@ -708,6 +708,7 @@ dependencies = [
  "rusqlite",
  "serde-hjson",
  "serde_json",
+ "thiserror",
  "toml",
  "tracing",
  "tracing-appender",
