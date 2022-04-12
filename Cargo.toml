@@ -22,6 +22,7 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 tracing-appender = "0.2"
 thiserror = "1.0"
+itertools = "0.10"
 
 [dependencies.rusqlite]
 version = "0.26.0"

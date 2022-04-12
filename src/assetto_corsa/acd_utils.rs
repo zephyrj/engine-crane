@@ -1,10 +1,11 @@
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Write};
 use std::{fs, io, mem};
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 use thiserror::Error;
+use itertools::Itertools;
 
 pub type Result<T> = std::result::Result<T, AcdError>;
 
@@ -31,8 +32,8 @@ pub enum AcdError {
 
 pub struct AcdArchive {
     acd_path: PathBuf,
-    key: String,
-    contents: HashMap<String, Vec<u8>>
+    extract_key: String,
+    contents: IndexMap<String, Vec<u8>>
 }
 
 fn missing_parent_error(path: &Path) -> AcdError {
@@ -49,13 +50,15 @@ fn key_error(parent: &str, reason: String) -> AcdError {
     }
 }
 
+fn get_parent_folder_str(path: &Path) -> Result<&str> {
+    Ok(path.parent().ok_or(missing_parent_error(path))?
+        .file_name().ok_or(missing_parent_error(path))?
+        .to_str().ok_or(missing_parent_error(path))?)
+}
+
 impl AcdArchive {
     pub fn load_from_path(acd_path: &Path) -> Result<AcdArchive> {
-        let parent =
-            acd_path.parent().ok_or(missing_parent_error(acd_path))?
-                .file_name().ok_or(missing_parent_error(acd_path))?
-                .to_str().ok_or(missing_parent_error(acd_path))?;
-        AcdArchive::load_from_path_with_parent(acd_path, parent)
+        AcdArchive::load_from_path_with_parent(acd_path, get_parent_folder_str(acd_path)?)
     }
 
     pub fn load_from_path_with_parent(acd_path: &Path, parent: &str) -> Result<AcdArchive> {
@@ -63,7 +66,7 @@ impl AcdArchive {
         let contents = extract_acd(acd_path, &key)?;
         Ok(AcdArchive{
             acd_path: acd_path.to_path_buf(),
-            key,
+            extract_key: key,
             contents
         })
     }
@@ -79,6 +82,30 @@ impl AcdArchive {
         for (filename, unpacked_buffer) in &self.contents {
             fs::write(out_path.join(filename), unpacked_buffer)?;
         }
+        Ok(())
+    }
+
+    pub fn write(&self) -> Result<()> {
+        self.write_to(self.acd_path.as_path())
+    }
+
+    pub fn write_to(&self, out_path: &Path) -> Result<()> {
+        let parent_folder = get_parent_folder_str(out_path)?;
+        let key = generate_extraction_key(parent_folder)?;
+        let mut out_file = File::create(out_path)?;
+        for filename in self.contents.keys() {
+            let mut key_byte_iter = key.chars().cycle();
+            let filename_len = filename.len() as u32;
+            out_file.write(&filename_len.to_le_bytes())?;
+            out_file.write(filename.as_bytes())?;
+            let data_len = self.contents[filename].len() as u32;
+            out_file.write(&data_len.to_le_bytes())?;
+            for byte in &self.contents[filename] {
+                let out_byte = byte + u32::from(key_byte_iter.next().unwrap()) as u8;
+                out_file.write(&[out_byte, 0, 0, 0])?;
+            }
+        }
+        out_file.flush()?;
         Ok(())
     }
 }
@@ -150,13 +177,13 @@ pub fn generate_extraction_key(folder_name: &str) -> Result<String> {
 /// This is derived from his quickBMS script which can be found at:
 /// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143
 pub fn extract_acd(acd_path: &Path,
-                   extraction_key: &str) -> Result<HashMap<String, Vec<u8>>> {
+                   extraction_key: &str) -> Result<IndexMap<String, Vec<u8>>> {
     let f = File::open(acd_path)?;
     let mut reader = BufReader::new(f);
     let mut packed_buffer = Vec::new();
     reader.read_to_end(&mut packed_buffer)?;
 
-    let mut out_map = HashMap::new();
+    let mut out_map = IndexMap::new();
     type LengthField = u32;
     let mut current_pos: usize = 0;
     while current_pos < packed_buffer.len() {
@@ -190,8 +217,11 @@ pub fn extract_acd(acd_path: &Path,
     Ok(out_map)
 }
 
+
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+    use std::io::Read;
     use std::path::Path;
     use crate::assetto_corsa::acd_utils::{AcdArchive, generate_extraction_key};
 
@@ -205,5 +235,18 @@ mod tests {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data.acd");
         let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data");
         AcdArchive::load_from_path(path).unwrap().unpack();
+    }
+
+    #[test]
+    fn read_and_write() {
+        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data.acd");
+        let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/testdata.acd");
+        let archive = AcdArchive::load_from_path(path).unwrap();
+        archive.write_to(out_path).unwrap();
+        let mut a = Vec::new();
+        File::open(path).unwrap().read_to_end(&mut a);
+        let mut b = Vec::new();
+        File::open(out_path).unwrap().read_to_end(&mut b);
+        assert_eq!(a, b)
     }
 }
