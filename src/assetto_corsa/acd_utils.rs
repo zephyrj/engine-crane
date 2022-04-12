@@ -234,7 +234,7 @@ mod tests {
     fn extract_acd() {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data.acd");
         let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data");
-        AcdArchive::load_from_path(path).unwrap().unpack();
+        AcdArchive::load_from_path(path).unwrap().unpack().unwrap();
     }
 
     #[test]
@@ -244,9 +244,9 @@ mod tests {
         let archive = AcdArchive::load_from_path(path).unwrap();
         archive.write_to(out_path).unwrap();
         let mut a = Vec::new();
-        File::open(path).unwrap().read_to_end(&mut a);
+        File::open(path).unwrap().read_to_end(&mut a).unwrap();
         let mut b = Vec::new();
-        File::open(out_path).unwrap().read_to_end(&mut b);
+        File::open(out_path).unwrap().read_to_end(&mut b).unwrap();
         assert_eq!(a, b)
     }
 }
