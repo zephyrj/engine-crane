@@ -56,7 +56,7 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
                                      old_value.replace(name_to_change, new_car_name));
                 idx += 1;
             }
-            lod_ini.write(entry.path())?;
+            lod_ini.write_to_file(entry.path())?;
         }
     }
 
@@ -492,7 +492,7 @@ impl Car {
 
     pub fn write(&self) -> Result<()> {
         let out_path = self.root_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
-        self.ini_config.write(&out_path)?;
+        self.ini_config.write_to_file(&out_path)?;
         self.ui_info.write()
     }
 

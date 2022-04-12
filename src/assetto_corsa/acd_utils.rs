@@ -62,7 +62,7 @@ impl AcdArchive {
     }
 
     pub fn load_from_path_with_parent(acd_path: &Path, parent: &str) -> Result<AcdArchive> {
-        let key = generate_extraction_key(parent)?;
+        let key = generate_acd_key(parent)?;
         let contents = extract_acd(acd_path, &key)?;
         Ok(AcdArchive{
             acd_path: acd_path.to_path_buf(),
@@ -91,7 +91,7 @@ impl AcdArchive {
 
     pub fn write_to(&self, out_path: &Path) -> Result<()> {
         let parent_folder = get_parent_folder_str(out_path)?;
-        let key = generate_extraction_key(parent_folder)?;
+        let key = generate_acd_key(parent_folder)?;
         let mut out_file = File::create(out_path)?;
         for filename in self.contents.keys() {
             let mut key_byte_iter = key.chars().cycle();
@@ -113,7 +113,7 @@ impl AcdArchive {
 /// Credit for this goes to Luigi Auriemma (me@aluigi.org)
 /// This is derived from his quickBMS script which can be found at:
 /// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143
-pub fn generate_extraction_key(folder_name: &str) -> Result<String> {
+pub fn generate_acd_key(folder_name: &str) -> Result<String> {
     let mut key_list: Vec<String> = Vec::with_capacity(8);
     let mut push_key_component = |val: i64| { key_list.push((val & 0xff).to_string()) };
 
@@ -223,11 +223,11 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
     use std::path::Path;
-    use crate::assetto_corsa::acd_utils::{AcdArchive, generate_extraction_key};
+    use crate::assetto_corsa::acd_utils::{AcdArchive, generate_acd_key};
 
     #[test]
     fn derive_acd_key() {
-        assert_eq!(generate_extraction_key("abarth500").unwrap(), "7-248-6-221-246-250-21-49");
+        assert_eq!(generate_acd_key("abarth500").unwrap(), "7-248-6-221-246-250-21-49");
     }
 
     #[test]

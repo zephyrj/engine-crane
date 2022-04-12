@@ -754,7 +754,7 @@ impl TurboControllers {
     }
 
     pub fn write(&self) -> Result<()> {
-        self.ini_config.write(&self.ini_path)?;
+        self.ini_config.write_to_file(&self.ini_path)?;
         Ok(())
     }
 
@@ -1032,7 +1032,7 @@ impl Engine {
 
     pub fn write(&mut self) -> Result<()> {
         let out_path = self.data_dir.join(Engine::INI_FILENAME);
-        self.ini_data.write(out_path.as_path())?;
+        self.ini_data.write_to_file(out_path.as_path())?;
         self.power_curve.write().map_err(|err| {
             Error::new(ErrorKind::IOError, format!("Failed to write power curve. {}", err))
         })?;

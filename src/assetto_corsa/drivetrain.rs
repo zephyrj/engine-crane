@@ -427,7 +427,7 @@ impl Drivetrain {
     }
 
     pub fn write(&mut self) -> std::io::Result<()> {
-        self.ini_data.write(&Path::new(&self.data_dir).join(Drivetrain::INI_FILENAME))
+        self.ini_data.write_to_file(&Path::new(&self.data_dir).join(Drivetrain::INI_FILENAME))
     }
 
     pub fn update_subcomponent<T: IniUpdater>(&mut self, component: &T) -> Result<()> {

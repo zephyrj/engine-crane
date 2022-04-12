@@ -406,8 +406,12 @@ impl Ini {
         T::load_from_ini(self)
     }
 
-    pub fn write(&self, path: &Path) -> io::Result<()> {
+    pub fn write_to_file(&self, path: &Path) -> io::Result<()> {
         fs::write(path, self.to_string())
+    }
+    
+    pub fn write_to_buf(&self, buf: &mut Vec<u8>) {
+        buf.copy_from_slice(&self.to_string().into_bytes())
     }
 
     pub fn get_value(&self, section_name: &str, property_name: &str) -> Option<String> {
