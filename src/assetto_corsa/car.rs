@@ -90,6 +90,7 @@ pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_n
             info!("Parent name already set to {}", existing_parent);
         }
     }
+    new_car.ui_info.add_tag("engine crane".to_owned());
     new_car.write()?;
     Ok(())
 }
@@ -328,6 +329,15 @@ impl UiInfo {
         None
     }
 
+    pub fn add_tag(&mut self, new_tag: String) {
+        let obj = self.json_config.as_object_mut().unwrap();
+        if let Some(value) = obj.get_mut("tags") {
+            if let Some(list) = value.as_array_mut() {
+                list.push(serde_json::Value::String(new_tag));
+            }
+        }
+    }
+
     pub fn specs(&self) -> Option<HashMap<&str, SpecValue>> {
         let mut return_map: HashMap<&str, SpecValue> = HashMap::new();
         if let Some(value) = self.json_config.get("specs") {
@@ -345,10 +355,11 @@ impl UiInfo {
 
     pub fn update_spec(&mut self, spec_key: &str, val: String) {
         let obj = self.json_config.as_object_mut().unwrap();
-        let value = obj.get_mut("specs").unwrap();
-        let map = value.as_object_mut().unwrap();
-        map.remove(spec_key);
-        map.insert(String::from(spec_key), serde_json::Value::String(val));
+        if let Some(value) = obj.get_mut("specs") {
+            let map = value.as_object_mut().unwrap();
+            map.remove(spec_key);
+            map.insert(String::from(spec_key), serde_json::Value::String(val));
+        }
     }
 
     pub fn torque_curve(&self) -> Option<Vec<Vec<&str>>> {
@@ -522,8 +533,6 @@ impl Car {
         Ok(car)
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
