@@ -388,8 +388,16 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
     
     info!("Loading car {}", ac_car_path.display());
     let mut ac_car = Car::load_from_path(ac_car_path).unwrap();
-    let drive_type = &extract_mandatory_section::<assetto_corsa::drivetrain::Traction>(ac_car.drivetrain()).unwrap().drive_type;
+    let drive_type = match ac_car.drivetrain() {
+        Ok(drivetrain) => {
+            extract_mandatory_section::<assetto_corsa::drivetrain::Traction>(&drivetrain).unwrap().drive_type
+        },
+        Err(err) => {
+            return Err(format!("Failed to load drivetrain. {}", err.to_string()));
+        }
+    };
     info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, drive_type.mechanical_efficiency());
+
     match settings.minimum_physics_level {
         AssettoCorsaPhysicsLevel::BaseGame => {
             info!("Using base game physics");
@@ -473,25 +481,35 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
 
     {
         info!("Updating drivetrain ini files");
-        let drivetrain = ac_car.mut_drivetrain();
-        match extract_mandatory_section::<assetto_corsa::drivetrain::AutoShifter>(drivetrain) {
-            Ok(mut autoshifter) => {
-                let limiter = calculator.limiter().round() as i32;
-                autoshifter.up = (limiter / 100) * 97;
-                autoshifter.down = (limiter / 100) * 70;
-                if drivetrain.update_subcomponent(&autoshifter).is_err() {
-                    error!("Failed to update drivetrain autoshifer")
+        match ac_car.drivetrain() {
+            Ok(mut drivetrain) => {
+                match extract_mandatory_section::<assetto_corsa::drivetrain::AutoShifter>(&drivetrain) {
+                    Ok(mut autoshifter) => {
+                        let limiter = calculator.limiter().round() as i32;
+                        autoshifter.up = (limiter / 100) * 97;
+                        autoshifter.down = (limiter / 100) * 70;
+                        if drivetrain.update_subcomponent(&autoshifter).is_err() {
+                            error!("Failed to update drivetrain autoshifer");
+                        }
+                    }
+                    Err(err) => {
+                        error!("Failed to update drivetrain autoshifer. {}", err.to_string());
+                    }
+                }
+
+                info!("Writing drivetrain ini files");
+                match drivetrain.write() {
+                    Err(err) => {
+                        error!("Failed to write drivetrain.ini. {}", err.to_string());
+                    },
+                    _ => {}
                 }
             }
-            Err(_) => {}
-        }
-
-        info!("Writing drivetrain ini files");
-        match drivetrain.write() {
-            Err(err) => { error!("Failed to write drivetrain.ini. {}", err.to_string())},
-            _ => {}
-        }
-    }
+            Err(err) => {
+                error!("Failed to load drivetrain. {}", err.to_string());
+            }
+        };
+    };
 
     info!("Updating ui components");
     let mass = ac_car.total_mass().unwrap();

@@ -456,8 +456,7 @@ pub struct Car {
     root_path: PathBuf,
     data_interface: Box<dyn DebuggableDataInterface>,
     ini_config: Ini,
-    pub ui_info: UiInfo,
-    drivetrain: Drivetrain
+    pub ui_info: UiInfo
 }
 
 impl Car {
@@ -467,14 +466,12 @@ impl Car {
         let data_dir_path = car_folder_path.join("data");
         let data_interface = Box::new(DataFolderInterface::new(&data_dir_path));
         let car_ini_data = data_interface.get_file_data("car.ini")?;
-        let car = Car {
+        Ok(Car{
             root_path: car_folder_path.to_path_buf(),
             data_interface,
             ini_config: Ini::load_from_string(String::from_utf8_lossy(car_ini_data.as_slice()).into_owned()),
             ui_info,
-            drivetrain: Drivetrain::load_from_path(&data_dir_path)?
-        };
-        Ok(car)
+        })
     }
 
     pub fn version(&self) -> Option<CarVersion> {
@@ -526,12 +523,8 @@ impl Car {
         self.ui_info.write()
     }
 
-    pub fn drivetrain(&self) -> &Drivetrain {
-        &self.drivetrain
-    }
-
-    pub fn mut_drivetrain(&mut self) -> &mut Drivetrain {
-        &mut self.drivetrain
+    pub fn drivetrain(&self) -> Result<Drivetrain> {
+        Drivetrain::load_from_path(&self.root_path.join("data"))
     }
 
     pub fn engine(&mut self) -> Result<Engine> {
