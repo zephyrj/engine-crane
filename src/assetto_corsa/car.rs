@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{fs, mem};
+use std::{fs, io, mem};
 use std::default::Default;
 
 use std::fmt::{Debug, Display, format, Formatter};
@@ -8,18 +8,80 @@ use std::io::{BufReader, BufRead, LineWriter, Write, BufWriter, Read};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use fs_extra::file::write_all;
 use serde_json::{json, Map, Value};
 use tracing::{debug, warn, info};
 use walkdir::WalkDir;
+
 use crate::assetto_corsa;
-use crate::assetto_corsa::traits::MandatoryCarData;
+use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface, MandatoryCarData};
 use crate::assetto_corsa::drivetrain::Drivetrain;
 use crate::assetto_corsa::error::{Result, Error, PropertyParseError, ErrorKind};
 use crate::assetto_corsa::engine::{Engine};
 use crate::assetto_corsa::{ini_utils, load_sfx_data};
 use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::acd_utils::AcdArchive;
+use crate::assetto_corsa::data::DataFolderInterface;
 
+
+pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Result<()> {
+    if existing_car_path == new_car_path {
+        return Err(Error::new(ErrorKind::CarAlreadyExists,
+                              format!("Cannot clone car to its existing location. ({})", existing_car_path.display())));
+    }
+
+    std::fs::create_dir(&new_car_path)?;
+    let mut copy_options = fs_extra::dir::CopyOptions::new();
+    copy_options.content_only = true;
+    fs_extra::dir::copy(&existing_car_path,
+                        &new_car_path,
+                        &copy_options)?;
+
+    let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
+    let data_path = new_car_path.join("data");
+    let acd_path = new_car_path.join("data.acd");
+    if !data_path.exists() {
+        if !acd_path.exists() {
+            return Err(Error::new(ErrorKind::InvalidCar,
+                                  format!("{} doesn't contain a data dir or data.acd file", existing_car_path.display())));
+        }
+        info!("No data dir present in {}. Data will be extracted from data.acd", new_car_path.display());
+        AcdArchive::load_from_path_with_parent(acd_path.as_path(), existing_car_name)?.unpack()?;
+    }
+    info!("Deleting {} as data will be invalid after clone completion", acd_path.display());
+    if let Some(err) = delete_data_acd_file(new_car_path).err(){
+        warn!("Warning: {}", err.to_string());
+    }
+    fix_car_specific_filenames(new_car_path, existing_car_name)?;
+    update_car_sfx(new_car_path, existing_car_name)?;
+    Ok(())
+}
+
+pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<PathBuf>{
+    let installed_cars_path = match assetto_corsa::get_installed_cars_path() {
+        Some(path) => { path },
+        None => {
+            return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
+        }
+    };
+    let existing_car_path = installed_cars_path.join(existing_car_name);
+    if !existing_car_path.exists() {
+        return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
+    }
+    let new_car_name = format!(
+        "{}_{}",
+        existing_car_name,
+        spec_name.to_lowercase().split_whitespace().collect::<Vec<&str>>().join("_")
+    );
+    let new_car_path = installed_cars_path.join(&new_car_name);
+    if new_car_path.exists() {
+        return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
+    }
+    info!("Cloning {} to {}", existing_car_path.display(), new_car_path.display());
+    clone_existing_car(existing_car_path.as_path(), new_car_path.as_path())?;
+    update_car_ui_data(new_car_path.as_path(), spec_name, existing_car_name)?;
+    Ok(new_car_path)
+}
 pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
     let acd_path = car_path.join("data.acd");
     if acd_path.exists() {
@@ -27,6 +89,7 @@ pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
     }
     Ok(())
 }
+
 
 fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<()> {
     let new_car_name = car_path.file_name().unwrap().to_str().unwrap();
@@ -125,65 +188,6 @@ fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
         write!(file, "{}\n", line)?;
     }
     Ok(())
-}
-
-pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Result<()> {
-    if existing_car_path == new_car_path {
-        return Err(Error::new(ErrorKind::CarAlreadyExists,
-                              format!("Cannot clone car to its existing location. ({})", existing_car_path.display())));
-    }
-
-    std::fs::create_dir(&new_car_path)?;
-    let mut copy_options = fs_extra::dir::CopyOptions::new();
-    copy_options.content_only = true;
-    fs_extra::dir::copy(&existing_car_path,
-                        &new_car_path,
-                        &copy_options)?;
-
-    let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
-    let data_path = new_car_path.join("data");
-    let acd_path = new_car_path.join("data.acd");
-    if !data_path.exists() {
-        if !acd_path.exists() {
-            return Err(Error::new(ErrorKind::InvalidCar,
-                                  format!("{} doesn't contain a data dir or data.acd file", existing_car_path.display())));
-        }
-        info!("No data dir present in {}. Data will be extracted from data.acd", new_car_path.display());
-        AcdArchive::load_from_path_with_parent(acd_path.as_path(), existing_car_name)?.unpack()?;
-    }
-    info!("Deleting {} as data will be invalid after clone completion", acd_path.display());
-    if let Some(err) = delete_data_acd_file(new_car_path).err(){
-        warn!("Warning: {}", err.to_string());
-    }
-    fix_car_specific_filenames(new_car_path, existing_car_name)?;
-    update_car_sfx(new_car_path, existing_car_name)?;
-    Ok(())
-}
-
-pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<PathBuf>{
-    let installed_cars_path = match assetto_corsa::get_installed_cars_path() {
-        Some(path) => { path },
-        None => {
-            return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
-        }
-    };
-    let existing_car_path = installed_cars_path.join(existing_car_name);
-    if !existing_car_path.exists() {
-        return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
-    }
-    let new_car_name = format!(
-        "{}_{}",
-        existing_car_name,
-        spec_name.to_lowercase().split_whitespace().collect::<Vec<&str>>().join("_")
-    );
-    let new_car_path = installed_cars_path.join(&new_car_name);
-    if new_car_path.exists() {
-        return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
-    }
-    info!("Cloning {} to {}", existing_car_path.display(), new_car_path.display());
-    clone_existing_car(existing_car_path.as_path(), new_car_path.as_path())?;
-    update_car_ui_data(new_car_path.as_path(), spec_name, existing_car_name)?;
-    Ok(new_car_path)
 }
 
 #[derive(Debug)]
@@ -450,6 +454,7 @@ impl UiInfo {
 #[derive(Debug)]
 pub struct Car {
     root_path: PathBuf,
+    data_interface: Box<dyn DebuggableDataInterface>,
     ini_config: Ini,
     pub ui_info: UiInfo,
     engine: Engine,
@@ -457,6 +462,23 @@ pub struct Car {
 }
 
 impl Car {
+    pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
+        let ui_info_path = car_folder_path.join(["ui", "ui_car.json"].iter().collect::<PathBuf>());
+        let ui_info = UiInfo::load(ui_info_path.as_path())?;
+        let data_dir_path = car_folder_path.join("data");
+        let data_interface = Box::new(DataFolderInterface::new(&data_dir_path));
+        let car_ini_data = data_interface.get_file_data("car.ini")?;
+        let car = Car {
+            root_path: car_folder_path.to_path_buf(),
+            data_interface,
+            ini_config: Ini::load_from_string(String::from_utf8_lossy(car_ini_data.as_slice()).into_owned()),
+            ui_info,
+            engine: Engine::load_from_dir(&data_dir_path)?,
+            drivetrain: Drivetrain::load_from_path(&data_dir_path)?
+        };
+        Ok(car)
+    }
+
     pub fn version(&self) -> Option<CarVersion> {
         ini_utils::get_value(&self.ini_config, "HEADER", "VERSION")
     }
@@ -501,9 +523,8 @@ impl Car {
         self.ini_config.remove_value("FUEL", "CONSUMPTION");
     }
 
-    pub fn write(&self) -> Result<()> {
-        let out_path = self.root_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
-        self.ini_config.write_to_file(&out_path)?;
+    pub fn write(&mut self) -> Result<()> {
+        self.data_interface.write_file_data("car.ini", self.ini_config.to_bytes())?;
         self.ui_info.write()
     }
 
@@ -517,20 +538,6 @@ impl Car {
 
     pub fn mut_engine(&mut self) -> &mut Engine {
         &mut self.engine
-    }
-
-    pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
-        let ui_info_path = car_folder_path.join(["ui", "ui_car.json"].iter().collect::<PathBuf>());
-        let ui_info = UiInfo::load(ui_info_path.as_path())?;
-        let car_ini_path = car_folder_path.join(["data", "car.ini"].iter().collect::<PathBuf>());
-        let car = Car {
-            root_path: car_folder_path.to_path_buf(),
-            ini_config: Ini::load_from_file(car_ini_path.as_path())?,
-            ui_info,
-            engine: Engine::load_from_dir(car_folder_path.join("data").as_path())?,
-            drivetrain: Drivetrain::load_from_path(car_folder_path.join("data").as_path())?
-        };
-        Ok(car)
     }
 }
 

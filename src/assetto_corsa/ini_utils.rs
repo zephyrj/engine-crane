@@ -5,6 +5,7 @@ use std::ops::Deref;
 use std::rc::Weak;
 
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::Path;
 use indexmap::IndexMap;
 use crate::assetto_corsa::error::{Error, ErrorKind};
@@ -410,8 +411,12 @@ impl Ini {
         fs::write(path, self.to_string())
     }
     
-    pub fn write_to_buf(&self, buf: &mut Vec<u8>) {
-        buf.copy_from_slice(&self.to_string().into_bytes())
+    pub fn write_to_buf(&self, buf: &mut Vec<u8>) -> io::Result<()> {
+        buf.write_all(&self.to_bytes())
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.to_string().into_bytes()
     }
 
     pub fn get_value(&self, section_name: &str, property_name: &str) -> Option<String> {

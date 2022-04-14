@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+use std::io;
 use std::path::Path;
 use crate::assetto_corsa::ini_utils::Ini;
 
@@ -30,3 +32,11 @@ pub fn extract_mandatory_section<T: MandatoryDataSection>(car_data: &dyn CarIniD
 pub fn extract_optional_section<T: OptionalDataSection>(car_data: &dyn CarIniData) -> crate::assetto_corsa::error::Result<Option<T>> {
     T::load_from_parent(car_data)
 }
+
+pub trait DataInterface {
+    fn load(&self);
+    fn get_file_data(&self, filename: &str) -> io::Result<Vec<u8>>;
+    fn write_file_data(&mut self, filename: &str, data: Vec<u8>) -> io::Result<()>;
+}
+
+pub trait DebuggableDataInterface: DataInterface + Debug {}
