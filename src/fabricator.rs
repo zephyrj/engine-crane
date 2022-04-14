@@ -399,9 +399,15 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
             info!("Using CSP extended physics");
             ac_car.set_version(CarVersion::CspExtendedPhysics);
             ac_car.clear_fuel_consumption();
-            ac_car.mut_engine().update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency())).map_err(|err| {
+            let mut engine = ac_car.engine().map_err(|err| {
+                format!("Failed to load engine. {}", err.to_string())
+            })?;
+            engine.update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency())).map_err(|err| {
                 error!("Failed to update fuel consumption. {}", err.to_string());
                 err.to_string()
+            })?;
+            engine.write().map_err(|err| {
+                format!("Failed to write engine data. {}", err.to_string())
             })?;
         }
     }
@@ -421,11 +427,13 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
     }
 
     {
-        let engine = ac_car.mut_engine();
+        let mut engine = ac_car.engine().map_err(|err| {
+            format!("Failed to load engine. {}", err.to_string())
+        })?;
         info!("Clearing existing turbo controllers");
         engine.clear_turbo_controllers().unwrap();
 
-        let mut engine_data = extract_mandatory_section::<assetto_corsa::engine::EngineData>(engine).unwrap();
+        let mut engine_data = extract_mandatory_section::<assetto_corsa::engine::EngineData>(&engine).unwrap();
         let inertia = calculator.inertia().unwrap();
         engine_data.inertia = inertia;
         let limiter = calculator.limiter().round() as i32;
@@ -439,7 +447,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         match calculator.create_turbo() {
             None => {
                 info!("The new engine doesn't have a turbo");
-                if let Some(mut old_turbo) = extract_optional_section::<Turbo>(engine).unwrap() {
+                if let Some(mut old_turbo) = extract_optional_section::<Turbo>(&engine).unwrap() {
                     info!("Removing old engine turbo parameters");
                     old_turbo.clear_sections();
                     old_turbo.bov_pressure_threshold = None;

@@ -457,7 +457,6 @@ pub struct Car {
     data_interface: Box<dyn DebuggableDataInterface>,
     ini_config: Ini,
     pub ui_info: UiInfo,
-    engine: Engine,
     drivetrain: Drivetrain
 }
 
@@ -473,7 +472,6 @@ impl Car {
             data_interface,
             ini_config: Ini::load_from_string(String::from_utf8_lossy(car_ini_data.as_slice()).into_owned()),
             ui_info,
-            engine: Engine::load_from_dir(&data_dir_path)?,
             drivetrain: Drivetrain::load_from_path(&data_dir_path)?
         };
         Ok(car)
@@ -536,8 +534,8 @@ impl Car {
         &mut self.drivetrain
     }
 
-    pub fn mut_engine(&mut self) -> &mut Engine {
-        &mut self.engine
+    pub fn engine(&mut self) -> Result<Engine> {
+        Engine::load_from_dir(&self.root_path.join("data"))
     }
 }
 
