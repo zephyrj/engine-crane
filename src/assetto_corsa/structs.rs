@@ -5,6 +5,7 @@ use std::str::FromStr;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::lut_utils::LutType;
+use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface};
 
 #[derive(Debug)]
 pub struct LutProperty<K, V>
@@ -42,21 +43,21 @@ impl<K,V> LutProperty<K, V>
     pub fn mandatory_from_ini(section_name: String,
                               property_name: String,
                               ini_data: &Ini,
-                              data_dir: &Path) -> Result<LutProperty<K, V>, String>
+                              data_source: &dyn DebuggableDataInterface) -> Result<LutProperty<K, V>, String>
     {
         let value = ini_utils::get_mandatory_property(ini_data,
                                                       section_name.as_str(),
                                                       property_name.as_str()).map_err(|err| {
             err.to_string()
         })?;
-        let lut = LutType::load_from_property_value(value, data_dir)?;
+        let lut = LutType::load_from_property_value(value, data_source)?;
         Ok(LutProperty{ lut, section_name, property_name })
     }
 
     pub fn optional_from_ini(section_name: String,
                              property_name: String,
                              ini_data: &Ini,
-                             data_dir: &Path) -> Result<Option<LutProperty<K, V>>, String>
+                             data_source: &dyn DebuggableDataInterface) -> Result<Option<LutProperty<K, V>>, String>
     {
         let value: String = match ini_utils::get_value::<String>(ini_data,
                                                                  section_name.as_str(),
@@ -66,7 +67,7 @@ impl<K,V> LutProperty<K, V>
                 val
             }
         };
-        let lut = LutType::load_from_property_value(value, data_dir)?;
+        let lut = LutType::load_from_property_value(value, data_source)?;
         Ok(Some(LutProperty{ lut, section_name, property_name }))
     }
     
@@ -86,11 +87,8 @@ impl<K,V> LutProperty<K, V>
         }
     }
 
-    pub fn write(&self) -> std::result::Result<(), String> {
-        return match &self.lut {
-            LutType::File(lut_file) => { lut_file.write() },
-            _ => { Ok(()) }
-        }
+    pub fn get_type(&self) -> &LutType<K, V> {
+        &self.lut
     }
 }
 
@@ -105,7 +103,7 @@ impl<K, V> IniUpdater for LutProperty<K, V>
                 ini_utils::set_value(ini_data,
                                      self.section_name.as_str(),
                                      self.property_name.as_str(),
-                                     lut_file.path.file_name().unwrap().to_str().unwrap());
+                                     &lut_file.filename);
             }
             LutType::Inline(lut) => {
                 ini_utils::set_value(ini_data,

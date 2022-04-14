@@ -310,7 +310,7 @@ impl AcEngineParameterCalculatorV1 {
         Some(t)
     }
 
-    pub fn create_turbo_controllers(&self, out_path: &Path) -> Option<assetto_corsa::engine::TurboControllers> {
+    pub fn create_turbo_controllers(&self) -> Option<assetto_corsa::engine::TurboControllers> {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
@@ -324,7 +324,6 @@ impl AcEngineParameterCalculatorV1 {
             lut.push((*rpm, boost_val));
         }
         let controller = TurboController::new(
-            out_path,
             0,
             ControllerInput::Rpms,
             ControllerCombinator::Add,
@@ -333,7 +332,7 @@ impl AcEngineParameterCalculatorV1 {
             10000_f64,
             0_f64
         );
-        let mut controllers = TurboControllers::new(out_path, 0);
+        let mut controllers = TurboControllers::new(0);
         controllers.add_controller(controller).unwrap();
         Some(controllers)
     }
@@ -414,7 +413,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                 error!("Failed to update fuel consumption. {}", err.to_string());
                 err.to_string()
             })?;
-            engine.write().map_err(|err| {
+            ac_car.update_engine(&engine).map_err(|err| {
                 format!("Failed to write engine data. {}", err.to_string())
             })?;
         }
@@ -465,7 +464,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
             Some(new_turbo) => {
                 info!("The new engine has a turbo");
                 engine.update_component(&new_turbo).unwrap();
-                if let Some(turbo_ctrl) = calculator.create_turbo_controllers(engine.data_dir()) {
+                if let Some(turbo_ctrl) = calculator.create_turbo_controllers() {
                     info!("Adding turbo controller with index 0");
                     engine.add_turbo_controllers(0, turbo_ctrl);
                 }
@@ -473,7 +472,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         }
 
         info!("Writing engine ini files");
-        engine.write().map_err(|err| {
+        ac_car.update_engine(&engine).map_err(|err| {
             error!("{}", err.to_string());
             format!("Swap failed. {}", err.to_string())
         })?;
@@ -498,11 +497,11 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                 }
 
                 info!("Writing drivetrain ini files");
-                match drivetrain.write() {
+                match ac_car.update_drivetrain(&drivetrain) {
+                    Ok(_) => {}
                     Err(err) => {
                         error!("Failed to write drivetrain.ini. {}", err.to_string());
-                    },
-                    _ => {}
+                    }
                 }
             }
             Err(err) => {

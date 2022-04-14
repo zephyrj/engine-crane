@@ -1,4 +1,5 @@
-
+use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -6,7 +7,7 @@ use crate::assetto_corsa::error::{Result, Error, ErrorKind, PropertyParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarIniData, MandatoryDataSection, MandatoryCarData};
+use crate::assetto_corsa::traits::{CarIniData, MandatoryDataSection, DebuggableDataInterface};
 
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -399,16 +400,21 @@ impl IniUpdater for DownshiftProtection {
 
 #[derive(Debug)]
 pub struct Drivetrain {
-    data_dir: PathBuf,
-    ini_data: Ini
+    ini_data: Ini,
 }
 
 impl Drivetrain {
     const INI_FILENAME: &'static str = "drivetrain.ini";
 
+    pub fn load_from_data(data: &(dyn DebuggableDataInterface)) -> Result<Self> where Self: Sized {
+        let file_data = data.get_file_data(Drivetrain::INI_FILENAME)?;
+        Ok(Drivetrain {
+            ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned())
+        })
+    }
+
     pub fn load_from_ini_string(ini_data: String) -> Drivetrain {
         Drivetrain {
-            data_dir: PathBuf::new(),
             ini_data: Ini::load_from_string(ini_data)
         }
     }
@@ -421,13 +427,14 @@ impl Drivetrain {
             }
         };
         Ok(Drivetrain {
-            data_dir: PathBuf::from(ini_path.parent().unwrap()),
             ini_data
         })
     }
 
-    pub fn write(&mut self) -> std::io::Result<()> {
-        self.ini_data.write_to_file(&Path::new(&self.data_dir).join(Drivetrain::INI_FILENAME))
+    pub fn to_bytes_map(&self) -> HashMap<String, Vec<u8>> {
+        let mut map = HashMap::new();
+        map.insert(Drivetrain::INI_FILENAME.to_owned(), self.ini_data.to_bytes());
+        map
     }
 
     pub fn update_subcomponent<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
@@ -440,16 +447,6 @@ impl Drivetrain {
 impl CarIniData for Drivetrain {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
-    }
-
-    fn data_dir(&self) -> &Path {
-        &self.data_dir
-    }
-}
-
-impl MandatoryCarData for Drivetrain {
-    fn load_from_path(data_dir: &Path) -> Result<Drivetrain> {
-        Drivetrain::load_from_file(data_dir.join(Drivetrain::INI_FILENAME).as_path())
     }
 }
 

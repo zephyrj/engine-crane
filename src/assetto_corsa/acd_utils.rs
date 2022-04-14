@@ -58,11 +58,11 @@ fn get_parent_folder_str(path: &Path) -> Result<&str> {
 
 impl AcdArchive {
     pub fn load_from_path(acd_path: &Path) -> Result<AcdArchive> {
-        AcdArchive::load_from_path_with_parent(acd_path, get_parent_folder_str(acd_path)?)
+        AcdArchive::load_from_path_with_key(acd_path, get_parent_folder_str(acd_path)?)
     }
 
-    pub fn load_from_path_with_parent(acd_path: &Path, parent: &str) -> Result<AcdArchive> {
-        let key = generate_acd_key(parent)?;
+    pub fn load_from_path_with_key(acd_path: &Path, in_key: &str) -> Result<AcdArchive> {
+        let key = generate_acd_key(in_key)?;
         let contents = extract_acd(acd_path, &key)?;
         Ok(AcdArchive{
             acd_path: acd_path.to_path_buf(),

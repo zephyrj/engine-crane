@@ -1,9 +1,11 @@
 use std::{fmt, io};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use csv::Terminator;
+use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface};
 
 #[derive(Debug)]
 pub struct LutFile<K, V>
@@ -12,7 +14,7 @@ pub struct LutFile<K, V>
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
-    pub path: PathBuf,
+    pub filename: String,
     data: Vec<(K,V)>
 }
 
@@ -22,16 +24,13 @@ impl<K, V> LutFile<K, V>
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
-    pub fn new(path: &Path, data: Vec<(K, V)>) -> LutFile<K, V> {
-        LutFile {
-            path: path.to_path_buf(),
-            data
-        }
+    pub fn new(filename: String, data: Vec<(K, V)>) -> LutFile<K, V> {
+        LutFile { filename, data }
     }
 
     pub fn from_path(lut_path: &Path) -> Result<LutFile<K, V>, String> {
         Ok(LutFile {
-            path: lut_path.to_path_buf(),
+            filename: lut_path.file_name().unwrap().to_string_lossy().to_string(),
             data: load_lut_from_path::<K, V>(lut_path)?
         })
     }
@@ -40,8 +39,12 @@ impl<K, V> LutFile<K, V>
         std::mem::replace(&mut self.data, data)
     }
 
-    pub fn write(&self) -> Result<(), String> {
-        write_lut_to_path(&self.data, self.path.as_path())?;
+    pub fn to_bytes(&self) -> Vec<u8> {
+        write_lut_to_bytes(&self.data).unwrap()
+    }
+
+    pub fn write_to_dir(&self, dir: &Path) -> Result<(), String> {
+        write_lut_to_path(&self.data, &dir.join(Path::new(&self.filename)))?;
         Ok(())
     }
 
@@ -126,13 +129,19 @@ impl<K, V> LutType<K, V>
         LutType::PathOnly(path)
     }
 
-    pub fn load_from_property_value(property_value: String, data_dir: &Path) -> Result<LutType<K, V>, String>{
+    pub fn load_from_property_value(property_value: String, data_source: &dyn DebuggableDataInterface) -> Result<LutType<K, V>, String>{
         return match property_value.starts_with("(") {
             true => {
                 Ok(LutType::Inline(InlineLut::from_property_value(property_value)?))
             }
             false => {
-                Ok(LutType::File(LutFile::from_path(data_dir.join(property_value.as_str()).as_path())?))
+                let data = data_source.get_file_data(&property_value).map_err(|err| {
+                    format!("Failed to load {} from data source. {}", property_value, err.to_string())
+                })?;
+                let lut_vec = load_lut_from_bytes(&data).map_err(|err| {
+                    format!("Failed to parse lut from {} in data source. {}", property_value, err.to_string())
+                })?;
+                Ok(LutType::File(LutFile::new(property_value, lut_vec)))
             }
         }
     }
@@ -151,6 +160,15 @@ pub fn load_lut_from_path<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
     };
     load_lut_from_reader(&file, b'|', Terminator::CRLF)
 }
+
+pub fn load_lut_from_bytes<K, V>(lut_bytes: &Vec<u8>) -> Result<Vec<(K, V)>, String>
+    where
+        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+{
+    load_lut_from_reader(Cursor::new(lut_bytes), b'|', Terminator::CRLF)
+}
+
 
 pub fn load_lut_from_reader<K, V, R>(lut_reader: R, delimiter: u8, terminator: Terminator) -> Result<Vec<(K, V)>, String>
     where
@@ -177,7 +195,7 @@ fn remove_whitespace(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-pub fn load_lut_from_property_value<K, V>(property_value: String, data_dir: &Path) -> Result<Vec<(K, V)>, String>
+pub fn load_lut_from_property_value<K, V>(property_value: String, data_source: &dyn DebuggableDataInterface) -> Result<Vec<(K, V)>, String>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
@@ -188,7 +206,10 @@ pub fn load_lut_from_property_value<K, V>(property_value: String, data_dir: &Pat
             load_lut_from_reader::<K, V, _>(data_slice.as_bytes(), b'=', Terminator::Any(b'|'))
         }
         false => {
-            load_lut_from_path::<K, V>(data_dir.join(property_value.as_str()).as_path()) 
+            let file_data = data_source.get_file_data(property_value.as_str()).map_err(|err| {
+                format!("Failed to read {} from data source. {}", property_value, err.to_string())
+            })?;
+            load_lut_from_bytes::<K, V>(&file_data)
         }
     }
 }
@@ -207,6 +228,23 @@ pub fn parse_lut_element<T>(record: &csv::StringRecord, index: usize) -> Result<
             return Err(format!("{} to {}. {:?}", err_str, std::any::type_name::<T>(), e))
         }
     }
+}
+
+pub fn write_lut_to_bytes<K,V>(data: &Vec<(K,V)>) -> Result<Vec<u8>, String>
+    where
+        K: std::fmt::Display,
+        V: std::fmt::Display
+{
+    let mut out : Vec<u8> = Vec::new();
+    {
+        let mut writer = csv::WriterBuilder::new().has_headers(false).delimiter(b'|').from_writer(&mut out);
+        for (key, val) in data {
+            writer.write_record(&[key.to_string(), val.to_string()]).map_err(|err| {
+                format!("Couldn't write lut to buffer. {}", err.to_string())
+            })?;
+        }
+    }
+    Ok(out)
 }
 
 pub fn write_lut_to_path<K, V>(data: &Vec<(K,V)>, path: &Path) -> Result<(), String>

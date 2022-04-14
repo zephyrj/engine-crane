@@ -6,15 +6,6 @@ use crate::assetto_corsa::ini_utils::Ini;
 pub trait CarIniData
 {
     fn ini_data(&self) -> &Ini;
-    fn data_dir(&self) -> &Path;
-}
-
-pub trait MandatoryCarData: CarIniData {
-    fn load_from_path(data_dir: &Path) -> crate::assetto_corsa::error::Result<Self> where Self: Sized;
-}
-
-pub trait OptionalCarData: CarIniData {
-    fn load_from_path(data_dir: &Path) -> crate::assetto_corsa::error::Result<Option<Self>> where Self: Sized;
 }
 
 pub trait MandatoryDataSection {

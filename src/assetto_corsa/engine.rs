@@ -7,13 +7,14 @@ use std::str::{FromStr};
 use csv::Terminator;
 use toml::Value;
 use toml::value::Table;
+use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, PropertyParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::lut_utils;
 use crate::assetto_corsa::lut_utils::{InlineLut, load_lut_from_path, LutType};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{MandatoryDataSection, CarIniData, OptionalDataSection};
+use crate::assetto_corsa::traits::{MandatoryDataSection, CarIniData, OptionalDataSection, DebuggableDataInterface, DataInterface};
 use crate::assetto_corsa::structs::LutProperty;
 
 
@@ -305,25 +306,27 @@ impl OptionalDataSection for FuelConsumptionFlowRate {
         if !ini_data.contains_section(Self::SECTION_NAME) {
             return Ok(None)
         }
-        let max_fuel_flow_lut = LutProperty::optional_from_ini(
-            String::from(Self::SECTION_NAME),
-            String::from("MAX_FUEL_FLOW_LUT"),
-            ini_data,
-            parent_data.data_dir()
-        ).map_err(|err_str| {
-            Error::new(ErrorKind::InvalidCar,
-                       format!("Error loading fuel flow consumption lut. {}", err_str))
-        })?;
-
-        let mut max_fuel_flow = 0;
-        if let Some(val) = ini_utils::get_value(ini_data, Self::SECTION_NAME, "MAX_FUEL_FLOW") {
-            max_fuel_flow = val;
-        }
-        Ok(Some(FuelConsumptionFlowRate{
-            base_data: ExtendedFuelConsumptionBaseData::load_from_parent(parent_data)?,
-            max_fuel_flow_lut,
-            max_fuel_flow
-        }))
+        Ok(None)
+        // TODO reinstate this
+        // let max_fuel_flow_lut = LutProperty::optional_from_ini(
+        //     String::from(Self::SECTION_NAME),
+        //     String::from("MAX_FUEL_FLOW_LUT"),
+        //     ini_data,
+        //     parent_data.data_dir()
+        // ).map_err(|err_str| {
+        //     Error::new(ErrorKind::InvalidCar,
+        //                format!("Error loading fuel flow consumption lut. {}", err_str))
+        // })?;
+        //
+        // let mut max_fuel_flow = 0;
+        // if let Some(val) = ini_utils::get_value(ini_data, Self::SECTION_NAME, "MAX_FUEL_FLOW") {
+        //     max_fuel_flow = val;
+        // }
+        // Ok(Some(FuelConsumptionFlowRate{
+        //     base_data: ExtendedFuelConsumptionBaseData::load_from_parent(parent_data)?,
+        //     max_fuel_flow_lut,
+        //     max_fuel_flow
+        // }))
     }
 }
 
@@ -602,7 +605,6 @@ impl Display for ControllerCombinator {
 
 #[derive(Debug)]
 pub struct TurboController {
-    data_dir: PathBuf,
     index: isize,
     input: ControllerInput,
     combinator: ControllerCombinator,
@@ -613,19 +615,19 @@ pub struct TurboController {
 }
 
 impl TurboController {
-    pub fn load_from_ini(ini: &Ini, idx: isize, data_dir: &Path) -> Result<TurboController> {
+    pub fn load_from_ini(ini: &Ini, idx: isize, data_source: &dyn DebuggableDataInterface) -> Result<TurboController> {
         let section_name = TurboController::get_controller_section_name(idx);
         let lut = lut_utils::load_lut_from_property_value(
             ini_utils::get_mandatory_property(ini, &section_name, "LUT")?,
-            data_dir
+            data_source
         ).map_err(
             |err_str| {
                 Error::new(ErrorKind::InvalidCar,
                            format!("Failed to load turbo controller with index {}: {}", idx, err_str ))
             })?;
 
+
         Ok(TurboController {
-            data_dir: PathBuf::from(data_dir),
             index: idx,
             input: ini_utils::get_mandatory_property(ini, &section_name, "INPUT")?,
             combinator: ini_utils::get_mandatory_property(ini, &section_name, "COMBINATOR")?,
@@ -636,8 +638,7 @@ impl TurboController {
         })
     }
 
-    pub fn new(out_dir: &Path,
-               index: isize,
+    pub fn new(index: isize,
                input: ControllerInput,
                combinator: ControllerCombinator,
                lut: Vec<(f64, f64)>,
@@ -645,7 +646,6 @@ impl TurboController {
                up_limit: f64,
                down_limit: f64) -> TurboController {
         TurboController {
-            data_dir: PathBuf::from(out_dir),
             index,
             input,
             combinator,
@@ -683,30 +683,28 @@ impl IniUpdater for TurboController {
 
 #[derive(Debug)]
 pub struct TurboControllers {
-    ini_path: PathBuf,
     index: isize,
     ini_config: Ini,
     controllers: Vec<TurboController>
 }
 
 impl TurboControllers {
-    pub fn new(out_path: &Path, index: isize) -> TurboControllers {
+    pub fn new(index: isize) -> TurboControllers {
         TurboControllers {
-            ini_path: PathBuf::from(out_path.join(TurboControllers::get_controller_ini_filename(index))),
             index,
             ini_config: Ini::new(),
             controllers: Vec::new()
         }
     }
 
-    pub fn load_all_from_ini_dir(data_dir: &Path, ini_data: &Ini) -> Result<HashMap<isize, TurboControllers>> {
+    pub fn load_all_from_data(data_source: &dyn DebuggableDataInterface, ini_data: &Ini) -> Result<HashMap<isize, TurboControllers>> {
         let turbo_count: isize = Turbo::count_turbo_sections(ini_data);
         if turbo_count == 0 {
             return Ok(HashMap::new());
         }
         let mut out_map = HashMap::new();
         for turbo_idx in 0..turbo_count {
-            match TurboControllers::load_controller_index_from_dir(turbo_idx, data_dir)? {
+            match TurboControllers::load_controller_index_from_dir(data_source, turbo_idx)? {
                 None => { continue }
                 Some(turbo_ctrls) => {
                     out_map.insert(turbo_idx, turbo_ctrls); }
@@ -715,55 +713,65 @@ impl TurboControllers {
         Ok(out_map)
     }
 
-    fn load_controller_index_from_dir(index: isize, data_dir: &Path) -> Result<Option<TurboControllers>> {
-        let ini_path = Path::new(data_dir).join(TurboControllers::get_controller_ini_filename(index));
-        let ini_config = match load_ini_file(ini_path.as_path()) {
-            Ok(res) => { res }
-            Err(err) => {
-                if err.kind() == io::ErrorKind::NotFound {
-                    return Ok(None)
-                }
-                return Err(Error::new(ErrorKind::InvalidCar,
-                                      format!("Failed to load turbo controller with index {}: {}", index, err )));
-            }
-        };
-        let turbo_controller_count: isize = TurboControllers::count_turbo_controller_sections(&ini_config);
-        let mut controller_vec: Vec<TurboController> = Vec::new();
-        for idx in 0..turbo_controller_count {
-            controller_vec.push(TurboController::load_from_ini(&ini_config, idx, data_dir)?);
-        }
+    fn load_controller_index_from_dir(data_source: &dyn DebuggableDataInterface, index: isize) -> Result<Option<TurboControllers>> {
+        match data_source.get_file_data(&TurboControllers::get_controller_ini_filename(index)) {
+            Ok(data) => {
+                let ini_config = Ini::load_from_string(String::from_utf8_lossy(data.as_slice()).to_string());
 
-        Ok(Some(
-            TurboControllers {
-                ini_path,
-                index,
-                ini_config,
-                controllers: controller_vec
+                let turbo_controller_count: isize = TurboControllers::count_turbo_controller_sections(&ini_config);
+                let mut controller_vec: Vec<TurboController> = Vec::new();
+                for idx in 0..turbo_controller_count {
+                    controller_vec.push(TurboController::load_from_ini(&ini_config, idx, data_source)?);
+                }
+
+                Ok(Some(
+                    TurboControllers {
+                        index,
+                        ini_config,
+                        controllers: controller_vec
+                    }
+                ))
             }
-        ))
+            Err(e) => {
+                match e.kind() {
+                    io::ErrorKind::NotFound => {
+                        return Ok(None)
+                    },
+                    _ => { return Err(Error::from(e)) }
+                }
+            }
+        }
     }
 
     pub fn add_controller(&mut self, controller: TurboController) -> Result<()> {
         controller.update_ini(&mut self.ini_config).map_err(|err_str| {
             Error::new(ErrorKind::InvalidUpdate,
                        format!("Failed to add turbo controller with index {} to {}. {}",
-                                      controller.index(), TurboControllers::get_controller_ini_filename(self.index), err_str ))
+                                      controller.index(), self.filename(), err_str ))
         })?;
         self.controllers.push(controller);
         Ok(())
     }
 
-    pub fn write(&self) -> Result<()> {
-        self.ini_config.write_to_file(&self.ini_path)?;
+    pub fn filename(&self) -> String {
+        TurboControllers::get_controller_ini_filename(self.index)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.ini_config.to_bytes()
+    }
+
+    pub fn write_to_dir(&self, dir: &Path) -> Result<()> {
+        self.ini_config.write_to_file(&dir.join(Path::new(&self.filename())))?;
         Ok(())
     }
 
-    pub fn delete_ini_file(&self) -> Result<()> {
-        std::fs::remove_file(&self.ini_path)?;
-        Ok(())
-    }
+    // pub fn delete_ini_file(&self) -> Result<()> {
+    //     std::fs::remove_file(&self.ini_path)?;
+    //     Ok(())
+    // }
 
-    fn get_controller_ini_filename(index: isize) -> String {
+    pub fn get_controller_ini_filename(index: isize) -> String {
         format!("ctrl_turbo{}.ini", index)
     }
 
@@ -787,7 +795,7 @@ impl TurboControllers {
 
 impl Display for TurboControllers {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n{}", self.ini_path.display(), self.ini_config.to_string())
+        write!(f, "{}", self.ini_config.to_string())
     }
 }
 
@@ -946,13 +954,10 @@ impl IniUpdater for Turbo {
         }
         Ok(())
     }
-
-
 }
 
 #[derive(Debug)]
 pub struct Engine {
-    data_dir: PathBuf,
     ini_data: Ini,
     power_curve: LutProperty<i32, i32>,
     turbo_controllers: HashMap<isize, TurboControllers>
@@ -965,31 +970,67 @@ impl Engine {
         let ini_data = Ini::load_from_string(ini_data);
         let power_curve= LutProperty::path_only(String::from("HEADER"), String::from("POWER_CURVE"), &ini_data).unwrap();
         Engine {
-            data_dir: PathBuf::from(""),
             ini_data,
             power_curve,
             turbo_controllers: HashMap::new()
         }
     }
 
-    pub fn load_from_dir(data_dir: &Path) -> Result<Engine> {
-        let ini_data = match load_ini_file(data_dir.join(Engine::INI_FILENAME).as_path()) {
-            Ok(ini_object) => { ini_object }
-            Err(err) => {
-                return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
-            }
-        };
-        let power_curve = LutProperty::mandatory_from_ini(String::from("HEADER"), String::from("POWER_CURVE"), &ini_data, data_dir).map_err(|err|{
+    pub fn load_from_car(data: &dyn DebuggableDataInterface) -> Result<Self> where Self: Sized {
+        let file_data = data.get_file_data(Engine::INI_FILENAME)?;
+        let ini_data = Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned());
+        let power_curve = LutProperty::mandatory_from_ini(
+            String::from("HEADER"),
+            String::from("POWER_CURVE"),
+            &ini_data,
+            data).map_err(|err|{
             Error::new(ErrorKind::InvalidCar, format!("Cannot find a lut for power curve. {}", err.to_string()))
         })?;
-        let turbo_controllers = TurboControllers::load_all_from_ini_dir(data_dir, &ini_data)?;
-        let eng = Engine {
-            data_dir: PathBuf::from(data_dir),
+        let turbo_controllers = TurboControllers::load_all_from_data(data, &ini_data)?;
+        Ok(Engine {
             ini_data,
             power_curve,
             turbo_controllers
+        })
+    }
+
+    // pub fn load_from_dir<'b>(data_dir: &'b Path) -> Result<Engine<'a>> {
+    //     let ini_data = match load_ini_file(data_dir.join(Engine::INI_FILENAME).as_path()) {
+    //         Ok(ini_object) => { ini_object }
+    //         Err(err) => {
+    //             return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
+    //         }
+    //     };
+    //     let power_curve = LutProperty::mandatory_from_ini(
+    //         String::from("HEADER"),
+    //         String::from("POWER_CURVE"),
+    //         &ini_data,
+    //         data_dir).map_err(|err|{
+    //         Error::new(ErrorKind::InvalidCar, format!("Cannot find a lut for power curve. {}", err.to_string()))
+    //     })?;
+    //     //let turbo_controllers = TurboControllers::load_all_from_ini_dir(data_dir, &ini_data)?;
+    //     let eng = Engine {
+    //         data_source: None,
+    //         ini_data,
+    //         power_curve,
+    //         turbo_controllers: HashMap::new()
+    //     };
+    //     Ok(eng)
+    // }
+
+    pub fn to_bytes_map(&self) -> HashMap<String, Vec<u8>> {
+        let mut map = HashMap::new();
+        map.insert(Engine::INI_FILENAME.to_owned(), self.ini_data.to_bytes());
+        match self.power_curve.get_type() {
+            LutType::File(lut_file) => {
+                map.insert(lut_file.filename.clone(), lut_file.to_bytes());
+            },
+            _ => {}
         };
-        Ok(eng)
+        for controller_file in self.turbo_controllers.values() {
+            map.insert(controller_file.filename(), controller_file.to_bytes());
+        }
+        map
     }
 
     pub fn update_component<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
@@ -1012,7 +1053,7 @@ impl Engine {
 
     pub fn remove_turbo_controllers(&mut self, turbo_idx: isize) -> Result<Option<TurboControllers>> {
         if let Some(old) = self.turbo_controllers.remove(&turbo_idx) {
-            old.delete_ini_file()?;
+            //old.delete_ini_file()?;
             return Ok(Some(old));
         }
         Ok(None)
@@ -1026,18 +1067,18 @@ impl Engine {
         Ok(())
     }
 
-    pub fn metadata(&self) -> Result<Option<Metadata>> {
-        Metadata::load_from_dir(Path::new(&self.data_dir.as_os_str()))
-    }
-
-    pub fn write(&mut self) -> Result<()> {
-        let out_path = self.data_dir.join(Engine::INI_FILENAME);
-        self.ini_data.write_to_file(out_path.as_path())?;
-        self.power_curve.write().map_err(|err| {
-            Error::new(ErrorKind::IOError, format!("Failed to write power curve. {}", err))
-        })?;
+    pub fn write_to_dir(&mut self, dir: &Path) -> Result<()> {
+        self.ini_data.write_to_file(&dir.join(Engine::INI_FILENAME))?;
+        match self.power_curve.get_type() {
+            LutType::File(lut_file) => {
+                lut_file.write_to_dir(dir).map_err(|err| {
+                    Error::new(ErrorKind::IOError, format!("Failed to write power curve. {}", err))
+                })?;
+            },
+            _ => {}
+        };
         for controller_file in self.turbo_controllers.values() {
-            controller_file.write()?;
+            controller_file.write_to_dir(dir)?;
         }
         Ok(())
     }
@@ -1046,10 +1087,6 @@ impl Engine {
 impl CarIniData for Engine {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
-    }
-
-    fn data_dir(&self) -> &Path {
-        &self.data_dir
     }
 }
 

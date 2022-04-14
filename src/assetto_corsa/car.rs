@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::{fs, io, mem};
+use std::borrow::Borrow;
 use std::default::Default;
 
 use std::fmt::{Debug, Display, format, Formatter};
@@ -14,7 +15,7 @@ use tracing::{debug, warn, info};
 use walkdir::WalkDir;
 
 use crate::assetto_corsa;
-use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface, MandatoryCarData};
+use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface};
 use crate::assetto_corsa::drivetrain::Drivetrain;
 use crate::assetto_corsa::error::{Result, Error, PropertyParseError, ErrorKind};
 use crate::assetto_corsa::engine::{Engine};
@@ -46,7 +47,7 @@ pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Resu
                                   format!("{} doesn't contain a data dir or data.acd file", existing_car_path.display())));
         }
         info!("No data dir present in {}. Data will be extracted from data.acd", new_car_path.display());
-        AcdArchive::load_from_path_with_parent(acd_path.as_path(), existing_car_name)?.unpack()?;
+        AcdArchive::load_from_path_with_key(acd_path.as_path(), existing_car_name)?.unpack()?;
     }
     info!("Deleting {} as data will be invalid after clone completion", acd_path.display());
     if let Some(err) = delete_data_acd_file(new_car_path).err(){
@@ -524,11 +525,27 @@ impl Car {
     }
 
     pub fn drivetrain(&self) -> Result<Drivetrain> {
-        Drivetrain::load_from_path(&self.root_path.join("data"))
+        Drivetrain::load_from_data(self.data_interface.borrow())
     }
 
-    pub fn engine(&mut self) -> Result<Engine> {
-        Engine::load_from_dir(&self.root_path.join("data"))
+    pub fn update_drivetrain(&mut self, drivetrain: &Drivetrain) -> Result<()> {
+        let update_data = drivetrain.to_bytes_map();
+        for (filename, data) in update_data {
+            self.data_interface.write_file_data(&filename, data)?;
+        }
+        Ok(())
+    }
+
+    pub fn engine(&self) -> Result<Engine> {
+        Engine::load_from_car(self.data_interface.borrow())
+    }
+
+    pub fn update_engine(&mut self, engine: &Engine) -> Result<()> {
+        let update_data = engine.to_bytes_map();
+        for (filename, data) in update_data {
+            self.data_interface.write_file_data(&filename, data)?;
+        }
+        Ok(())
     }
 }
 
