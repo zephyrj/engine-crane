@@ -6,6 +6,7 @@ use std::str::FromStr;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, PropertyParseError};
 use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::{ini_utils};
+use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::traits::{CarIniData, MandatoryDataSection, DebuggableDataInterface};
 
@@ -399,52 +400,61 @@ impl IniUpdater for DownshiftProtection {
 }
 
 #[derive(Debug)]
-pub struct Drivetrain {
+pub struct Drivetrain<'a> {
+    car: &'a mut Car,
     ini_data: Ini,
 }
 
-impl Drivetrain {
+impl<'a> Drivetrain<'a> {
     const INI_FILENAME: &'static str = "drivetrain.ini";
 
-    pub fn load_from_data(data: &(dyn DebuggableDataInterface)) -> Result<Self> where Self: Sized {
-        let file_data = data.get_file_data(Drivetrain::INI_FILENAME)?;
+    pub fn from_car(car: &'a mut Car) -> Result<Drivetrain<'a>> {
+        let file_data = car.data_interface().get_file_data(Drivetrain::INI_FILENAME)?;
         Ok(Drivetrain {
+            car,
             ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned())
         })
     }
 
-    pub fn load_from_ini_string(ini_data: String) -> Drivetrain {
-        Drivetrain {
-            ini_data: Ini::load_from_string(ini_data)
-        }
-    }
-
-    pub fn load_from_file(ini_path: &Path) -> Result<Drivetrain> {
-        let ini_data = match load_ini_file(ini_path) {
-            Ok(ini_object) => { ini_object }
-            Err(err) => {
-                return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
-            }
-        };
-        Ok(Drivetrain {
-            ini_data
-        })
-    }
-
-    pub fn to_bytes_map(&self) -> HashMap<String, Vec<u8>> {
-        let mut map = HashMap::new();
-        map.insert(Drivetrain::INI_FILENAME.to_owned(), self.ini_data.to_bytes());
-        map
-    }
+    // pub fn load_from_data(data: &(dyn DebuggableDataInterface)) -> Result<Self> where Self: Sized {
+    //     let file_data = data.get_file_data(Drivetrain::INI_FILENAME)?;
+    //     Ok(Drivetrain {
+    //         ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned())
+    //     })
+    // }
+    //
+    // pub fn load_from_ini_string(ini_data: String) -> Drivetrain {
+    //     Drivetrain {
+    //         ini_data: Ini::load_from_string(ini_data)
+    //     }
+    // }
+    //
+    // pub fn load_from_file(ini_path: &Path) -> Result<Drivetrain> {
+    //     let ini_data = match load_ini_file(ini_path) {
+    //         Ok(ini_object) => { ini_object }
+    //         Err(err) => {
+    //             return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
+    //         }
+    //     };
+    //     Ok(Drivetrain {
+    //         ini_data
+    //     })
+    // }
 
     pub fn update_subcomponent<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
         component.update_ini(&mut self.ini_data).map_err(|err_string| {
             Error::new(ErrorKind::InvalidUpdate, err_string)
         })
     }
+
+    pub fn write(&mut self) -> Result<()> {
+        self.car.data_interface().write_file_data(Drivetrain::INI_FILENAME,
+                                                  self.ini_data.to_bytes())?;
+        Ok(())
+    }
 }
 
-impl CarIniData for Drivetrain {
+impl<'a> CarIniData for Drivetrain<'a> {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
     }

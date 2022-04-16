@@ -4,10 +4,10 @@ use std::path::{Path};
 use iced::keyboard::KeyCode::N;
 use tracing::{debug, error, info};
 use crate::{assetto_corsa, automation, beam_ng};
-use crate::assetto_corsa::car::{Car, CarVersion, SpecValue};
-use crate::assetto_corsa::drivetrain::DriveType;
-use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
-use crate::assetto_corsa::traits::{CarIniData, extract_mandatory_section, extract_optional_section};
+use crate::assetto_corsa::car::{Car, CarUiData, CarIniData, CarVersion, SpecValue};
+use crate::assetto_corsa::drivetrain::{Drivetrain, DriveType};
+use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Engine, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
+use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section};
 use crate::automation::car::{Attribute, CarFile};
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 use crate::beam_ng::ModData;
@@ -384,10 +384,9 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                                           settings: AssettoCorsaCarSettings,
                                           additional_car_data: AdditionalAcCarData) -> Result<(), String> {
     let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
-    
     info!("Loading car {}", ac_car_path.display());
-    let mut ac_car = Car::load_from_path(ac_car_path).unwrap();
-    let drive_type = match ac_car.drivetrain() {
+    let mut car = Car::load_from_path(ac_car_path).unwrap();
+    let drive_type = match Drivetrain::from_car(&mut car) {
         Ok(drivetrain) => {
             extract_mandatory_section::<assetto_corsa::drivetrain::Traction>(&drivetrain).unwrap().drive_type
         },
@@ -397,46 +396,55 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
     };
     info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, drive_type.mechanical_efficiency());
 
-    match settings.minimum_physics_level {
-        AssettoCorsaPhysicsLevel::BaseGame => {
-            info!("Using base game physics");
-            ac_car.set_fuel_consumption(calculator.basic_fuel_consumption().unwrap());
-        }
-        AssettoCorsaPhysicsLevel::CspExtendedPhysics => {
-            info!("Using CSP extended physics");
-            ac_car.set_version(CarVersion::CspExtendedPhysics);
-            ac_car.clear_fuel_consumption();
-            let mut engine = ac_car.engine().map_err(|err| {
-                format!("Failed to load engine. {}", err.to_string())
-            })?;
-            engine.update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency())).map_err(|err| {
-                error!("Failed to update fuel consumption. {}", err.to_string());
-                err.to_string()
-            })?;
-            ac_car.update_engine(&engine).map_err(|err| {
-                format!("Failed to write engine data. {}", err.to_string())
-            })?;
-        }
-    }
-
-    if let Some(current_engine_weight) = additional_car_data.engine_weight() {
-        if let Some(current_car_mass) = ac_car.total_mass() {
-            let new_engine_delta: i32 = calculator.engine_weight() as i32 - current_engine_weight as i32;
-            if new_engine_delta < 0 && new_engine_delta.abs() as u32 >= current_car_mass {
-                error!("Invalid existing engine weight ({}). Would result in negative total mass", current_engine_weight);
+    let mut mass = 0;
+    {
+        let mut ini_data = CarIniData::from_car(&mut car).unwrap();
+        match settings.minimum_physics_level {
+            AssettoCorsaPhysicsLevel::BaseGame => {
+                info!("Using base game physics");
+                ini_data.set_fuel_consumption(calculator.basic_fuel_consumption().unwrap());
             }
-            let new_mass = (current_car_mass as i32 + new_engine_delta) as u32;
-            info!("Updating total mass to {} based off a provided existing engine weight of {}", new_mass, current_engine_weight);
-            ac_car.set_total_mass(new_mass);
-        } else {
-            error!("Existing car doesn't have a total mass property")
+            AssettoCorsaPhysicsLevel::CspExtendedPhysics => {
+                info!("Using CSP extended physics");
+                {
+                    ini_data.set_version(CarVersion::CspExtendedPhysics);
+                    ini_data.clear_fuel_consumption();
+                }
+            }
         }
+
+        if let Some(current_engine_weight) = additional_car_data.engine_weight() {
+            if let Some(current_car_mass) = ini_data.total_mass() {
+                let new_engine_delta: i32 = calculator.engine_weight() as i32 - current_engine_weight as i32;
+                if new_engine_delta < 0 && new_engine_delta.abs() as u32 >= current_car_mass {
+                    error!("Invalid existing engine weight ({}). Would result in negative total mass", current_engine_weight);
+                }
+                let new_mass = (current_car_mass as i32 + new_engine_delta) as u32;
+                info!("Updating total mass to {} based off a provided existing engine weight of {}", new_mass, current_engine_weight);
+                ini_data.set_total_mass(new_mass);
+            } else {
+                error!("Existing car doesn't have a total mass property")
+            }
+        }
+        info!("Writing car ini files");
+        mass = ini_data.total_mass().unwrap();
+        ini_data.write().unwrap();
     }
 
     {
-        let mut engine = ac_car.engine().map_err(|err| {
+        let mut engine = Engine::from_car(&mut car).map_err(|err| {
             format!("Failed to load engine. {}", err.to_string())
         })?;
+        match settings.minimum_physics_level {
+            AssettoCorsaPhysicsLevel::CspExtendedPhysics => {
+                engine.update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency())).map_err(|err| {
+                    error!("Failed to update fuel consumption. {}", err.to_string());
+                    err.to_string()
+                })?;
+            }
+            _ => {}
+        }
+
         info!("Clearing existing turbo controllers");
         engine.clear_turbo_controllers().unwrap();
 
@@ -472,7 +480,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         }
 
         info!("Writing engine ini files");
-        ac_car.update_engine(&engine).map_err(|err| {
+        engine.write().map_err(|err| {
             error!("{}", err.to_string());
             format!("Swap failed. {}", err.to_string())
         })?;
@@ -480,7 +488,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
 
     {
         info!("Updating drivetrain ini files");
-        match ac_car.drivetrain() {
+        match Drivetrain::from_car(&mut car) {
             Ok(mut drivetrain) => {
                 match extract_mandatory_section::<assetto_corsa::drivetrain::AutoShifter>(&drivetrain) {
                     Ok(mut autoshifter) => {
@@ -497,7 +505,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                 }
 
                 info!("Writing drivetrain ini files");
-                match ac_car.update_drivetrain(&drivetrain) {
+                match drivetrain.write() {
                     Ok(_) => {}
                     Err(err) => {
                         error!("Failed to write drivetrain.ini. {}", err.to_string());
@@ -510,25 +518,24 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         };
     };
 
-    info!("Updating ui components");
-    let mass = ac_car.total_mass().unwrap();
-    ac_car.ui_info.update_power_curve(calculator.engine_bhp_power_curve());
-    ac_car.ui_info.update_torque_curve(calculator.engine_torque_curve());
-    ac_car.ui_info.update_spec("bhp", format!("{}bhp", calculator.peak_bhp()));
-    ac_car.ui_info.update_spec("torque", format!("{}Nm", calculator.peak_torque()));
-    ac_car.ui_info.update_spec("weight", format!("{}kg", mass));
-    ac_car.ui_info.update_spec("pwratio", format!("{}kg/hp", round_float_to(mass as f64 / (calculator.peak_bhp() as f64), 2)));
+    {
+        info!("Updating ui components");
+        let mut ui_data = CarUiData::from_car(&mut car).unwrap();
+        ui_data.ui_info.update_power_curve(calculator.engine_bhp_power_curve());
+        ui_data.ui_info.update_torque_curve(calculator.engine_torque_curve());
+        ui_data.ui_info.update_spec("bhp", format!("{}bhp", calculator.peak_bhp()));
+        ui_data.ui_info.update_spec("torque", format!("{}Nm", calculator.peak_torque()));
+        ui_data.ui_info.update_spec("weight", format!("{}kg", mass));
+        ui_data.ui_info.update_spec("pwratio", format!("{}kg/hp", round_float_to(mass as f64 / (calculator.peak_bhp() as f64), 2)));
 
-    let blank = String::from("---");
-    ac_car.ui_info.update_spec("acceleration", blank.clone());
-    ac_car.ui_info.update_spec("range", blank.clone());
-    ac_car.ui_info.update_spec("topspeed", blank);
+        let blank = String::from("---");
+        ui_data.ui_info.update_spec("acceleration", blank.clone());
+        ui_data.ui_info.update_spec("range", blank.clone());
+        ui_data.ui_info.update_spec("topspeed", blank);
 
-    info!("Writing car ui files");
-    ac_car.ui_info.write().unwrap();
-
-    info!("Writing car ini files");
-    ac_car.write().unwrap();
+        info!("Writing car ui files");
+        ui_data.ui_info.write().unwrap();
+    }
 
     Ok(())
 }

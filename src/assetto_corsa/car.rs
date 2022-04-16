@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::{fs, io, mem};
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use std::default::Default;
 
 use std::fmt::{Debug, Display, format, Formatter};
@@ -136,26 +136,36 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
 }
 
 pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_name: &str) -> Result<()> {
-    let mut new_car = Car::load_from_path(car_path)?;
-    let existing_name = match new_car.screen_name() {
-        None => { String::from(car_path.file_name().unwrap().to_str().unwrap()) }
-        Some(name) => { name }
-    };
-    let new_name = existing_name.clone().add(format!(" {}", new_suffix).as_str());
-    info!("Updating screen name and ui data from {} to {}", existing_name, new_name);
-    new_car.set_screen_name(new_name.as_str());
-    new_car.ui_info.set_name(new_name);
-    match new_car.ui_info.parent() {
-        None => {
-            info!("Updating parent name");
-            new_car.ui_info.set_parent(String::from(parent_car_folder_name));
-        }
-        Some(existing_parent) => {
-            info!("Parent name already set to {}", existing_parent);
-        }
+    let mut car = Car::load_from_path(car_path)?;
+    let mut existing_name = String::new();
+    let mut new_name = String::new();
+    {
+        let mut ini_data = CarIniData::from_car(&mut car)?;
+        existing_name = match ini_data.screen_name() {
+            None => { String::from(car_path.file_name().unwrap().to_str().unwrap()) }
+            Some(name) => { name }
+        };
+        new_name = existing_name.clone().add(format!(" {}", new_suffix).as_str());
+        info!("Updating screen name and ui data from {} to {}", existing_name, new_name);
+        ini_data.set_screen_name(new_name.as_str());
+        ini_data.write()?;
     }
-    new_car.ui_info.add_tag("engine crane".to_owned());
-    new_car.write()?;
+
+    {
+        let mut ui_data = CarUiData::from_car(&mut car)?;
+        ui_data.ui_info.set_name(new_name);
+        match ui_data.ui_info.parent() {
+            None => {
+                info!("Updating parent name");
+                ui_data.ui_info.set_parent(String::from(parent_car_folder_name));
+            }
+            Some(existing_parent) => {
+                info!("Parent name already set to {}", existing_parent);
+            }
+        }
+        ui_data.ui_info.add_tag("engine crane".to_owned());
+        ui_data.write()?;
+    }
     Ok(())
 }
 
@@ -453,32 +463,24 @@ impl UiInfo {
 }
 
 #[derive(Debug)]
-pub struct Car {
-    root_path: PathBuf,
-    data_interface: Box<dyn DebuggableDataInterface>,
+pub struct CarIniData<'a> {
+    car: &'a mut Car,
     ini_config: Ini,
-    pub ui_info: UiInfo
 }
 
-impl Car {
-    pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
-        let ui_info_path = car_folder_path.join(["ui", "ui_car.json"].iter().collect::<PathBuf>());
-        let ui_info = UiInfo::load(ui_info_path.as_path())?;
-        let data_dir_path = car_folder_path.join("data");
-        let data_interface = Box::new(DataFolderInterface::new(&data_dir_path));
-        let car_ini_data = data_interface.get_file_data("car.ini")?;
-        Ok(Car{
-            root_path: car_folder_path.to_path_buf(),
-            data_interface,
-            ini_config: Ini::load_from_string(String::from_utf8_lossy(car_ini_data.as_slice()).into_owned()),
-            ui_info,
+impl<'a> CarIniData<'a> {
+    pub fn from_car(car: &'a mut Car) -> Result<CarIniData<'a>> {
+        let car_ini_data = car.data_interface.get_file_data("car.ini")?;
+        Ok(CarIniData {
+            car,
+            ini_config: Ini::load_from_string(String::from_utf8_lossy(car_ini_data.as_slice()).into_owned())
         })
     }
 
     pub fn version(&self) -> Option<CarVersion> {
         ini_utils::get_value(&self.ini_config, "HEADER", "VERSION")
     }
-    
+
     pub fn set_version(&mut self, version: CarVersion) {
         ini_utils::set_value(&mut self.ini_config, "HEADER", "VERSION", version);
     }
@@ -514,38 +516,60 @@ impl Car {
     pub fn set_fuel_consumption(&mut self, consumption: f64) {
         ini_utils::set_float(&mut self.ini_config, "FUEL","CONSUMPTION", consumption, 4);
     }
-    
+
     pub fn clear_fuel_consumption(&mut self) {
         self.ini_config.remove_value("FUEL", "CONSUMPTION");
     }
 
-    pub fn write(&mut self) -> Result<()> {
-        self.data_interface.write_file_data("car.ini", self.ini_config.to_bytes())?;
+    pub fn write(&'a mut self) -> Result<()> {
+        self.car.data_interface().write_file_data("car.ini", self.ini_config.to_bytes())?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct CarUiData<'a> {
+    car: &'a mut Car,
+    pub ui_info: UiInfo
+}
+
+impl<'a> CarUiData<'a> {
+    pub fn from_car(car: &'a mut Car) -> Result<CarUiData<'a>> {
+        let ui_info_path = car.root_path.join(["ui", "ui_car.json"].iter().collect::<PathBuf>());
+        let ui_info = UiInfo::load(ui_info_path.as_path())?;
+        Ok(CarUiData{
+            car,
+            ui_info
+        })
+    }
+
+    pub fn write(&'a mut self) -> Result<()> {
         self.ui_info.write()
     }
+}
 
-    pub fn drivetrain(&self) -> Result<Drivetrain> {
-        Drivetrain::load_from_data(self.data_interface.borrow())
+#[derive(Debug)]
+pub struct Car {
+    root_path: PathBuf,
+    data_interface: Box<dyn DebuggableDataInterface>,
+}
+
+impl Car {
+    pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
+        let data_dir_path = car_folder_path.join("data");
+        let data_interface = Box::new(DataFolderInterface::new(&data_dir_path));
+        Ok(Car{
+            root_path: car_folder_path.to_path_buf(),
+            data_interface
+        })
     }
 
-    pub fn update_drivetrain(&mut self, drivetrain: &Drivetrain) -> Result<()> {
-        let update_data = drivetrain.to_bytes_map();
-        for (filename, data) in update_data {
-            self.data_interface.write_file_data(&filename, data)?;
-        }
-        Ok(())
+    pub fn data_interface(&mut self) -> & mut dyn DebuggableDataInterface {
+        self.data_interface.as_mut()
     }
 
-    pub fn engine(&self) -> Result<Engine> {
-        Engine::load_from_car(self.data_interface.borrow())
-    }
-
-    pub fn update_engine(&mut self, engine: &Engine) -> Result<()> {
-        let update_data = engine.to_bytes_map();
-        for (filename, data) in update_data {
-            self.data_interface.write_file_data(&filename, data)?;
-        }
-        Ok(())
+    pub fn root_path(&self) -> &Path {
+        &self.root_path
     }
 }
 

@@ -28,6 +28,7 @@ pub trait DataInterface {
     fn load(&self);
     fn get_file_data(&self, filename: &str) -> io::Result<Vec<u8>>;
     fn write_file_data(&mut self, filename: &str, data: Vec<u8>) -> io::Result<()>;
+    fn delete_file(&mut self, filename: &str) -> io::Result<()>;
 }
 
 pub trait DebuggableDataInterface: DataInterface + Debug {}

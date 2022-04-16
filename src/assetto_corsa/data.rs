@@ -34,6 +34,11 @@ impl DataInterface for DataFolderInterface {
         let mut f = File::create(file_path)?;
         f.write_all(data.as_slice())
     }
+
+    fn delete_file(&mut self, filename: &str) -> io::Result<()> {
+        let file_path = (&self.data_folder_path).join(Path::new(filename));
+        std::fs::remove_file(&file_path)
+    }
 }
 
 impl DebuggableDataInterface for DataFolderInterface {}

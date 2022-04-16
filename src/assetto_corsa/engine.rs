@@ -766,11 +766,6 @@ impl TurboControllers {
         Ok(())
     }
 
-    // pub fn delete_ini_file(&self) -> Result<()> {
-    //     std::fs::remove_file(&self.ini_path)?;
-    //     Ok(())
-    // }
-
     pub fn get_controller_ini_filename(index: isize) -> String {
         format!("ctrl_turbo{}.ini", index)
     }
@@ -957,37 +952,40 @@ impl IniUpdater for Turbo {
 }
 
 #[derive(Debug)]
-pub struct Engine {
+pub struct Engine<'a> {
+    car: &'a mut Car,
     ini_data: Ini,
     power_curve: LutProperty<i32, i32>,
     turbo_controllers: HashMap<isize, TurboControllers>
 }
 
-impl Engine {
+impl<'a> Engine<'a> {
     const INI_FILENAME: &'static str = "engine.ini";
 
-    pub fn load_from_ini_string(ini_data: String) -> Engine {
-        let ini_data = Ini::load_from_string(ini_data);
-        let power_curve= LutProperty::path_only(String::from("HEADER"), String::from("POWER_CURVE"), &ini_data).unwrap();
-        Engine {
-            ini_data,
-            power_curve,
-            turbo_controllers: HashMap::new()
-        }
-    }
+    // pub fn load_from_ini_string(ini_data: String) -> Engine<'a> {
+    //     let ini_data = Ini::load_from_string(ini_data);
+    //     let power_curve= LutProperty::path_only(String::from("HEADER"), String::from("POWER_CURVE"), &ini_data).unwrap();
+    //     Engine {
+    //         ini_data,
+    //         power_curve,
+    //         turbo_controllers: HashMap::new()
+    //     }
+    // }
 
-    pub fn load_from_car(data: &dyn DebuggableDataInterface) -> Result<Self> where Self: Sized {
-        let file_data = data.get_file_data(Engine::INI_FILENAME)?;
+    pub fn from_car(car: & mut Car) -> Result<Engine> {
+        let data_interface = car.data_interface();
+        let file_data = data_interface.get_file_data(Engine::INI_FILENAME)?;
         let ini_data = Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned());
         let power_curve = LutProperty::mandatory_from_ini(
             String::from("HEADER"),
             String::from("POWER_CURVE"),
             &ini_data,
-            data).map_err(|err|{
+            data_interface).map_err(|err|{
             Error::new(ErrorKind::InvalidCar, format!("Cannot find a lut for power curve. {}", err.to_string()))
         })?;
-        let turbo_controllers = TurboControllers::load_all_from_data(data, &ini_data)?;
+        let turbo_controllers = TurboControllers::load_all_from_data(data_interface, &ini_data)?;
         Ok(Engine {
+            car,
             ini_data,
             power_curve,
             turbo_controllers
@@ -1033,6 +1031,20 @@ impl Engine {
         map
     }
 
+    pub fn write(&mut self) -> Result<()> {
+        self.car.data_interface().write_file_data(Engine::INI_FILENAME, self.ini_data.to_bytes())?;
+        match self.power_curve.get_type() {
+            LutType::File(lut_file) => {
+                self.car.data_interface().write_file_data(&lut_file.filename, lut_file.to_bytes())?;
+            },
+            _ => {}
+        };
+        for controller_file in self.turbo_controllers.values() {
+            self.car.data_interface().write_file_data(&controller_file.filename(), controller_file.to_bytes())?;
+        }
+        Ok(())
+    }
+
     pub fn update_component<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
         component.update_ini(&mut self.ini_data).map_err(|err_string| {
             Error::new(ErrorKind::InvalidUpdate, err_string)
@@ -1053,7 +1065,7 @@ impl Engine {
 
     pub fn remove_turbo_controllers(&mut self, turbo_idx: isize) -> Result<Option<TurboControllers>> {
         if let Some(old) = self.turbo_controllers.remove(&turbo_idx) {
-            //old.delete_ini_file()?;
+            self.car.data_interface().delete_file(&old.filename())?;
             return Ok(Some(old));
         }
         Ok(None)
@@ -1084,7 +1096,7 @@ impl Engine {
     }
 }
 
-impl CarIniData for Engine {
+impl<'a> CarIniData for Engine<'a> {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
     }
