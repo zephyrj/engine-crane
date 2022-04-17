@@ -221,11 +221,8 @@ impl ExtendedFuelConsumptionBaseData {
                mechanical_efficiency: Option<f64>) -> ExtendedFuelConsumptionBaseData {
         ExtendedFuelConsumptionBaseData { idle_throttle, idle_cutoff, mechanical_efficiency }
     }
-}
 
-impl MandatoryDataSection for ExtendedFuelConsumptionBaseData {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<ExtendedFuelConsumptionBaseData> where Self: Sized {
-        let ini_data = parent_data.ini_data();
+    fn load_from_ini(ini_data: &Ini) -> Result<ExtendedFuelConsumptionBaseData> {
         Ok(ExtendedFuelConsumptionBaseData {
             idle_throttle: ini_utils::get_value(ini_data, Self::SECTION_NAME, "IDLE_THROTTLE"),
             idle_cutoff: ini_utils::get_value(ini_data, Self::SECTION_NAME, "IDLE_CUTOFF"),
@@ -298,35 +295,31 @@ impl FuelConsumptionFlowRate {
             max_fuel_flow
         }
     }
-}
 
-impl OptionalDataSection for FuelConsumptionFlowRate {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Option<Self>> where Self: Sized {
-        let ini_data = parent_data.ini_data();
+    pub fn load_from_data(ini_data: &Ini,
+                          data_interface: &dyn DebuggableDataInterface) -> Result<Option<FuelConsumptionFlowRate>> {
         if !ini_data.contains_section(Self::SECTION_NAME) {
             return Ok(None)
         }
-        Ok(None)
-        // TODO reinstate this
-        // let max_fuel_flow_lut = LutProperty::optional_from_ini(
-        //     String::from(Self::SECTION_NAME),
-        //     String::from("MAX_FUEL_FLOW_LUT"),
-        //     ini_data,
-        //     parent_data.data_dir()
-        // ).map_err(|err_str| {
-        //     Error::new(ErrorKind::InvalidCar,
-        //                format!("Error loading fuel flow consumption lut. {}", err_str))
-        // })?;
-        //
-        // let mut max_fuel_flow = 0;
-        // if let Some(val) = ini_utils::get_value(ini_data, Self::SECTION_NAME, "MAX_FUEL_FLOW") {
-        //     max_fuel_flow = val;
-        // }
-        // Ok(Some(FuelConsumptionFlowRate{
-        //     base_data: ExtendedFuelConsumptionBaseData::load_from_parent(parent_data)?,
-        //     max_fuel_flow_lut,
-        //     max_fuel_flow
-        // }))
+
+        let max_fuel_flow_lut = LutProperty::optional_from_ini(
+            String::from(Self::SECTION_NAME),
+            String::from("MAX_FUEL_FLOW_LUT"),
+            ini_data,
+            data_interface
+        ).map_err(|err_str| {
+            Error::new(ErrorKind::InvalidCar,
+                       format!("Error loading fuel flow consumption lut. {}", err_str))
+        })?;
+        let mut max_fuel_flow = 0;
+        if let Some(val) = ini_utils::get_value(ini_data, Self::SECTION_NAME, "MAX_FUEL_FLOW") {
+            max_fuel_flow = val;
+        }
+        Ok(Some(FuelConsumptionFlowRate{
+            base_data: ExtendedFuelConsumptionBaseData::load_from_ini(ini_data)?,
+            max_fuel_flow_lut,
+            max_fuel_flow
+        }))
     }
 }
 
@@ -991,30 +984,6 @@ impl<'a> Engine<'a> {
             turbo_controllers
         })
     }
-
-    // pub fn load_from_dir<'b>(data_dir: &'b Path) -> Result<Engine<'a>> {
-    //     let ini_data = match load_ini_file(data_dir.join(Engine::INI_FILENAME).as_path()) {
-    //         Ok(ini_object) => { ini_object }
-    //         Err(err) => {
-    //             return Err(Error::new(ErrorKind::InvalidCar, err.to_string() ));
-    //         }
-    //     };
-    //     let power_curve = LutProperty::mandatory_from_ini(
-    //         String::from("HEADER"),
-    //         String::from("POWER_CURVE"),
-    //         &ini_data,
-    //         data_dir).map_err(|err|{
-    //         Error::new(ErrorKind::InvalidCar, format!("Cannot find a lut for power curve. {}", err.to_string()))
-    //     })?;
-    //     //let turbo_controllers = TurboControllers::load_all_from_ini_dir(data_dir, &ini_data)?;
-    //     let eng = Engine {
-    //         data_source: None,
-    //         ini_data,
-    //         power_curve,
-    //         turbo_controllers: HashMap::new()
-    //     };
-    //     Ok(eng)
-    // }
 
     pub fn to_bytes_map(&self) -> HashMap<String, Vec<u8>> {
         let mut map = HashMap::new();
