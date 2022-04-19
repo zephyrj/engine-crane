@@ -1,16 +1,16 @@
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 use tracing::{error, info};
-use crate::{assetto_corsa, automation, beam_ng};
+use crate::{automation, beam_ng};
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
 use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::data::car_ini_data::CarVersion;
 use crate::assetto_corsa::car::ui::CarUiData;
-use crate::assetto_corsa::car::data::drivetrain::Drivetrain;
-use crate::assetto_corsa::car::data::engine::turbo_ctrl::{ControllerCombinator, ControllerInput, TurboController};
-use crate::assetto_corsa::car::data::engine::turbo::TurboSection;
-use crate::assetto_corsa::car::data::engine::{CoastCurve, Damage, Engine, Metadata, Turbo, TurboControllers};
+use crate::assetto_corsa::car::data::Drivetrain;
+use crate::assetto_corsa::car::data::Engine;
+use crate::assetto_corsa::car::data::engine;
+
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section};
 use crate::automation::car::CarFile;
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
@@ -291,14 +291,14 @@ impl AcEngineParameterCalculatorV1 {
          round_float_to(max_boost, decimal_place_precision))
     }
 
-    pub fn create_turbo(&self) -> Option<data::engine::Turbo> {
+    pub fn create_turbo(&self) -> Option<engine::Turbo> {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
         // todo update this to take into account the boost amount set and ignore any overboost that may skew the turbo section calculation
         let (ref_rpm, max_boost) = self.get_max_boost_params(3);
-        let mut t = Turbo::new();
-        t.add_section(TurboSection::new(
+        let mut t = engine::Turbo::new();
+        t.add_section(engine::turbo::TurboSection::new(
             0,
             // TODO work out how to better approximate these
             0.99,
@@ -313,7 +313,7 @@ impl AcEngineParameterCalculatorV1 {
         Some(t)
     }
 
-    pub fn create_turbo_controllers(&self) -> Option<data::engine::TurboControllers> {
+    pub fn create_turbo_controllers(&self) -> Option<engine::TurboControllers> {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
@@ -326,21 +326,21 @@ impl AcEngineParameterCalculatorV1 {
             }
             lut.push((*rpm, boost_val));
         }
-        let controller = TurboController::new(
+        let controller = engine::turbo_ctrl::TurboController::new(
             0,
-            ControllerInput::Rpms,
-            ControllerCombinator::Add,
+            engine::turbo_ctrl::ControllerInput::Rpms,
+            engine::turbo_ctrl::ControllerCombinator::Add,
             lut,
             0.95,
             10000_f64,
             0_f64
         );
-        let mut controllers = TurboControllers::new(0);
+        let mut controllers = engine::TurboControllers::new(0);
         controllers.add_controller(controller).unwrap();
         Some(controllers)
     }
 
-    pub fn coast_data(&self) -> Option<data::engine::CoastCurve> {
+    pub fn coast_data(&self) -> Option<engine::CoastCurve> {
         //   The following data is available from the engine.jbeam exported file
         //   The dynamic friction torque on the engine in Nm/s.
         //   This is a friction torque which increases proportional to engine AV (rad/s).
@@ -355,14 +355,14 @@ impl AcEngineParameterCalculatorV1 {
         let static_friction = eng_map.get("friction")?.as_f64().unwrap();
         let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm * 2_f64 * std::f64::consts::PI) / 60_f64;
         let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + (2_f64 * static_friction);
-        Some(CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
-                                            friction_torque.round() as i32,
-                                            0.0))
+        Some(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
+                                                    friction_torque.round() as i32,
+                                                    0.0))
     }
 
-    pub fn damage(&self) -> data::engine::Damage {
+    pub fn damage(&self) -> engine::Damage {
         let (_, max_boost) = self.get_max_boost_params(2);
-        Damage::new(
+        engine::Damage::new(
             (self.limiter()+200_f64).round() as i32,
             1,
             Some(max_boost.ceil()),
@@ -373,10 +373,10 @@ impl AcEngineParameterCalculatorV1 {
         )
     }
 
-    pub fn create_metadata(&self) -> data::engine::Metadata {
-        let mut m = Metadata::new();
+    pub fn create_metadata(&self) -> engine::Metadata {
+        let mut m = engine::Metadata::new();
         m.set_version(2);
-        m.set_source(data::engine::metadata::Source::Automation);
+        m.set_source(engine::metadata::Source::Automation);
         m.set_mass_kg(self.engine_sqlite_data.weight.round() as i64);
         m
     }
@@ -465,7 +465,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         match calculator.create_turbo() {
             None => {
                 info!("The new engine doesn't have a turbo");
-                if let Some(mut old_turbo) = extract_optional_section::<Turbo>(&engine).unwrap() {
+                if let Some(mut old_turbo) = extract_optional_section::<engine::Turbo>(&engine).unwrap() {
                     info!("Removing old engine turbo parameters");
                     old_turbo.clear_sections();
                     old_turbo.bov_pressure_threshold = None;
