@@ -4,7 +4,7 @@ use tracing::{error, info};
 use crate::{assetto_corsa, automation, beam_ng};
 use crate::assetto_corsa::car::{Car, CarUiData, CarIniData, CarVersion};
 use crate::assetto_corsa::drivetrain::Drivetrain;
-use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Engine, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
+use crate::assetto_corsa::engine::{Metadata, CoastCurve, ControllerCombinator, ControllerInput, Damage, Engine, Turbo, TurboController, TurboControllers, TurboSection};
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section};
 use crate::automation::car::CarFile;
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
@@ -370,7 +370,7 @@ impl AcEngineParameterCalculatorV1 {
     pub fn create_metadata(&self) -> assetto_corsa::engine::Metadata {
         let mut m = Metadata::new();
         m.set_version(2);
-        m.set_source(assetto_corsa::engine::Source::Automation);
+        m.set_source(assetto_corsa::engine::metadata::Source::Automation);
         m.set_mass_kg(self.engine_sqlite_data.weight.round() as i64);
         m
     }
