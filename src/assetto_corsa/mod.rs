@@ -1,8 +1,6 @@
 mod error;
 pub(crate) mod traits;
-pub(crate) mod structs;
 mod file_utils;
-mod lut_utils;
 mod ini_utils;
 pub mod car;
 

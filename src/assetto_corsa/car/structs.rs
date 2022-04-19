@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::lut_utils::LutType;
+use crate::assetto_corsa::car::lut_utils::LutType;
 use crate::assetto_corsa::traits::DataInterface;
 
 #[derive(Debug)]

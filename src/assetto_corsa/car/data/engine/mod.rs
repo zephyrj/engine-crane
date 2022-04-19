@@ -10,10 +10,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
-use crate::assetto_corsa::lut_utils::{LutType};
+use crate::assetto_corsa::car::lut_utils::{LutType};
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
-use crate::assetto_corsa::structs::LutProperty;
+use crate::assetto_corsa::car::structs::LutProperty;
 
 pub use metadata::Metadata;
 pub use engine_data::EngineData;
@@ -159,8 +159,8 @@ mod tests {
     use std::path::Path;
     use crate::assetto_corsa::car::data::engine::{CoastCurve, Damage, Engine, EngineData, ExtendedFuelConsumptionBaseData, FuelConsumptionFlowRate, Turbo};
     use crate::assetto_corsa::ini_utils::IniUpdater;
-    use crate::assetto_corsa::lut_utils::{InlineLut, LutType};
-    use crate::assetto_corsa::structs::LutProperty;
+    use crate::assetto_corsa::car::lut_utils::{InlineLut, LutType};
+    use crate::assetto_corsa::car::structs::LutProperty;
     use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, MandatoryDataSection};
 
     const TURBO_NO_CTRL_DATA: &'static str = r#"

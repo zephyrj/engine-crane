@@ -5,7 +5,7 @@ use std::path::Path;
 use toml::Value;
 use toml::value::Table;
 use crate::assetto_corsa::error::{Result};
-use crate::assetto_corsa::lut_utils::load_lut_from_path;
+use crate::assetto_corsa::car::lut_utils::load_lut_from_path;
 
 
 pub enum Source {

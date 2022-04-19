@@ -2,6 +2,8 @@ pub mod data_interface;
 pub mod ui;
 pub mod data;
 pub mod acd_utils;
+pub mod lut_utils;
+pub(crate) mod structs;
 
 pub use data_interface::DataFolderInterface;
 

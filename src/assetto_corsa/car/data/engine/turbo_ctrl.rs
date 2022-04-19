@@ -7,8 +7,9 @@ use csv::Terminator;
 
 use crate::assetto_corsa::traits::DataInterface;
 use crate::assetto_corsa::error::{Error, ErrorKind, PropertyParseError, Result};
-use crate::assetto_corsa::{ini_utils, lut_utils};
+use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::car::data::engine::Turbo;
+use crate::assetto_corsa::car::lut_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 
 
