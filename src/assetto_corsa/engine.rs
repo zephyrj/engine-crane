@@ -14,7 +14,7 @@ use crate::assetto_corsa::lut_utils;
 use crate::assetto_corsa::lut_utils::{InlineLut, load_lut_from_path, LutType};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{MandatoryDataSection, CarIniData, OptionalDataSection, DebuggableDataInterface, DataInterface};
+use crate::assetto_corsa::traits::{MandatoryDataSection, CarDataFile, OptionalDataSection, DataInterface, _DataInterfaceI};
 use crate::assetto_corsa::structs::LutProperty;
 
 
@@ -297,7 +297,7 @@ impl FuelConsumptionFlowRate {
     }
 
     pub fn load_from_data(ini_data: &Ini,
-                          data_interface: &dyn DebuggableDataInterface) -> Result<Option<FuelConsumptionFlowRate>> {
+                          data_interface: &dyn DataInterface) -> Result<Option<FuelConsumptionFlowRate>> {
         if !ini_data.contains_section(Self::SECTION_NAME) {
             return Ok(None)
         }
@@ -350,7 +350,7 @@ impl EngineData {
 }
 
 impl MandatoryDataSection for EngineData {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         Ok(EngineData{
             altitude_sensitivity: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "ALTITUDE_SENSITIVITY")?,
@@ -393,7 +393,7 @@ impl Damage {
 }
 
 impl MandatoryDataSection for Damage {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         Ok(Damage{
             rpm_threshold: ini_utils::get_mandatory_property(ini_data, Self::SECTION_NAME, "RPM_THRESHOLD")?,
@@ -482,7 +482,7 @@ impl CoastCurve {
 }
 
 impl MandatoryDataSection for CoastCurve {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let curve_data_source: CoastSource = ini_utils::get_mandatory_property(ini_data, "HEADER", "COAST_CURVE")?;
 
@@ -608,7 +608,7 @@ pub struct TurboController {
 }
 
 impl TurboController {
-    pub fn load_from_ini(ini: &Ini, idx: isize, data_source: &dyn DebuggableDataInterface) -> Result<TurboController> {
+    pub fn load_from_ini(ini: &Ini, idx: isize, data_source: &dyn DataInterface) -> Result<TurboController> {
         let section_name = TurboController::get_controller_section_name(idx);
         let lut = lut_utils::load_lut_from_property_value(
             ini_utils::get_mandatory_property(ini, &section_name, "LUT")?,
@@ -690,7 +690,7 @@ impl TurboControllers {
         }
     }
 
-    pub fn load_all_from_data(data_source: &dyn DebuggableDataInterface, ini_data: &Ini) -> Result<HashMap<isize, TurboControllers>> {
+    pub fn load_all_from_data(data_source: &dyn DataInterface, ini_data: &Ini) -> Result<HashMap<isize, TurboControllers>> {
         let turbo_count: isize = Turbo::count_turbo_sections(ini_data);
         if turbo_count == 0 {
             return Ok(HashMap::new());
@@ -706,7 +706,7 @@ impl TurboControllers {
         Ok(out_map)
     }
 
-    fn load_controller_index_from_dir(data_source: &dyn DebuggableDataInterface, index: isize) -> Result<Option<TurboControllers>> {
+    fn load_controller_index_from_dir(data_source: &dyn DataInterface, index: isize) -> Result<Option<TurboControllers>> {
         match data_source.get_file_data(&TurboControllers::get_controller_ini_filename(index)) {
             Ok(data) => {
                 let ini_config = Ini::load_from_string(String::from_utf8_lossy(data.as_slice()).to_string());
@@ -881,7 +881,7 @@ pub struct Turbo {
 }
 
 impl OptionalDataSection for Turbo {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Option<Self>> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Option<Self>> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let turbo_count: isize = Turbo::count_turbo_sections(ini_data);
         if turbo_count == 0 {
@@ -966,7 +966,7 @@ impl<'a> Engine<'a> {
     // }
 
     pub fn from_car(car: & mut Car) -> Result<Engine> {
-        let data_interface = car.data_interface();
+        let data_interface = car.mut_data_interface();
         let file_data = data_interface.get_file_data(Engine::INI_FILENAME)?;
         let ini_data = Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned());
         let power_curve = LutProperty::mandatory_from_ini(
@@ -1001,15 +1001,15 @@ impl<'a> Engine<'a> {
     }
 
     pub fn write(&mut self) -> Result<()> {
-        self.car.data_interface().write_file_data(Engine::INI_FILENAME, self.ini_data.to_bytes())?;
+        self.car.mut_data_interface().write_file_data(Engine::INI_FILENAME, self.ini_data.to_bytes())?;
         match self.power_curve.get_type() {
             LutType::File(lut_file) => {
-                self.car.data_interface().write_file_data(&lut_file.filename, lut_file.to_bytes())?;
+                self.car.mut_data_interface().write_file_data(&lut_file.filename, lut_file.to_bytes())?;
             },
             _ => {}
         };
         for controller_file in self.turbo_controllers.values() {
-            self.car.data_interface().write_file_data(&controller_file.filename(), controller_file.to_bytes())?;
+            self.car.mut_data_interface().write_file_data(&controller_file.filename(), controller_file.to_bytes())?;
         }
         Ok(())
     }
@@ -1034,7 +1034,7 @@ impl<'a> Engine<'a> {
 
     pub fn remove_turbo_controllers(&mut self, turbo_idx: isize) -> Result<Option<TurboControllers>> {
         if let Some(old) = self.turbo_controllers.remove(&turbo_idx) {
-            self.car.data_interface().delete_file(&old.filename())?;
+            self.car.mut_data_interface().delete_file(&old.filename())?;
             return Ok(Some(old));
         }
         Ok(None)
@@ -1065,9 +1065,12 @@ impl<'a> Engine<'a> {
     }
 }
 
-impl<'a> CarIniData for Engine<'a> {
+impl<'a> CarDataFile for Engine<'a> {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
+    }
+    fn data_interface(&self) -> &dyn DataInterface {
+        self.car.data_interface()
     }
 }
 

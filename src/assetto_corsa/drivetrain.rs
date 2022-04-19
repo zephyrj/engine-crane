@@ -8,7 +8,7 @@ use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarIniData, MandatoryDataSection, DebuggableDataInterface};
+use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection, DataInterface};
 
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,7 +64,7 @@ pub struct Traction {
 }
 
 impl MandatoryDataSection for Traction {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         Ok(Traction{
             drive_type: get_mandatory_field(parent_data.ini_data(), "TRACTION", "TYPE")?
         })
@@ -110,7 +110,7 @@ impl Gearbox {
 }
 
 impl MandatoryDataSection for Gearbox {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let gear_count = get_mandatory_field(ini_data, "GEARS", "COUNT")?;
         let mut gear_ratios = Vec::new();
@@ -184,7 +184,7 @@ pub struct Clutch {
 }
 
 impl MandatoryDataSection for Clutch {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> {
         Ok(Clutch{
             max_torque: get_mandatory_field(parent_data.ini_data(), "CLUTCH", "MAX_TORQUE")?
         })
@@ -206,7 +206,7 @@ pub struct Differential {
 }
 
 impl MandatoryDataSection for Differential {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let power = get_mandatory_field(ini_data, "DIFFERENTIAL", "POWER")?;
         let coast = get_mandatory_field(ini_data, "DIFFERENTIAL", "COAST")?;
@@ -267,7 +267,7 @@ impl AutoClutch {
 }
 
 impl MandatoryDataSection for AutoClutch {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let upshift_profile = AutoClutch::load_shift_profile(ini_data, "UPSHIFT_PROFILE")?;
         let downshift_profile = AutoClutch::load_shift_profile(ini_data, "DOWNSHIFT_PROFILE")?;
@@ -312,7 +312,7 @@ impl AutoBlip {
 }
 
 impl MandatoryDataSection for AutoBlip {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let electronic = get_mandatory_field(ini_data, "AUTOBLIP", "ELECTRONIC")?;
         let level = get_mandatory_field(ini_data, "AUTOBLIP", "LEVEL")?;
@@ -349,7 +349,7 @@ pub struct AutoShifter {
 }
 
 impl MandatoryDataSection for AutoShifter {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         let up = get_mandatory_field(ini_data, "AUTO_SHIFTER", "UP")?;
         let down = get_mandatory_field(ini_data, "AUTO_SHIFTER", "DOWN")?;
@@ -378,7 +378,7 @@ pub struct DownshiftProtection {
 }
 
 impl MandatoryDataSection for DownshiftProtection {
-    fn load_from_parent(parent_data: &dyn CarIniData) -> Result<Self> where Self: Sized {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let ini_data = parent_data.ini_data();
         Ok(DownshiftProtection{
             active: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "ACTIVE")?,
@@ -409,7 +409,7 @@ impl<'a> Drivetrain<'a> {
     const INI_FILENAME: &'static str = "drivetrain.ini";
 
     pub fn from_car(car: &'a mut Car) -> Result<Drivetrain<'a>> {
-        let file_data = car.data_interface().get_file_data(Drivetrain::INI_FILENAME)?;
+        let file_data = car.mut_data_interface().get_file_data(Drivetrain::INI_FILENAME)?;
         Ok(Drivetrain {
             car,
             ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned())
@@ -448,15 +448,18 @@ impl<'a> Drivetrain<'a> {
     }
 
     pub fn write(&mut self) -> Result<()> {
-        self.car.data_interface().write_file_data(Drivetrain::INI_FILENAME,
-                                                  self.ini_data.to_bytes())?;
+        self.car.mut_data_interface().write_file_data(Drivetrain::INI_FILENAME,
+                                                      self.ini_data.to_bytes())?;
         Ok(())
     }
 }
 
-impl<'a> CarIniData for Drivetrain<'a> {
+impl<'a> CarDataFile for Drivetrain<'a> {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
+    }
+    fn data_interface(&self) -> &dyn DataInterface {
+        self.car.data_interface()
     }
 }
 

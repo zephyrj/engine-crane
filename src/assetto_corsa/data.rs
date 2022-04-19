@@ -3,7 +3,7 @@ use std::io;
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::info;
-use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface};
+use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface};
 
 #[derive(Debug)]
 pub struct DataFolderInterface {
@@ -16,7 +16,7 @@ impl DataFolderInterface {
     }
 }
 
-impl DataInterface for DataFolderInterface {
+impl _DataInterfaceI for DataFolderInterface {
     fn load(&self) {}
 
     fn get_file_data(&self, filename: &str) -> io::Result<Vec<u8>> {
@@ -41,4 +41,4 @@ impl DataInterface for DataFolderInterface {
     }
 }
 
-impl DebuggableDataInterface for DataFolderInterface {}
+impl DataInterface for DataFolderInterface {}

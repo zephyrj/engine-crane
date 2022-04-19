@@ -5,7 +5,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use csv::Terminator;
-use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface};
+use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface};
 
 #[derive(Debug)]
 pub struct LutFile<K, V>
@@ -129,7 +129,7 @@ impl<K, V> LutType<K, V>
         LutType::PathOnly(path)
     }
 
-    pub fn load_from_property_value(property_value: String, data_source: &dyn DebuggableDataInterface) -> Result<LutType<K, V>, String>{
+    pub fn load_from_property_value(property_value: String, data_source: &dyn DataInterface) -> Result<LutType<K, V>, String>{
         return match property_value.starts_with("(") {
             true => {
                 Ok(LutType::Inline(InlineLut::from_property_value(property_value)?))
@@ -195,7 +195,7 @@ fn remove_whitespace(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-pub fn load_lut_from_property_value<K, V>(property_value: String, data_source: &dyn DebuggableDataInterface) -> Result<Vec<(K, V)>, String>
+pub fn load_lut_from_property_value<K, V>(property_value: String, data_source: &dyn DataInterface) -> Result<Vec<(K, V)>, String>
     where
         K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
         V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug

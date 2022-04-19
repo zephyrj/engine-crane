@@ -5,7 +5,7 @@ use std::str::FromStr;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::lut_utils::LutType;
-use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface};
+use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface};
 
 #[derive(Debug)]
 pub struct LutProperty<K, V>
@@ -43,7 +43,7 @@ impl<K,V> LutProperty<K, V>
     pub fn mandatory_from_ini(section_name: String,
                               property_name: String,
                               ini_data: &Ini,
-                              data_source: &dyn DebuggableDataInterface) -> Result<LutProperty<K, V>, String>
+                              data_source: &dyn DataInterface) -> Result<LutProperty<K, V>, String>
     {
         let value = ini_utils::get_mandatory_property(ini_data,
                                                       section_name.as_str(),
@@ -57,7 +57,7 @@ impl<K,V> LutProperty<K, V>
     pub fn optional_from_ini(section_name: String,
                              property_name: String,
                              ini_data: &Ini,
-                             data_source: &dyn DebuggableDataInterface) -> Result<Option<LutProperty<K, V>>, String>
+                             data_source: &dyn DataInterface) -> Result<Option<LutProperty<K, V>>, String>
     {
         let value: String = match ini_utils::get_value::<String>(ini_data,
                                                                  section_name.as_str(),

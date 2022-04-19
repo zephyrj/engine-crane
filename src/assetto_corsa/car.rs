@@ -15,7 +15,7 @@ use tracing::{debug, warn, info};
 use walkdir::WalkDir;
 
 use crate::assetto_corsa;
-use crate::assetto_corsa::traits::{DataInterface, DebuggableDataInterface};
+use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface};
 use crate::assetto_corsa::drivetrain::Drivetrain;
 use crate::assetto_corsa::error::{Result, Error, PropertyParseError, ErrorKind};
 use crate::assetto_corsa::engine::{Engine};
@@ -522,7 +522,7 @@ impl<'a> CarIniData<'a> {
     }
 
     pub fn write(&'a mut self) -> Result<()> {
-        self.car.data_interface().write_file_data("car.ini", self.ini_config.to_bytes())?;
+        self.car.mut_data_interface().write_file_data("car.ini", self.ini_config.to_bytes())?;
         Ok(())
     }
 }
@@ -551,7 +551,7 @@ impl<'a> CarUiData<'a> {
 #[derive(Debug)]
 pub struct Car {
     root_path: PathBuf,
-    data_interface: Box<dyn DebuggableDataInterface>,
+    data_interface: Box<dyn DataInterface>,
 }
 
 impl Car {
@@ -564,12 +564,16 @@ impl Car {
         })
     }
 
-    pub fn data_interface(&mut self) -> & mut dyn DebuggableDataInterface {
-        self.data_interface.as_mut()
-    }
-
     pub fn root_path(&self) -> &Path {
         &self.root_path
+    }
+
+    pub fn data_interface(&self) -> &dyn DataInterface {
+        self.data_interface.as_ref()
+    }
+
+    pub fn mut_data_interface(&mut self) -> & mut dyn DataInterface {
+        self.data_interface.as_mut()
     }
 }
 
