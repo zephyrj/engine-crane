@@ -104,7 +104,7 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::assetto_corsa::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, DriveType, Gearbox, IniUpdater, Traction};
+    use crate::assetto_corsa::car::data::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, DriveType, Gearbox, IniUpdater, Traction};
     use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
 
     const TEST_DATA: &'static str = r#"

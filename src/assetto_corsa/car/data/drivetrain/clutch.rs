@@ -1,4 +1,4 @@
-use crate::assetto_corsa::drivetrain::get_mandatory_field;
+use crate::assetto_corsa::car::data::drivetrain::get_mandatory_field;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};

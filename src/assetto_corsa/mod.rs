@@ -6,7 +6,6 @@ mod lut_utils;
 mod ini_utils;
 mod acd_utils;
 pub(crate) mod engine;
-pub(crate) mod drivetrain;
 pub mod car;
 mod data;
 
@@ -15,10 +14,10 @@ pub use car::Car;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
-use std::io::{BufReader, BufRead};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use tracing::info;
-use crate::assetto_corsa::error::{Result, Error, ErrorKind};
+use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 use crate::steam;
 
 pub const STEAM_GAME_NAME: &str = "assettocorsa";

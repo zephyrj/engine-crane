@@ -1,15 +1,16 @@
 use std::fmt::{Display, Formatter};
-use std::path::{Path};
+use std::path::Path;
 use tracing::{error, info};
 use crate::{assetto_corsa, automation, beam_ng};
 use crate::assetto_corsa::Car;
+use crate::assetto_corsa::car::data;
 use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::data::car_ini_data::CarVersion;
 use crate::assetto_corsa::car::ui::CarUiData;
-use crate::assetto_corsa::drivetrain::Drivetrain;
-use crate::assetto_corsa::engine::turbo_ctrl::{TurboController, ControllerCombinator, ControllerInput};
+use crate::assetto_corsa::car::data::drivetrain::Drivetrain;
+use crate::assetto_corsa::engine::turbo_ctrl::{ControllerCombinator, ControllerInput, TurboController};
 use crate::assetto_corsa::engine::turbo::TurboSection;
-use crate::assetto_corsa::engine::{Metadata, CoastCurve, Damage, Engine, Turbo, TurboControllers};
+use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, Metadata, Turbo, TurboControllers};
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section};
 use crate::automation::car::CarFile;
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
@@ -390,7 +391,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
     let mut car = Car::load_from_path(ac_car_path).unwrap();
     let drive_type = match Drivetrain::from_car(&mut car) {
         Ok(drivetrain) => {
-            extract_mandatory_section::<assetto_corsa::drivetrain::Traction>(&drivetrain).unwrap().drive_type
+            extract_mandatory_section::<data::drivetrain::Traction>(&drivetrain).unwrap().drive_type
         },
         Err(err) => {
             return Err(format!("Failed to load drivetrain. {}", err.to_string()));
@@ -492,7 +493,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         info!("Updating drivetrain ini files");
         match Drivetrain::from_car(&mut car) {
             Ok(mut drivetrain) => {
-                match extract_mandatory_section::<assetto_corsa::drivetrain::AutoShifter>(&drivetrain) {
+                match extract_mandatory_section::<data::drivetrain::AutoShifter>(&drivetrain) {
                     Ok(mut autoshifter) => {
                         let limiter = calculator.limiter().round() as i32;
                         autoshifter.up = (limiter / 100) * 97;
