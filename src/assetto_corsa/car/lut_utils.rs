@@ -7,6 +7,7 @@ use std::str::FromStr;
 use csv::Terminator;
 use crate::assetto_corsa::traits::DataInterface;
 
+
 #[derive(Debug)]
 pub struct LutFile<K, V>
     where
@@ -105,7 +106,6 @@ impl<K, V> Display for InlineLut<K, V>
                )?)
     }
 }
-
 
 #[derive(Debug)]
 pub enum LutType<K, V>

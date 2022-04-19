@@ -26,20 +26,20 @@ impl<K,V> LutProperty<K, V>
     pub fn new(lut: LutType<K,V>, section_name: String, property_name: String) -> LutProperty<K,V> {
         LutProperty{ lut, section_name, property_name }
     }
-    
+
     pub fn path_only(section_name: String, property_name: String, ini_data: &Ini) -> Result<LutProperty<K,V>, String> {
         let property_val: String = ini_utils::get_mandatory_property(&ini_data,
-                                                                     section_name.as_str(), 
+                                                                     section_name.as_str(),
                                                                      property_name.as_str()).map_err(|err|{
             err.to_string()
         })?;
-        Ok(LutProperty{ 
-            lut: LutType::PathOnly(PathBuf::from(property_val)), 
-            section_name: String::new(), 
-            property_name: String::new() 
+        Ok(LutProperty{
+            lut: LutType::PathOnly(PathBuf::from(property_val)),
+            section_name: String::new(),
+            property_name: String::new()
         })
     }
-    
+
     pub fn mandatory_from_ini(section_name: String,
                               property_name: String,
                               ini_data: &Ini,
@@ -70,7 +70,7 @@ impl<K,V> LutProperty<K, V>
         let lut = LutType::load_from_property_value(value, data_source)?;
         Ok(Some(LutProperty{ lut, section_name, property_name }))
     }
-    
+
     pub fn update(&mut self, lut: Vec<(K, V)>) -> Vec<(K, V)> {
         match &mut self.lut {
             LutType::File(lut_file) => { lut_file.update(lut) }
