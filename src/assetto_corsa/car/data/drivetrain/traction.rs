@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::assetto_corsa::car::data::drivetrain::get_mandatory_field;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::{PropertyParseError, Result};
 
 
@@ -67,9 +67,9 @@ impl MandatoryDataSection for Traction {
     }
 }
 
-impl IniUpdater for Traction {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        ini_utils::set_value(ini_data, "TRACTION", "TYPE", &self.drive_type);
+impl CarDataUpdater for Traction {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        ini_utils::set_value(car_data.mut_ini_data(), "TRACTION", "TYPE", &self.drive_type);
         Ok(())
     }
 }

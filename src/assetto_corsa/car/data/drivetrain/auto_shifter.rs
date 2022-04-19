@@ -1,7 +1,7 @@
 use crate::assetto_corsa::car::data::drivetrain::get_mandatory_field;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::Result;
 
 
@@ -24,8 +24,9 @@ impl MandatoryDataSection for AutoShifter {
     }
 }
 
-impl IniUpdater for AutoShifter {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+impl CarDataUpdater for AutoShifter {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         ini_utils::set_value(ini_data, "AUTO_SHIFTER", "UP", self.up);
         ini_utils::set_value(ini_data, "AUTO_SHIFTER", "DOWN", self.down);
         ini_utils::set_float(ini_data, "AUTO_SHIFTER", "SLIP_THRESHOLD", self.slip_threshold, 2);
@@ -33,3 +34,4 @@ impl IniUpdater for AutoShifter {
         Ok(())
     }
 }
+

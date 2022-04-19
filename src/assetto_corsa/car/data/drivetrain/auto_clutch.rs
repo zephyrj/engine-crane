@@ -1,7 +1,7 @@
 use crate::assetto_corsa::car::data::drivetrain::{get_mandatory_field, mandatory_field_error};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::Result;
 
 
@@ -68,9 +68,9 @@ impl MandatoryDataSection for AutoClutch {
     }
 }
 
-impl IniUpdater for AutoClutch {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        // TODO Update shift profiles
+impl CarDataUpdater for AutoClutch {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         ini_utils::set_value(ini_data, "AUTOCLUTCH", "USE_ON_CHANGES", self.use_on_changes);
         ini_utils::set_value(ini_data, "AUTOCLUTCH", "MIN_RPM", self.min_rpm);
         ini_utils::set_value(ini_data, "AUTOCLUTCH", "MAX_RPM", self.max_rpm);

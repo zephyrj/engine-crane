@@ -1,7 +1,7 @@
 use crate::assetto_corsa::car::data::drivetrain::get_mandatory_field;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::Result;
 
 
@@ -22,8 +22,9 @@ impl MandatoryDataSection for Differential {
     }
 }
 
-impl IniUpdater for Differential {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+impl CarDataUpdater for Differential {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         ini_utils::set_float(ini_data, "DIFFERENTIAL", "POWER", self.power, 2);
         ini_utils::set_float(ini_data, "DIFFERENTIAL", "COAST", self.coast, 2);
         ini_utils::set_value(ini_data, "DIFFERENTIAL", "PRELOAD", self.preload);

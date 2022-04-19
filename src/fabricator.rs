@@ -503,7 +503,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                         let limiter = calculator.limiter().round() as i32;
                         autoshifter.up = (limiter / 100) * 97;
                         autoshifter.down = (limiter / 100) * 70;
-                        if drivetrain.update_subcomponent(&autoshifter).is_err() {
+                        if update_car_data(&mut drivetrain, &autoshifter).is_err() {
                             error!("Failed to update drivetrain autoshifer");
                         }
                     }

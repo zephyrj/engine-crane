@@ -1,8 +1,8 @@
 use crate::assetto_corsa::car::data::drivetrain::get_mandatory_field;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};
-use crate::assetto_corsa::error::Result;
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
+use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 
 
 #[derive(Debug)]
@@ -69,8 +69,9 @@ impl MandatoryDataSection for Gearbox {
     }
 }
 
-impl IniUpdater for Gearbox {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+impl CarDataUpdater for Gearbox {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         let current_count_opt: Option<i32> = ini_utils::get_value(ini_data, "GEARS", "COUNT");
         if let Some(current_count) = current_count_opt {
             if current_count != self.gear_count {
@@ -88,7 +89,8 @@ impl IniUpdater for Gearbox {
                                      *gear_ratio,
                                      3);
             } else {
-                return Err(String::from("Warning: gear count doesn't match stored ratios"));
+                return Err(Error::new(ErrorKind::InvalidUpdate,
+                                      "gear count doesn't match stored ratios".to_owned()));
             }
         }
         ini_utils::set_float(ini_data, "GEARS", "GEAR_R", self.reverse_gear_ratio, 3);
