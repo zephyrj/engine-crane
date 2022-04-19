@@ -5,6 +5,7 @@ pub mod differential;
 pub mod auto_clutch;
 pub mod auto_blip;
 pub mod auto_shifter;
+pub mod downshift_protection;
 
 pub use traction::Traction;
 pub use gearbox::Gearbox;
@@ -13,43 +14,14 @@ pub use differential::Differential;
 pub use auto_clutch::AutoClutch;
 pub use auto_blip::AutoBlip;
 pub use auto_shifter::AutoShifter;
+pub use downshift_protection::DownshiftProtection;
 
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection, DataInterface};
+use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
 
-
-#[derive(Debug)]
-pub struct DownshiftProtection {
-    pub active: i32,
-    pub debug: i32,
-    pub overrev: i32,
-    pub lock_n: i32
-}
-
-impl MandatoryDataSection for DownshiftProtection {
-    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
-        let ini_data = parent_data.ini_data();
-        Ok(DownshiftProtection{
-            active: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "ACTIVE")?,
-            debug: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "DEBUG")?,
-            overrev: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "OVERREV")?,
-            lock_n: get_mandatory_field(ini_data, "DOWNSHIFT_PROTECTION", "LOCK_N")?,
-        })
-    }
-}
-
-impl IniUpdater for DownshiftProtection {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        ini_utils::set_value(ini_data, "DOWNSHIFT_PROTECTION", "ACTIVE", self.active);
-        ini_utils::set_value(ini_data, "DOWNSHIFT_PROTECTION", "DEBUG", self.debug);
-        ini_utils::set_value(ini_data, "DOWNSHIFT_PROTECTION", "OVERREV", self.overrev);
-        ini_utils::set_value(ini_data, "DOWNSHIFT_PROTECTION", "LOCK_N", self.lock_n);
-        Ok(())
-    }
-}
 
 #[derive(Debug)]
 pub struct Drivetrain<'a> {
