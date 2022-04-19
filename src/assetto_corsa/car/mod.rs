@@ -78,6 +78,7 @@ pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<P
     update_car_ui_data(new_car_path.as_path(), spec_name, existing_car_name)?;
     Ok(new_car_path)
 }
+
 pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
     let acd_path = car_path.join("data.acd");
     if acd_path.exists() {
@@ -85,7 +86,6 @@ pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
     }
     Ok(())
 }
-
 
 fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<()> {
     let new_car_name = car_path.file_name().unwrap().to_str().unwrap();
