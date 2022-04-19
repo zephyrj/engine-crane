@@ -7,18 +7,12 @@ pub mod turbo_ctrl;
 pub mod turbo;
 
 use std::collections::HashMap;
-use std::io;
-use std::fmt::{Display, Formatter};
 use std::path::Path;
-use std::str::FromStr;
-
 use crate::assetto_corsa::car::Car;
-use crate::assetto_corsa::error::{Result, Error, ErrorKind, PropertyParseError};
-use crate::assetto_corsa::lut_utils;
+use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 use crate::assetto_corsa::lut_utils::{LutType};
-use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
-use crate::assetto_corsa::traits::{CarDataFile, OptionalDataSection, DataInterface};
+use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
 use crate::assetto_corsa::structs::LutProperty;
 
 pub use metadata::Metadata;
