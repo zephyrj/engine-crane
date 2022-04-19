@@ -1,6 +1,7 @@
 pub mod metadata;
-pub mod fuel_consumption;
 pub mod engine_data;
+pub mod power_curve;
+pub mod fuel_consumption;
 pub mod damage;
 pub mod coast;
 pub mod turbo_ctrl;
@@ -10,13 +11,12 @@ use std::collections::HashMap;
 use std::path::Path;
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
-use crate::assetto_corsa::car::lut_utils::{LutType};
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
-use crate::assetto_corsa::car::structs::LutProperty;
 
 pub use metadata::Metadata;
 pub use engine_data::EngineData;
+pub use power_curve::PowerCurve;
 pub use fuel_consumption::FuelConsumptionFlowRate;
 pub use damage::Damage;
 pub use coast::CoastCurve;
@@ -28,7 +28,6 @@ pub use turbo_ctrl::TurboControllers;
 pub struct Engine<'a> {
     car: &'a mut Car,
     ini_data: Ini,
-    power_curve: LutProperty<i32, i32>,
     turbo_controllers: HashMap<isize, TurboControllers>
 }
 
@@ -49,18 +48,11 @@ impl<'a> Engine<'a> {
         let data_interface = car.mut_data_interface();
         let file_data = data_interface.get_file_data(Engine::INI_FILENAME)?;
         let ini_data = Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned());
-        let power_curve = LutProperty::mandatory_from_ini(
-            String::from("HEADER"),
-            String::from("POWER_CURVE"),
-            &ini_data,
-            data_interface).map_err(|err|{
-            Error::new(ErrorKind::InvalidCar, format!("Cannot find a lut for power curve. {}", err.to_string()))
-        })?;
         let turbo_controllers = TurboControllers::load_all_from_data(data_interface, &ini_data)?;
         Ok(Engine {
             car,
             ini_data,
-            power_curve,
+            //power_curve,
             turbo_controllers
         })
     }
@@ -68,12 +60,6 @@ impl<'a> Engine<'a> {
     pub fn to_bytes_map(&self) -> HashMap<String, Vec<u8>> {
         let mut map = HashMap::new();
         map.insert(Engine::INI_FILENAME.to_owned(), self.ini_data.to_bytes());
-        match self.power_curve.get_type() {
-            LutType::File(lut_file) => {
-                map.insert(lut_file.filename.clone(), lut_file.to_bytes());
-            },
-            _ => {}
-        };
         for controller_file in self.turbo_controllers.values() {
             map.insert(controller_file.filename(), controller_file.to_bytes());
         }
@@ -82,12 +68,6 @@ impl<'a> Engine<'a> {
 
     pub fn write(&mut self) -> Result<()> {
         self.car.mut_data_interface().write_file_data(Engine::INI_FILENAME, self.ini_data.to_bytes())?;
-        match self.power_curve.get_type() {
-            LutType::File(lut_file) => {
-                self.car.mut_data_interface().write_file_data(&lut_file.filename, lut_file.to_bytes())?;
-            },
-            _ => {}
-        };
         for controller_file in self.turbo_controllers.values() {
             self.car.mut_data_interface().write_file_data(&controller_file.filename(), controller_file.to_bytes())?;
         }
@@ -98,14 +78,6 @@ impl<'a> Engine<'a> {
         component.update_ini(&mut self.ini_data).map_err(|err_string| {
             Error::new(ErrorKind::InvalidUpdate, err_string)
         })
-    }
-
-    pub fn update_power_curve(&mut self, power_curve: Vec<(i32, i32)>) -> Result<Vec<(i32, i32)>> {
-        let ret = self.power_curve.update(power_curve);
-        self.power_curve.update_ini(&mut self.ini_data).map_err(|err_str|{
-            Error::new(ErrorKind::InvalidUpdate, err_str)
-        })?;
-        Ok(ret)
     }
 
     pub fn add_turbo_controllers(&mut self, turbo_idx: isize, turbo_ctrl: TurboControllers) -> Option<TurboControllers> {
@@ -130,14 +102,6 @@ impl<'a> Engine<'a> {
 
     pub fn write_to_dir(&mut self, dir: &Path) -> Result<()> {
         self.ini_data.write_to_file(&dir.join(Engine::INI_FILENAME))?;
-        match self.power_curve.get_type() {
-            LutType::File(lut_file) => {
-                lut_file.write_to_dir(dir).map_err(|err| {
-                    Error::new(ErrorKind::IOError, format!("Failed to write power curve. {}", err))
-                })?;
-            },
-            _ => {}
-        };
         for controller_file in self.turbo_controllers.values() {
             controller_file.write_to_dir(dir)?;
         }
@@ -149,8 +113,14 @@ impl<'a> CarDataFile for Engine<'a> {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
     }
+    fn mut_ini_data(&mut self) -> &mut Ini {
+        &mut self.ini_data
+    }
     fn data_interface(&self) -> &dyn DataInterface {
         self.car.data_interface()
+    }
+    fn mut_data_interface(&mut self) -> &mut dyn DataInterface {
+        self.car.mut_data_interface()
     }
 }
 

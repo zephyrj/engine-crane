@@ -5,7 +5,7 @@ use std::str::FromStr;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::car::lut_utils::LutType;
-use crate::assetto_corsa::traits::DataInterface;
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, DataInterface};
 
 #[derive(Debug)]
 pub struct LutProperty<K, V>
@@ -113,6 +113,37 @@ impl<K, V> IniUpdater for LutProperty<K, V>
             }
             LutType::PathOnly(path) => {
                 ini_utils::set_value(ini_data,
+                                     self.section_name.as_str(),
+                                     self.property_name.as_str(),
+                                     format!("{}", path.display()));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl <K,V> CarDataUpdater for LutProperty<K, V>
+    where  K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+           V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug
+{
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> crate::assetto_corsa::error::Result<()> {
+        match &self.lut {
+            LutType::File(lut_file) => {
+                ini_utils::set_value(car_data.mut_ini_data(),
+                                     self.section_name.as_str(),
+                                     self.property_name.as_str(),
+                                     &lut_file.filename);
+                car_data.mut_data_interface().write_file_data(&lut_file.filename,
+                                                              lut_file.to_bytes())?;
+            }
+            LutType::Inline(lut) => {
+                ini_utils::set_value(car_data.mut_ini_data(),
+                                     self.section_name.as_str(),
+                                     self.property_name.as_str(),
+                                     lut.to_string());
+            }
+            LutType::PathOnly(path) => {
+                ini_utils::set_value(car_data.mut_ini_data(),
                                      self.section_name.as_str(),
                                      self.property_name.as_str(),
                                      format!("{}", path.display()));

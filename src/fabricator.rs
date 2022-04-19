@@ -11,7 +11,7 @@ use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::Engine;
 use crate::assetto_corsa::car::data::engine;
 
-use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section};
+use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, update_car_data};
 use crate::automation::car::CarFile;
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 
@@ -460,7 +460,12 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         engine.update_component(&engine_data).unwrap();
         engine.update_component(&calculator.damage()).unwrap();
         engine.update_component(&calculator.coast_data().unwrap()).unwrap();
-        engine.update_power_curve(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
+
+        let mut power_curve = extract_mandatory_section::<engine::PowerCurve>(&engine).unwrap();
+        power_curve.update(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
+        update_car_data(&mut engine, &power_curve).unwrap();
+
+        //engine.update_power_curve().unwrap();
 
         match calculator.create_turbo() {
             None => {

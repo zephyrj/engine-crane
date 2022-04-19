@@ -5,7 +5,13 @@ use crate::assetto_corsa::ini_utils::Ini;
 pub trait CarDataFile
 {
     fn ini_data(&self) -> &Ini;
+    fn mut_ini_data(&mut self) -> &mut Ini;
     fn data_interface(&self) -> &dyn DataInterface;
+    fn mut_data_interface(&mut self) -> &mut dyn DataInterface;
+}
+
+pub trait CarDataUpdater {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> crate::assetto_corsa::error::Result<()>;
 }
 
 pub trait MandatoryDataSection {
@@ -22,6 +28,10 @@ pub fn extract_mandatory_section<T: MandatoryDataSection>(car_data: &dyn CarData
 
 pub fn extract_optional_section<T: OptionalDataSection>(car_data: &dyn CarDataFile) -> crate::assetto_corsa::error::Result<Option<T>> {
     T::load_from_parent(car_data)
+}
+
+pub fn update_car_data<T: CarDataFile, S: CarDataUpdater>(car_data: &mut T, car_data_updater: &S) -> crate::assetto_corsa::error::Result<()> {
+    car_data_updater.update_car_data(car_data)
 }
 
 pub trait _DataInterfaceI {

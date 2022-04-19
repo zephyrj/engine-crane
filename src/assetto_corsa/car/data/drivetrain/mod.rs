@@ -82,8 +82,14 @@ impl<'a> CarDataFile for Drivetrain<'a> {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
     }
+    fn mut_ini_data(&mut self) -> &mut Ini {
+        &mut self.ini_data
+    }
     fn data_interface(&self) -> &dyn DataInterface {
         self.car.data_interface()
+    }
+    fn mut_data_interface(&mut self) -> &mut dyn DataInterface {
+        self.car.mut_data_interface()
     }
 }
 
