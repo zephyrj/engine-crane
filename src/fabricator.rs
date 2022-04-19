@@ -440,10 +440,12 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         })?;
         match settings.minimum_physics_level {
             AssettoCorsaPhysicsLevel::CspExtendedPhysics => {
-                engine.update_component(&calculator.fuel_flow_consumption(drive_type.mechanical_efficiency())).map_err(|err| {
-                    error!("Failed to update fuel consumption. {}", err.to_string());
-                    err.to_string()
-                })?;
+                update_car_data(&mut engine,
+                                &calculator.fuel_flow_consumption(drive_type.mechanical_efficiency()))
+                    .map_err(|err| {
+                        error!("Failed to update fuel consumption. {}", err.to_string());
+                        err.to_string()
+                    })?
             }
             _ => {}
         }
@@ -457,15 +459,13 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         let limiter = calculator.limiter().round() as i32;
         engine_data.limiter = limiter;
         engine_data.minimum = calculator.idle_speed().unwrap().round() as i32;
-        engine.update_component(&engine_data).unwrap();
-        engine.update_component(&calculator.damage()).unwrap();
-        engine.update_component(&calculator.coast_data().unwrap()).unwrap();
+        update_car_data(&mut engine, &engine_data).unwrap();
+        update_car_data(&mut engine, &calculator.damage()).unwrap();
+        update_car_data(&mut engine, &calculator.coast_data().unwrap()).unwrap();
 
         let mut power_curve = extract_mandatory_section::<engine::PowerCurve>(&engine).unwrap();
         power_curve.update(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
         update_car_data(&mut engine, &power_curve).unwrap();
-
-        //engine.update_power_curve().unwrap();
 
         match calculator.create_turbo() {
             None => {
@@ -474,12 +474,12 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                     info!("Removing old engine turbo parameters");
                     old_turbo.clear_sections();
                     old_turbo.bov_pressure_threshold = None;
-                    engine.update_component(&old_turbo).unwrap();
+                    update_car_data(&mut engine,&old_turbo).unwrap();
                 }
             }
             Some(new_turbo) => {
                 info!("The new engine has a turbo");
-                engine.update_component(&new_turbo).unwrap();
+                update_car_data(&mut engine,&new_turbo).unwrap();
                 if let Some(turbo_ctrl) = calculator.create_turbo_controllers() {
                     info!("Adding turbo controller with index 0");
                     engine.add_turbo_controllers(0, turbo_ctrl);

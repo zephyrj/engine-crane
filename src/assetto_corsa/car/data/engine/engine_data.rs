@@ -1,4 +1,4 @@
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::Result;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
@@ -30,8 +30,9 @@ impl MandatoryDataSection for EngineData {
     }
 }
 
-impl IniUpdater for EngineData {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+impl CarDataUpdater for EngineData {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         ini_utils::set_float(ini_data, Self::SECTION_NAME, "ALTITUDE_SENSITIVITY", self.altitude_sensitivity, 2);
         ini_utils::set_float(ini_data, Self::SECTION_NAME, "INERTIA", self.inertia, 3);
         ini_utils::set_value(ini_data, Self::SECTION_NAME, "LIMITER", self.limiter);

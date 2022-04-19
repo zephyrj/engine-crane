@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::{PropertyParseError, Result};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
@@ -40,8 +40,9 @@ impl MandatoryDataSection for CoastCurve {
     }
 }
 
-impl IniUpdater for CoastCurve {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+impl CarDataUpdater for CoastCurve {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         return match self.curve_data_source {
             CoastSource::FromCoastRef => {
                 let section_name = self.curve_data_source.get_section_name();

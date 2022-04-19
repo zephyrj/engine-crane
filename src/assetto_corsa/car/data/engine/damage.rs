@@ -1,4 +1,4 @@
-use crate::assetto_corsa::traits::{CarDataFile, MandatoryDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::Result;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
@@ -35,8 +35,9 @@ impl MandatoryDataSection for Damage {
     }
 }
 
-impl IniUpdater for Damage {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+impl CarDataUpdater for Damage {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         ini_utils::set_value(ini_data, Self::SECTION_NAME, "RPM_THRESHOLD", self.rpm_threshold);
         ini_utils::set_value(ini_data, Self::SECTION_NAME, "RPM_DAMAGE_K", self.rpm_damage_k);
         match self.turbo_boost_threshold {

@@ -1,4 +1,4 @@
-use crate::assetto_corsa::traits::{CarDataFile, OptionalDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, OptionalDataSection};
 use crate::assetto_corsa::error::Result;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
@@ -57,18 +57,21 @@ impl Turbo {
     }
 }
 
-impl IniUpdater for Turbo {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        if let Some(bov_pressure_threshold) = self.bov_pressure_threshold {
-            ini_utils::set_float(ini_data, "BOV", "PRESSURE_THRESHOLD", bov_pressure_threshold, 2);
-        } else {
-            ini_data.remove_section("BOV");
-        }
-        for idx in 0..Turbo::count_turbo_sections(ini_data) {
-            ini_data.remove_section(TurboSection::get_ini_section_name(idx).as_str())
+impl CarDataUpdater for Turbo {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        {
+            let ini_data = car_data.mut_ini_data();
+            if let Some(bov_pressure_threshold) = self.bov_pressure_threshold {
+                ini_utils::set_float(ini_data, "BOV", "PRESSURE_THRESHOLD", bov_pressure_threshold, 2);
+            } else {
+                ini_data.remove_section("BOV");
+            }
+            for idx in 0..Turbo::count_turbo_sections(ini_data) {
+                ini_data.remove_section(TurboSection::get_ini_section_name(idx).as_str())
+            }
         }
         for section in &self.sections {
-            section.update_ini(ini_data)?;
+            section.update_car_data(car_data)?;
         }
         Ok(())
     }
@@ -147,8 +150,9 @@ impl TurboSection {
     }
 }
 
-impl IniUpdater for TurboSection {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+impl CarDataUpdater for TurboSection {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         let section_name = TurboSection::get_ini_section_name(self.index);
         ini_utils::set_float(ini_data, &section_name, "LAG_DN", self.lag_dn, 3);
         ini_utils::set_float(ini_data, &section_name, "LAG_UP", self.lag_up, 3);

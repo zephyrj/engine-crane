@@ -4,7 +4,7 @@ use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::car::lut_utils::{InlineLut, LutType};
 use crate::assetto_corsa::car::structs::LutProperty;
-use crate::assetto_corsa::traits::DataInterface;
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, DataInterface};
 
 
 #[derive(Debug)]
@@ -32,8 +32,9 @@ impl ExtendedFuelConsumptionBaseData {
     }
 }
 
-impl IniUpdater for ExtendedFuelConsumptionBaseData {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
+impl CarDataUpdater for ExtendedFuelConsumptionBaseData {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
         if let Some(idle_throttle) = self.idle_throttle {
             ini_utils::set_float(ini_data, Self::SECTION_NAME, "IDLE_THROTTLE", idle_throttle, 3);
         } else if ini_data.section_contains_property(Self::SECTION_NAME, "IDLE_THROTTLE") {
@@ -124,14 +125,15 @@ impl FuelConsumptionFlowRate {
     }
 }
 
-impl IniUpdater for FuelConsumptionFlowRate {
-    fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String> {
-        self.base_data.update_ini(ini_data)?;
+impl CarDataUpdater for FuelConsumptionFlowRate {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        self.base_data.update_car_data(car_data)?;
+        let ini_data = car_data.mut_ini_data();
         ini_data.remove_section(Self::SECTION_NAME);
         ini_utils::set_value(ini_data, Self::SECTION_NAME, "MAX_FUEL_FLOW", self.max_fuel_flow);
         ini_utils::set_value(ini_data, Self::SECTION_NAME, "LOG_FUEL_FLOW", 0);
         if let Some(flow_lut) = &self.max_fuel_flow_lut {
-            flow_lut.update_ini(ini_data)?;
+            flow_lut.update_car_data(car_data)?;
         }
         Ok(())
     }
