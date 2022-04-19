@@ -4,7 +4,6 @@ pub(crate) mod structs;
 mod file_utils;
 mod lut_utils;
 mod ini_utils;
-mod acd_utils;
 pub mod car;
 
 pub use car::Car;

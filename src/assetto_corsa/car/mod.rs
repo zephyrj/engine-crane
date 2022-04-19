@@ -1,23 +1,24 @@
 pub mod data_interface;
 pub mod ui;
 pub mod data;
+pub mod acd_utils;
 
 pub use data_interface::DataFolderInterface;
 
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{BufReader, BufRead, LineWriter, Write};
+use std::io::{BufRead, BufReader, LineWriter, Write};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
-use tracing::{warn, info};
+use tracing::{info, warn};
 use walkdir::WalkDir;
 
 use crate::assetto_corsa;
 use crate::assetto_corsa::traits:: DataInterface;
-use crate::assetto_corsa::error::{Result, Error, ErrorKind};
+use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 use crate::assetto_corsa::{ini_utils, load_sfx_data};
 use crate::assetto_corsa::ini_utils::Ini;
-use crate::assetto_corsa::acd_utils::AcdArchive;
+use acd_utils::AcdArchive;
 use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::ui::CarUiData;
 

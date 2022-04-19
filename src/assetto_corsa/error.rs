@@ -47,8 +47,8 @@ impl From<toml::de::Error> for Error {
     }
 }
 
-impl From<crate::assetto_corsa::acd_utils::AcdError> for Error {
-    fn from(e: crate::assetto_corsa::acd_utils::AcdError) -> Self {
+impl From<crate::assetto_corsa::car::acd_utils::AcdError> for Error {
+    fn from(e: crate::assetto_corsa::car::acd_utils::AcdError) -> Self {
         Error::new(ErrorKind::AcdError, e.to_string())
     }
 }

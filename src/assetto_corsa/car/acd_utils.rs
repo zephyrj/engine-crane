@@ -222,7 +222,7 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
     use std::path::Path;
-    use crate::assetto_corsa::acd_utils::{AcdArchive, generate_acd_key};
+    use crate::assetto_corsa::car::acd_utils::{AcdArchive, generate_acd_key};
 
     #[test]
     fn derive_acd_key() {
