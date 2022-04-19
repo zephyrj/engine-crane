@@ -8,9 +8,9 @@ use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::data::car_ini_data::CarVersion;
 use crate::assetto_corsa::car::ui::CarUiData;
 use crate::assetto_corsa::car::data::drivetrain::Drivetrain;
-use crate::assetto_corsa::engine::turbo_ctrl::{ControllerCombinator, ControllerInput, TurboController};
-use crate::assetto_corsa::engine::turbo::TurboSection;
-use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, Metadata, Turbo, TurboControllers};
+use crate::assetto_corsa::car::data::engine::turbo_ctrl::{ControllerCombinator, ControllerInput, TurboController};
+use crate::assetto_corsa::car::data::engine::turbo::TurboSection;
+use crate::assetto_corsa::car::data::engine::{CoastCurve, Damage, Engine, Metadata, Turbo, TurboControllers};
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section};
 use crate::automation::car::CarFile;
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
@@ -193,7 +193,7 @@ impl AcEngineParameterCalculatorV1 {
             (self.engine_sqlite_data.power_curve[rpm_index] * 1000_f64) // power curve contains kW
     }
 
-    pub fn fuel_flow_consumption(&self, mechanical_efficiency: f64) -> assetto_corsa::engine::FuelConsumptionFlowRate {
+    pub fn fuel_flow_consumption(&self, mechanical_efficiency: f64) -> data::engine::FuelConsumptionFlowRate {
         // The lut values should be: rpm, kg/hr
         // The max-flow should be weighted to the upper end of the rev-range as racing is usually done in that range.
         // This is probably enough of a fallback as this will only be used if a lut isn't found and that will be
@@ -205,7 +205,7 @@ impl AcEngineParameterCalculatorV1 {
         for (rpm_idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
             max_flow_lut.push((*rpm as i32, (self.get_fuel_use_per_sec_at_rpm(rpm_idx) * 3.6).round() as i32))
         }
-        assetto_corsa::engine::FuelConsumptionFlowRate::new(
+        data::engine::FuelConsumptionFlowRate::new(
             0.03,
             (self.idle_speed().unwrap() + 100_f64).round() as i32,
             mechanical_efficiency,
@@ -291,7 +291,7 @@ impl AcEngineParameterCalculatorV1 {
          round_float_to(max_boost, decimal_place_precision))
     }
 
-    pub fn create_turbo(&self) -> Option<assetto_corsa::engine::Turbo> {
+    pub fn create_turbo(&self) -> Option<data::engine::Turbo> {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
@@ -313,7 +313,7 @@ impl AcEngineParameterCalculatorV1 {
         Some(t)
     }
 
-    pub fn create_turbo_controllers(&self) -> Option<assetto_corsa::engine::TurboControllers> {
+    pub fn create_turbo_controllers(&self) -> Option<data::engine::TurboControllers> {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
@@ -340,7 +340,7 @@ impl AcEngineParameterCalculatorV1 {
         Some(controllers)
     }
 
-    pub fn coast_data(&self) -> Option<assetto_corsa::engine::CoastCurve> {
+    pub fn coast_data(&self) -> Option<data::engine::CoastCurve> {
         //   The following data is available from the engine.jbeam exported file
         //   The dynamic friction torque on the engine in Nm/s.
         //   This is a friction torque which increases proportional to engine AV (rad/s).
@@ -360,7 +360,7 @@ impl AcEngineParameterCalculatorV1 {
                                             0.0))
     }
 
-    pub fn damage(&self) -> assetto_corsa::engine::Damage {
+    pub fn damage(&self) -> data::engine::Damage {
         let (_, max_boost) = self.get_max_boost_params(2);
         Damage::new(
             (self.limiter()+200_f64).round() as i32,
@@ -373,10 +373,10 @@ impl AcEngineParameterCalculatorV1 {
         )
     }
 
-    pub fn create_metadata(&self) -> assetto_corsa::engine::Metadata {
+    pub fn create_metadata(&self) -> data::engine::Metadata {
         let mut m = Metadata::new();
         m.set_version(2);
-        m.set_source(assetto_corsa::engine::metadata::Source::Automation);
+        m.set_source(data::engine::metadata::Source::Automation);
         m.set_mass_kg(self.engine_sqlite_data.weight.round() as i64);
         m
     }
@@ -451,7 +451,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         info!("Clearing existing turbo controllers");
         engine.clear_turbo_controllers().unwrap();
 
-        let mut engine_data = extract_mandatory_section::<assetto_corsa::engine::EngineData>(&engine).unwrap();
+        let mut engine_data = extract_mandatory_section::<data::engine::EngineData>(&engine).unwrap();
         let inertia = calculator.inertia().unwrap();
         engine_data.inertia = inertia;
         let limiter = calculator.limiter().round() as i32;

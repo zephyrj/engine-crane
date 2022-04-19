@@ -157,7 +157,7 @@ impl<'a> CarDataFile for Engine<'a> {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
-    use crate::assetto_corsa::engine::{CoastCurve, Damage, Engine, EngineData, ExtendedFuelConsumptionBaseData, FuelConsumptionFlowRate, Turbo};
+    use crate::assetto_corsa::car::data::engine::{CoastCurve, Damage, Engine, EngineData, ExtendedFuelConsumptionBaseData, FuelConsumptionFlowRate, Turbo};
     use crate::assetto_corsa::ini_utils::IniUpdater;
     use crate::assetto_corsa::lut_utils::{InlineLut, LutType};
     use crate::assetto_corsa::structs::LutProperty;

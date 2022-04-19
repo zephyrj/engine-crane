@@ -5,7 +5,6 @@ mod file_utils;
 mod lut_utils;
 mod ini_utils;
 mod acd_utils;
-pub(crate) mod engine;
 pub mod car;
 mod data;
 
