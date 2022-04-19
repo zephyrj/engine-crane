@@ -1,16 +1,13 @@
-use std::fmt::{Display, format, Formatter};
-use std::num;
+use std::fmt::{Display, Formatter};
 use std::path::{Path};
-use iced::keyboard::KeyCode::N;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 use crate::{assetto_corsa, automation, beam_ng};
-use crate::assetto_corsa::car::{Car, CarUiData, CarIniData, CarVersion, SpecValue};
-use crate::assetto_corsa::drivetrain::{Drivetrain, DriveType};
+use crate::assetto_corsa::car::{Car, CarUiData, CarIniData, CarVersion};
+use crate::assetto_corsa::drivetrain::Drivetrain;
 use crate::assetto_corsa::engine::{CoastCurve, ControllerCombinator, ControllerInput, Damage, Engine, Metadata, Turbo, TurboController, TurboControllers, TurboSection};
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section};
-use crate::automation::car::{Attribute, CarFile};
+use crate::automation::car::CarFile;
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
-use crate::beam_ng::ModData;
 
 enum ACEngineParameterVersion {
     V1

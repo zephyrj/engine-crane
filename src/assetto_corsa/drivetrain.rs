@@ -1,10 +1,6 @@
-use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind, PropertyParseError};
-use crate::assetto_corsa::file_utils::load_ini_file;
 use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};

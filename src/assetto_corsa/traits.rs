@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 use std::io;
-use std::path::Path;
 use crate::assetto_corsa::ini_utils::Ini;
 
 pub trait CarDataFile

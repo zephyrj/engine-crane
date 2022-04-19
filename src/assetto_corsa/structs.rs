@@ -1,11 +1,11 @@
 use std::fmt;
 use std::fmt::Display;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 use crate::assetto_corsa::lut_utils::LutType;
-use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface};
+use crate::assetto_corsa::traits::DataInterface;
 
 #[derive(Debug)]
 pub struct LutProperty<K, V>

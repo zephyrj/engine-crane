@@ -5,7 +5,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use csv::Terminator;
-use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface};
+use crate::assetto_corsa::traits::DataInterface;
 
 #[derive(Debug)]
 pub struct LutFile<K, V>

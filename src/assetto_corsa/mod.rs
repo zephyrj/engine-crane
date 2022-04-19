@@ -10,10 +10,8 @@ pub(crate) mod drivetrain;
 pub mod car;
 mod data;
 
-
 use std::collections::HashMap;
 use std::fs;
-use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::path::PathBuf;

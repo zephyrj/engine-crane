@@ -1,14 +1,10 @@
 pub mod jbeam;
 
-use std::ffi::OsString;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use directories::BaseDirs;
-use parselnk::Lnk;
-use serde_hjson::Value;
 use crate::steam;
-use tracing::{debug, info, Level};
+use tracing::{debug, info};
 
 pub const STEAM_GAME_NAME: &str = "BeamNG.drive";
 pub const STEAM_GAME_ID: i64 = 284160;

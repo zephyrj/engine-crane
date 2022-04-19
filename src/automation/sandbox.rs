@@ -3,8 +3,7 @@ use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use directories::{BaseDirs, UserDirs};
-use fs_extra::dir::DirEntryAttr::Path;
-use rusqlite::{Connection, params, Row};
+use rusqlite::{Connection, Row};
 use tracing::info;
 
 use crate::steam;

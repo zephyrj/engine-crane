@@ -5,7 +5,6 @@ use indexmap::IndexMap;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 use thiserror::Error;
-use itertools::Itertools;
 
 pub type Result<T> = std::result::Result<T, AcdError>;
 

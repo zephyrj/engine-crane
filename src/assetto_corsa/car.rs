@@ -1,24 +1,19 @@
 use std::collections::HashMap;
-use std::{fs, io, mem};
-use std::borrow::{Borrow, BorrowMut};
+use std::fs;
 use std::default::Default;
-
-use std::fmt::{Debug, Display, format, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
-use std::io::{BufReader, BufRead, LineWriter, Write, BufWriter, Read};
+use std::io::{BufReader, BufRead, LineWriter, Write, BufWriter};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use fs_extra::file::write_all;
-use serde_json::{json, Map, Value};
-use tracing::{debug, warn, info};
+use serde_json::{json, Value};
+use tracing::{warn, info};
 use walkdir::WalkDir;
 
 use crate::assetto_corsa;
-use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface};
-use crate::assetto_corsa::drivetrain::Drivetrain;
+use crate::assetto_corsa::traits:: DataInterface;
 use crate::assetto_corsa::error::{Result, Error, PropertyParseError, ErrorKind};
-use crate::assetto_corsa::engine::{Engine};
 use crate::assetto_corsa::{ini_utils, load_sfx_data};
 use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::acd_utils::AcdArchive;

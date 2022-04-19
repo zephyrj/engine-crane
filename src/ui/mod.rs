@@ -1,11 +1,6 @@
-use std::borrow::Borrow;
-use std::collections::HashMap;
-use std::num::ParseIntError;
-use std::ops::Add;
 use std::path::{Path, PathBuf};
-use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, text_input, TextInput, Row, button, Button, Color, HorizontalAlignment};
+use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, text_input, TextInput, Row, button, Button, HorizontalAlignment};
 use crate::{assetto_corsa, beam_ng, fabricator};
-use crate::automation;
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
 use tracing::{span, Level, info, error};
 
