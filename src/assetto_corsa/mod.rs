@@ -6,7 +6,6 @@ mod lut_utils;
 mod ini_utils;
 mod acd_utils;
 pub mod car;
-mod data;
 
 pub use car::Car;
 

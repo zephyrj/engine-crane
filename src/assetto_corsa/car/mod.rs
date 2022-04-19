@@ -1,5 +1,8 @@
-pub mod data;
+pub mod data_interface;
 pub mod ui;
+pub mod data;
+
+pub use data_interface::DataFolderInterface;
 
 use std::fmt::Debug;
 use std::fs::File;
@@ -17,7 +20,6 @@ use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::acd_utils::AcdArchive;
 use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::ui::CarUiData;
-use crate::assetto_corsa::data::DataFolderInterface;
 
 
 pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Result<()> {
