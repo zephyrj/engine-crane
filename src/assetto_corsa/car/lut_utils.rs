@@ -35,6 +35,10 @@ impl<K, V> LutFile<K, V>
             data: load_lut_from_path::<K, V>(lut_path)?
         })
     }
+
+    pub fn delete(&self, data_interface: &mut dyn DataInterface) -> io::Result<()> {
+        data_interface.delete_file(&self.filename)
+    }
     
     pub fn update(&mut self, data: Vec<(K,V)>) -> Vec<(K,V)> {
         std::mem::replace(&mut self.data, data)

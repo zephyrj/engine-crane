@@ -1,9 +1,9 @@
-use std::fmt;
+use std::{fmt, io};
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
+use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::car::lut_utils::LutType;
 use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, DataInterface};
 
@@ -79,6 +79,16 @@ impl<K,V> LutProperty<K, V>
         }
     }
 
+    pub fn delete_from_car_data(&self, car_data: &mut dyn CarDataFile) -> io::Result<()> {
+        car_data.mut_ini_data().remove_value(&self.section_name, &self.property_name);
+        match &self.lut {
+            LutType::File(lut_file) => {
+                lut_file.delete(car_data.mut_data_interface())
+            },
+            _ => Ok(())
+        }
+    }
+
     pub fn to_vec(&self) -> Vec<(K, V)> {
         match &self.lut {
             LutType::File(lut_file) => { lut_file.to_vec() }
@@ -89,36 +99,6 @@ impl<K,V> LutProperty<K, V>
 
     pub fn get_type(&self) -> &LutType<K, V> {
         &self.lut
-    }
-}
-
-impl<K, V> IniUpdater for LutProperty<K, V>
-    where
-        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug
-{
-    fn update_ini(&self, ini_data: &mut Ini) -> Result<(), String> {
-        match &self.lut {
-            LutType::File(lut_file) => {
-                ini_utils::set_value(ini_data,
-                                     self.section_name.as_str(),
-                                     self.property_name.as_str(),
-                                     &lut_file.filename);
-            }
-            LutType::Inline(lut) => {
-                ini_utils::set_value(ini_data,
-                                     self.section_name.as_str(),
-                                     self.property_name.as_str(),
-                                     lut.to_string());
-            }
-            LutType::PathOnly(path) => {
-                ini_utils::set_value(ini_data,
-                                     self.section_name.as_str(),
-                                     self.property_name.as_str(),
-                                     format!("{}", path.display()));
-            }
-        }
-        Ok(())
     }
 }
 
