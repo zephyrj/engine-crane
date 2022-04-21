@@ -29,6 +29,10 @@ impl _DataInterfaceI for DataFolderInterface {
         Ok(data)
     }
 
+    fn contains_file(&self, filename: &str) -> bool {
+        self.data_folder_path.join(Path::new(filename)).is_file()
+    }
+
     fn write_file_data(&mut self, filename: &str, data: Vec<u8>) -> io::Result<()>{
         let file_path = (&self.data_folder_path).join(Path::new(filename));
         let mut f = File::create(file_path)?;

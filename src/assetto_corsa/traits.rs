@@ -37,6 +37,7 @@ pub fn update_car_data<T: CarDataFile, S: CarDataUpdater>(car_data: &mut T, car_
 pub trait _DataInterfaceI {
     fn load(&self);
     fn get_file_data(&self, filename: &str) -> io::Result<Vec<u8>>;
+    fn contains_file(&self, filename: &str) -> bool;
     fn write_file_data(&mut self, filename: &str, data: Vec<u8>) -> io::Result<()>;
     fn delete_file(&mut self, filename: &str) -> io::Result<()>;
 }
