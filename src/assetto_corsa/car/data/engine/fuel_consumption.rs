@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
+use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::car::lut_utils::{InlineLut, LutType};

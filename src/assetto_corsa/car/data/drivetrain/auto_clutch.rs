@@ -1,6 +1,6 @@
 use crate::assetto_corsa::car::data::drivetrain::{get_mandatory_field, mandatory_field_error};
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
+use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::Result;
 

@@ -3,7 +3,6 @@ use std::str::FromStr;
 use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::{PropertyParseError, Result};
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
 
 
 #[derive(Debug)]
