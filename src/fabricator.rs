@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::path::Path;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use crate::{automation, beam_ng};
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
@@ -10,6 +10,9 @@ use crate::assetto_corsa::car::ui::CarUiData;
 use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::Engine;
 use crate::assetto_corsa::car::data::engine;
+use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
+use crate::assetto_corsa::car::lut_utils::{InlineLut, LutType};
+use crate::assetto_corsa::car::structs::LutProperty;
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, update_car_data};
 use crate::automation::car::CarFile;
@@ -313,7 +316,7 @@ impl AcEngineParameterCalculatorV1 {
         Some(t)
     }
 
-    pub fn create_turbo_controllers(&self) -> Option<engine::TurboControllers> {
+    pub fn create_turbo_controller(&self) -> Option<engine::turbo_ctrl::TurboController> {
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             return None;
         }
@@ -335,9 +338,7 @@ impl AcEngineParameterCalculatorV1 {
             10000_f64,
             0_f64
         );
-        let mut controllers = engine::TurboControllers::new(0);
-        controllers.add_controller(controller).unwrap();
-        Some(controllers)
+        Some(controller)
     }
 
     pub fn coast_data(&self) -> Option<engine::CoastCurve> {
@@ -434,6 +435,12 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         ini_data.write().unwrap();
     }
 
+    info!("Clearing existing turbo controllers");
+    let res = delete_all_turbo_controllers_from_car(&mut car);
+    if let Some(err) = res.err() {
+        warn!("Failed to clear fuel turbo controllers. {}", err.to_string());
+    }
+
     {
         let mut engine = Engine::from_car(&mut car).map_err(|err| {
             format!("Failed to load engine. {}", err.to_string())
@@ -449,9 +456,6 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
             }
             _ => {}
         }
-
-        info!("Clearing existing turbo controllers");
-        engine.clear_turbo_controllers().unwrap();
 
         let mut engine_data = extract_mandatory_section::<data::engine::EngineData>(&engine).unwrap();
         let inertia = calculator.inertia().unwrap();
@@ -473,22 +477,28 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                 if let Some(mut old_turbo) = extract_optional_section::<engine::Turbo>(&engine).unwrap() {
                     info!("Removing old engine turbo parameters");
                     old_turbo.clear_sections();
-                    old_turbo.bov_pressure_threshold = None;
+                    old_turbo.clear_bov_threshold();
                     update_car_data(&mut engine,&old_turbo).unwrap();
                 }
             }
             Some(new_turbo) => {
                 info!("The new engine has a turbo");
                 update_car_data(&mut engine,&new_turbo).unwrap();
-                if let Some(turbo_ctrl) = calculator.create_turbo_controllers() {
-                    info!("Adding turbo controller with index 0");
-                    engine.add_turbo_controllers(0, turbo_ctrl);
-                }
             }
         }
 
         info!("Writing engine ini files");
         engine.write().map_err(|err| {
+            error!("{}", err.to_string());
+            format!("Swap failed. {}", err.to_string())
+        })?;
+    }
+
+    if let Some(turbo_ctrl) = calculator.create_turbo_controller() {
+        info!("Writing turbo controller with index 0");
+        let mut controller_file = engine::TurboControllerFile::new(&mut car, 0);
+        update_car_data(&mut controller_file, &turbo_ctrl).unwrap();
+        controller_file.write().map_err(|err| {
             error!("{}", err.to_string());
             format!("Swap failed. {}", err.to_string())
         })?;

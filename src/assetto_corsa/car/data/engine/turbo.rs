@@ -1,19 +1,19 @@
 use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, OptionalDataSection};
 use crate::assetto_corsa::error::Result;
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
+use crate::assetto_corsa::ini_utils::Ini;
 
 
 #[derive(Debug)]
 pub struct Turbo {
-    pub bov_pressure_threshold: Option<f64>,
+    bov_pressure_threshold: Option<f64>,
     sections: Vec<TurboSection>
 }
 
 impl OptionalDataSection for Turbo {
     fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Option<Self>> where Self: Sized {
         let ini_data = parent_data.ini_data();
-        let turbo_count: isize = Turbo::count_turbo_sections(ini_data);
+        let turbo_count = Turbo::count_turbo_sections(ini_data);
         if turbo_count == 0 {
             return Ok(None);
         }
@@ -21,8 +21,9 @@ impl OptionalDataSection for Turbo {
         let pressure_threshold = ini_utils::get_value(ini_data, "BOV", "PRESSURE_THRESHOLD");
         let mut section_vec: Vec<TurboSection> = Vec::new();
         for idx in 0..turbo_count {
-            section_vec.push(TurboSection::load_from_ini( idx, ini_data)?);
+            section_vec.push(TurboSection::load_from_parent(idx, parent_data)?);
         }
+
         Ok(Some(Turbo{
             bov_pressure_threshold: pressure_threshold,
             sections: section_vec
@@ -38,6 +39,14 @@ impl Turbo {
         }
     }
 
+    pub fn set_bov_threshold(&mut self, threshold: f64) {
+        self.bov_pressure_threshold = Some(threshold)
+    }
+
+    pub fn clear_bov_threshold(&mut self) {
+        self.bov_pressure_threshold = None
+    }
+
     pub fn add_section(&mut self, section: TurboSection) {
         self.sections.push(section)
     }
@@ -46,7 +55,15 @@ impl Turbo {
         self.sections.clear()
     }
 
-    pub fn count_turbo_sections(ini: &Ini) -> isize {
+    pub fn delete_from_car_data(&mut self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        for section in &mut self.sections {
+            section.delete_from_car_data(car_data)?;
+        }
+        self.sections.clear();
+        Ok(())
+    }
+
+    pub fn count_turbo_sections(ini: &Ini) -> usize {
         let mut count = 0;
         loop {
             if !ini.contains_section(TurboSection::get_ini_section_name(count).as_str()) {
@@ -59,16 +76,13 @@ impl Turbo {
 
 impl CarDataUpdater for Turbo {
     fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
-        {
-            let ini_data = car_data.mut_ini_data();
-            if let Some(bov_pressure_threshold) = self.bov_pressure_threshold {
-                ini_utils::set_float(ini_data, "BOV", "PRESSURE_THRESHOLD", bov_pressure_threshold, 2);
-            } else {
-                ini_data.remove_section("BOV");
-            }
-            for idx in 0..Turbo::count_turbo_sections(ini_data) {
-                ini_data.remove_section(TurboSection::get_ini_section_name(idx).as_str())
-            }
+        for idx in 0..Turbo::count_turbo_sections(car_data.ini_data()) {
+            TurboSection::load_from_parent(idx, car_data)?.delete_from_car_data(car_data)?;
+        }
+        if let Some(bov_pressure_threshold) = self.bov_pressure_threshold {
+            ini_utils::set_float(car_data.mut_ini_data(), "BOV", "PRESSURE_THRESHOLD", bov_pressure_threshold, 2);
+        } else {
+            car_data.mut_ini_data().remove_section("BOV");
         }
         for section in &self.sections {
             section.update_car_data(car_data)?;
@@ -80,7 +94,7 @@ impl CarDataUpdater for Turbo {
 
 #[derive(Debug)]
 pub struct TurboSection {
-    index: isize,
+    index: usize,
     lag_dn: f64,
     lag_up: f64,
     max_boost: f64,
@@ -92,7 +106,7 @@ pub struct TurboSection {
 }
 
 impl TurboSection {
-    pub fn from_defaults(index: isize) -> TurboSection {
+    pub fn from_defaults(index: usize) -> TurboSection {
         TurboSection {
             index,
             lag_dn: 0.99,
@@ -102,11 +116,11 @@ impl TurboSection {
             display_max_boost: 1.0,
             reference_rpm: 3000,
             gamma: 1.0,
-            cockpit_adjustable: 0
+            cockpit_adjustable: 0,
         }
     }
 
-    pub fn new(index: isize,
+    pub fn new(index: usize,
                lag_dn: f64,
                lag_up: f64,
                max_boost: f64,
@@ -125,27 +139,36 @@ impl TurboSection {
             display_max_boost,
             reference_rpm,
             gamma,
-            cockpit_adjustable
+            cockpit_adjustable,
         }
     }
 
-    pub fn load_from_ini(idx: isize,
-                         ini: &Ini) -> Result<TurboSection> {
+    pub fn load_from_parent(idx: usize, parent_data: &dyn CarDataFile) -> Result<TurboSection> {
         let section_name = TurboSection::get_ini_section_name(idx);
+        let ini_data = parent_data.ini_data();
         Ok(TurboSection {
             index: idx,
-            lag_dn: ini_utils::get_mandatory_property(ini, &section_name, "LAG_DN")?,
-            lag_up: ini_utils::get_mandatory_property(ini, &section_name, "LAG_UP")?,
-            max_boost: ini_utils::get_mandatory_property(ini, &section_name, "MAX_BOOST")?,
-            wastegate: ini_utils::get_mandatory_property(ini, &section_name, "WASTEGATE")?,
-            display_max_boost: ini_utils::get_mandatory_property(ini, &section_name, "DISPLAY_MAX_BOOST")?,
-            reference_rpm: ini_utils::get_mandatory_property(ini, &section_name, "REFERENCE_RPM")?,
-            gamma: ini_utils::get_mandatory_property(ini, &section_name, "GAMMA")?,
-            cockpit_adjustable: ini_utils::get_mandatory_property(ini, &section_name, "COCKPIT_ADJUSTABLE")?
+            lag_dn: ini_utils::get_mandatory_property(ini_data, &section_name, "LAG_DN")?,
+            lag_up: ini_utils::get_mandatory_property(ini_data, &section_name, "LAG_UP")?,
+            max_boost: ini_utils::get_mandatory_property(ini_data, &section_name, "MAX_BOOST")?,
+            wastegate: ini_utils::get_mandatory_property(ini_data, &section_name, "WASTEGATE")?,
+            display_max_boost: ini_utils::get_mandatory_property(ini_data, &section_name, "DISPLAY_MAX_BOOST")?,
+            reference_rpm: ini_utils::get_mandatory_property(ini_data, &section_name, "REFERENCE_RPM")?,
+            gamma: ini_utils::get_mandatory_property(ini_data, &section_name, "GAMMA")?,
+            cockpit_adjustable: ini_utils::get_mandatory_property(ini_data, &section_name, "COCKPIT_ADJUSTABLE")?,
         })
     }
 
-    pub fn get_ini_section_name(idx: isize) -> String {
+    pub fn section_name(&self) -> String {
+        TurboSection::get_ini_section_name(self.index)
+    }
+
+    pub fn delete_from_car_data(&mut self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        car_data.mut_ini_data().remove_section(&self.section_name());
+        Ok(())
+    }
+
+    pub fn get_ini_section_name(idx: usize) -> String {
         format!("TURBO_{}", idx)
     }
 }

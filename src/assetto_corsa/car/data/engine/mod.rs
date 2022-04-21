@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
-use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
+use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
 
 pub use metadata::Metadata;
@@ -21,14 +21,13 @@ pub use fuel_consumption::FuelConsumptionFlowRate;
 pub use damage::Damage;
 pub use coast::CoastCurve;
 pub use turbo::Turbo;
-pub use turbo_ctrl::TurboControllers;
+pub use turbo_ctrl::TurboControllerFile;
 
 
 #[derive(Debug)]
 pub struct Engine<'a> {
     car: &'a mut Car,
     ini_data: Ini,
-    turbo_controllers: HashMap<isize, TurboControllers>
 }
 
 impl<'a> Engine<'a> {
@@ -48,63 +47,25 @@ impl<'a> Engine<'a> {
         let data_interface = car.mut_data_interface();
         let file_data = data_interface.get_file_data(Engine::INI_FILENAME)?;
         let ini_data = Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned());
-        let turbo_controllers = TurboControllers::load_all_from_data(data_interface, &ini_data)?;
         Ok(Engine {
             car,
             ini_data,
-            //power_curve,
-            turbo_controllers
         })
     }
 
     pub fn to_bytes_map(&self) -> HashMap<String, Vec<u8>> {
         let mut map = HashMap::new();
         map.insert(Engine::INI_FILENAME.to_owned(), self.ini_data.to_bytes());
-        for controller_file in self.turbo_controllers.values() {
-            map.insert(controller_file.filename(), controller_file.to_bytes());
-        }
         map
     }
 
     pub fn write(&mut self) -> Result<()> {
         self.car.mut_data_interface().write_file_data(Engine::INI_FILENAME, self.ini_data.to_bytes())?;
-        for controller_file in self.turbo_controllers.values() {
-            self.car.mut_data_interface().write_file_data(&controller_file.filename(), controller_file.to_bytes())?;
-        }
-        Ok(())
-    }
-
-    pub fn update_component<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
-        component.update_ini(&mut self.ini_data).map_err(|err_string| {
-            Error::new(ErrorKind::InvalidUpdate, err_string)
-        })
-    }
-
-    pub fn add_turbo_controllers(&mut self, turbo_idx: isize, turbo_ctrl: TurboControllers) -> Option<TurboControllers> {
-        self.turbo_controllers.insert(turbo_idx, turbo_ctrl)
-    }
-
-    pub fn remove_turbo_controllers(&mut self, turbo_idx: isize) -> Result<Option<TurboControllers>> {
-        if let Some(old) = self.turbo_controllers.remove(&turbo_idx) {
-            self.car.mut_data_interface().delete_file(&old.filename())?;
-            return Ok(Some(old));
-        }
-        Ok(None)
-    }
-
-    pub fn clear_turbo_controllers(&mut self) -> Result<()> {
-        let idx_vec: Vec<isize> = self.turbo_controllers.keys().map(|k| { *k }).into_iter().collect();
-        for idx in idx_vec {
-            self.remove_turbo_controllers(idx)?;
-        }
         Ok(())
     }
 
     pub fn write_to_dir(&mut self, dir: &Path) -> Result<()> {
         self.ini_data.write_to_file(&dir.join(Engine::INI_FILENAME))?;
-        for controller_file in self.turbo_controllers.values() {
-            controller_file.write_to_dir(dir)?;
-        }
         Ok(())
     }
 }
