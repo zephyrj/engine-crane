@@ -19,7 +19,7 @@ pub use downshift_protection::DownshiftProtection;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
 use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::car::Car;
-use crate::assetto_corsa::ini_utils::{Ini, IniUpdater};
+use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
 
 
@@ -64,12 +64,6 @@ impl<'a> Drivetrain<'a> {
     //         ini_data
     //     })
     // }
-
-    pub fn update_subcomponent<T: IniUpdater>(&mut self, component: &T) -> Result<()> {
-        component.update_ini(&mut self.ini_data).map_err(|err_string| {
-            Error::new(ErrorKind::InvalidUpdate, err_string)
-        })
-    }
 
     pub fn write(&mut self) -> Result<()> {
         self.car.mut_data_interface().write_file_data(Drivetrain::INI_FILENAME,
