@@ -29,12 +29,6 @@ pub enum AcdError {
     },
 }
 
-pub struct AcdArchive {
-    acd_path: PathBuf,
-    extract_key: String,
-    contents: IndexMap<String, Vec<u8>>
-}
-
 fn missing_parent_error(path: &Path) -> AcdError {
     AcdError::DecodeError {
         path: path.display().to_string(),
@@ -55,6 +49,12 @@ fn get_parent_folder_str(path: &Path) -> Result<&str> {
         .to_str().ok_or(missing_parent_error(path))?)
 }
 
+pub struct AcdArchive {
+    acd_path: PathBuf,
+    extract_key: String,
+    contents: IndexMap<String, Vec<u8>>
+}
+
 impl AcdArchive {
     pub fn load_from_path(acd_path: &Path) -> Result<AcdArchive> {
         AcdArchive::load_from_path_with_key(acd_path, get_parent_folder_str(acd_path)?)
@@ -68,6 +68,27 @@ impl AcdArchive {
             extract_key: key,
             contents
         })
+    }
+
+    pub fn get_file_data(&self, filename: &str) -> Option<Vec<u8>> {
+        match self.contents.get(filename) {
+            Some(data) => {
+                Some(data.clone())
+            },
+            None => None
+        }
+    }
+
+    pub fn contains_file(&self, filename: &str) -> bool {
+        self.contents.contains_key(filename)
+    }
+
+    pub fn update_file_data(&mut self, filename: String, data: Vec<u8>) -> Option<Vec<u8>> {
+        self.contents.insert(filename, data)
+    }
+
+    pub fn delete_file(&mut self, filename: &str) -> Option<Vec<u8>> {
+        self.contents.remove(filename)
     }
 
     pub fn unpack(&self) -> Result<()> {

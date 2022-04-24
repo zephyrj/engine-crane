@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::ini_utils::Ini;
-use crate::assetto_corsa::error::{PropertyParseError, Result};
+use crate::assetto_corsa::error::{Error, ErrorKind, PropertyParseError, Result};
 use crate::assetto_corsa::ini_utils;
 
 
@@ -13,8 +13,17 @@ pub struct CarIniData<'a> {
 }
 
 impl<'a> CarIniData<'a> {
+    const FILENAME: &'static str = "car.ini";
+
     pub fn from_car(car: &'a mut Car) -> Result<CarIniData<'a>> {
-        let car_ini_data = car.data_interface.get_file_data("car.ini")?;
+        let car_ini_data = match car.data_interface.get_file_data(CarIniData::FILENAME) {
+            Ok(data_option) => match data_option {
+                None => Err(Error::new(ErrorKind::InvalidCar,
+                                       format!("missing {} data", CarIniData::FILENAME))),
+                Some(data) => Ok(data)
+            }
+            Err(e) => Err(e)?
+        }?;
         Ok(CarIniData {
             car,
             ini_config: Ini::load_from_string(String::from_utf8_lossy(car_ini_data.as_slice()).into_owned())
@@ -66,7 +75,9 @@ impl<'a> CarIniData<'a> {
     }
 
     pub fn write(&'a mut self) -> Result<()> {
-        self.car.mut_data_interface().write_file_data("car.ini", self.ini_config.to_bytes())?;
+        let data_interface = self.car.mut_data_interface();
+        data_interface.update_file_data("car.ini", self.ini_config.to_bytes());
+        data_interface.write()?;
         Ok(())
     }
 }

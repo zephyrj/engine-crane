@@ -79,13 +79,13 @@ impl<K,V> LutProperty<K, V>
         }
     }
 
-    pub fn delete_from_car_data(&self, car_data: &mut dyn CarDataFile) -> io::Result<()> {
+    pub fn delete_from_car_data(&self, car_data: &mut dyn CarDataFile) {
         car_data.mut_ini_data().remove_value(&self.section_name, &self.property_name);
         match &self.lut {
             LutType::File(lut_file) => {
                 lut_file.delete(car_data.mut_data_interface())
             },
-            _ => Ok(())
+            _ => ()
         }
     }
 
@@ -113,8 +113,8 @@ impl <K,V> CarDataUpdater for LutProperty<K, V>
                                      self.section_name.as_str(),
                                      self.property_name.as_str(),
                                      &lut_file.filename);
-                car_data.mut_data_interface().write_file_data(&lut_file.filename,
-                                                              lut_file.to_bytes())?;
+                car_data.mut_data_interface().update_file_data(&lut_file.filename,
+                                                               lut_file.to_bytes());
             }
             LutType::Inline(lut) => {
                 ini_utils::set_value(car_data.mut_ini_data(),

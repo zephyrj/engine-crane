@@ -33,7 +33,17 @@ impl<'a> Drivetrain<'a> {
     const INI_FILENAME: &'static str = "drivetrain.ini";
 
     pub fn from_car(car: &'a mut Car) -> Result<Drivetrain<'a>> {
-        let file_data = car.mut_data_interface().get_file_data(Drivetrain::INI_FILENAME)?;
+        let file_data = match car.data_interface.get_file_data(Drivetrain::INI_FILENAME) {
+            Ok(data_option) => {
+                match data_option {
+                    None => Err(Error::new(ErrorKind::InvalidCar, format!("missing {} data", Drivetrain::INI_FILENAME))),
+                    Some(data) => Ok(data)
+                }
+            }
+            Err(e) => {
+                Err(Error::new(ErrorKind::InvalidCar, format!("error reading {} data. {}", Drivetrain::INI_FILENAME, e.to_string())))
+            }
+        }?;
         Ok(Drivetrain {
             car,
             ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned())
@@ -66,8 +76,10 @@ impl<'a> Drivetrain<'a> {
     // }
 
     pub fn write(&mut self) -> Result<()> {
-        self.car.mut_data_interface().write_file_data(Drivetrain::INI_FILENAME,
-                                                      self.ini_data.to_bytes())?;
+        let data_interface = self.car.mut_data_interface();
+        data_interface.update_file_data(Drivetrain::INI_FILENAME,
+                                        self.ini_data.to_bytes());
+        data_interface.write()?;
         Ok(())
     }
 }

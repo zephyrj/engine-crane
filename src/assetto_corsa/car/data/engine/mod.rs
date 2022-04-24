@@ -44,12 +44,20 @@ impl<'a> Engine<'a> {
     // }
 
     pub fn from_car(car: & mut Car) -> Result<Engine> {
-        let data_interface = car.mut_data_interface();
-        let file_data = data_interface.get_file_data(Engine::INI_FILENAME)?;
-        let ini_data = Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned());
+        let file_data = match car.data_interface.get_file_data(Engine::INI_FILENAME) {
+            Ok(data_option) => {
+                match data_option {
+                    None => Err(Error::new(ErrorKind::InvalidCar, format!("missing {} data", Engine::INI_FILENAME))),
+                    Some(data) => Ok(data)
+                }
+            }
+            Err(e) => {
+                Err(Error::new(ErrorKind::InvalidCar, format!("error reading {} data. {}", Engine::INI_FILENAME, e.to_string())))
+            }
+        }?;
         Ok(Engine {
             car,
-            ini_data,
+            ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned())
         })
     }
 
@@ -60,7 +68,9 @@ impl<'a> Engine<'a> {
     }
 
     pub fn write(&mut self) -> Result<()> {
-        self.car.mut_data_interface().write_file_data(Engine::INI_FILENAME, self.ini_data.to_bytes())?;
+        let data_interface = self.car.mut_data_interface();
+        data_interface.update_file_data(Engine::INI_FILENAME, self.ini_data.to_bytes());
+        data_interface.write()?;
         Ok(())
     }
 

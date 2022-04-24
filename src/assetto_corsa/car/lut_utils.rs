@@ -36,8 +36,8 @@ impl<K, V> LutFile<K, V>
         })
     }
 
-    pub fn delete(&self, data_interface: &mut dyn DataInterface) -> io::Result<()> {
-        data_interface.delete_file(&self.filename)
+    pub fn delete(&self, data_interface: &mut dyn DataInterface) {
+        data_interface.remove_file(&self.filename)
     }
     
     pub fn update(&mut self, data: Vec<(K,V)>) -> Vec<(K,V)> {
@@ -139,9 +139,17 @@ impl<K, V> LutType<K, V>
                 Ok(LutType::Inline(InlineLut::from_property_value(property_value)?))
             }
             false => {
-                let data = data_source.get_file_data(&property_value).map_err(|err| {
-                    format!("Failed to load {} from data source. {}", property_value, err.to_string())
-                })?;
+                let data = match data_source.get_file_data(&property_value) {
+                    Ok(data_option) => {
+                        match data_option {
+                            None => Err(format!("Failed to load {} from data source. No such file", property_value)),
+                            Some(data) => Ok(data)
+                        }
+                    }
+                    Err(e) => {
+                        Err(format!("Failed to load {} from data source. {}", property_value, e.to_string()))
+                    }
+                }?;
                 let lut_vec = load_lut_from_bytes(&data).map_err(|err| {
                     format!("Failed to parse lut from {} in data source. {}", property_value, err.to_string())
                 })?;
@@ -210,9 +218,15 @@ pub fn load_lut_from_property_value<K, V>(property_value: String, data_source: &
             load_lut_from_reader::<K, V, _>(data_slice.as_bytes(), b'=', Terminator::Any(b'|'))
         }
         false => {
-            let file_data = data_source.get_file_data(property_value.as_str()).map_err(|err| {
-                format!("Failed to read {} from data source. {}", property_value, err.to_string())
-            })?;
+            let file_data = match data_source.get_file_data(&property_value) {
+                Ok(data_option) => match data_option {
+                    None => Err(format!("Failed to load {} from data source. No such file", property_value)),
+                    Some(data) => Ok(data)
+                }
+                Err(e) => {
+                    Err(format!("Failed to load {} from data source. {}", property_value, e.to_string()))
+                }
+            }?;
             load_lut_from_bytes::<K, V>(&file_data)
         }
     }

@@ -1,5 +1,6 @@
 use std::{error, fmt, io, result};
 use std::fmt::{Display, Formatter};
+use crate::assetto_corsa::traits::DataInterfaceError;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -50,6 +51,12 @@ impl From<toml::de::Error> for Error {
 impl From<crate::assetto_corsa::car::acd_utils::AcdError> for Error {
     fn from(e: crate::assetto_corsa::car::acd_utils::AcdError) -> Self {
         Error::new(ErrorKind::AcdError, e.to_string())
+    }
+}
+
+impl From<crate::assetto_corsa::traits::DataInterfaceError> for Error {
+    fn from(e: DataInterfaceError) -> Self {
+        Error::new(ErrorKind::IOError, e.to_string())
     }
 }
 

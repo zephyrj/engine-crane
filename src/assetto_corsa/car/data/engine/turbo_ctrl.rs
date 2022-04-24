@@ -43,21 +43,24 @@ impl<'a> TurboControllerFile<'a> {
     }
 
     pub fn from_car(car: & mut Car, turbo_index: usize) -> Result<Option<TurboControllerFile>> {
-        match car.mut_data_interface().get_file_data(&TurboControllerFile::get_controller_ini_filename(turbo_index)) {
-            Err(e) => {
-                return match e.kind() {
-                    io::ErrorKind::NotFound => {
-                        Ok(None)
-                    },
-                    _ => { Err(Error::from(e)) }
+        match car.data_interface.get_file_data(&TurboControllerFile::get_controller_ini_filename(turbo_index)) {
+            Ok(data_option) => {
+                match data_option {
+                    None => Ok(None),
+                    Some(file_data) => {
+                        Ok(Some(TurboControllerFile {
+                            car,
+                            turbo_index,
+                            ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).to_string())
+                        }))
+                    }
                 }
             }
-            Ok(file_data) => {
-                Ok(Some(TurboControllerFile {
-                    car,
-                    turbo_index,
-                    ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).to_string())
-                }))
+            Err(e) => {
+                Err(Error::new(ErrorKind::InvalidCar,
+                               format!("error reading {} data. {}",
+                                       &TurboControllerFile::get_controller_ini_filename(turbo_index),
+                                       e.to_string())))
             }
         }
     }
@@ -66,14 +69,16 @@ impl<'a> TurboControllerFile<'a> {
         if let Some(mut ctrl_file) = TurboControllerFile::from_car(car, turbo_index)? {
             ctrl_file.delete_all_controller_sections()?;
         }
-        car.mut_data_interface().delete_file(&TurboControllerFile::get_controller_ini_filename(turbo_index))?;
+        car.mut_data_interface().remove_file(&TurboControllerFile::get_controller_ini_filename(turbo_index));
         Ok(())
     }
 
     pub fn write(&mut self) -> Result<()> {
         let filename = self.filename();
         let bytes = self.ini_data.to_bytes();
-        self.car.mut_data_interface().write_file_data(&filename, bytes)?;
+        let data_interface = self.car.mut_data_interface();
+        data_interface.update_file_data(&filename, bytes);
+        data_interface.write()?;
         Ok(())
     }
 
@@ -181,7 +186,7 @@ impl TurboController {
     }
 
     pub fn delete(&self, controller_file: &mut TurboControllerFile) -> Result<()> {
-        self.lut.delete_from_car_data(controller_file)?;
+        self.lut.delete_from_car_data(controller_file);
         controller_file.mut_ini_data().remove_section(&self.section_name());
         Ok(())
     }

@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 use std::io;
+use crate::assetto_corsa::car::acd_utils::AcdError;
 use crate::assetto_corsa::ini_utils::Ini;
+use thiserror::Error;
 
 pub trait CarDataFile
 {
@@ -34,12 +36,28 @@ pub fn update_car_data<T: CarDataFile, S: CarDataUpdater>(car_data: &mut T, car_
     car_data_updater.update_car_data(car_data)
 }
 
+pub type DataInterfaceResult<T> = std::result::Result<T, DataInterfaceError>;
+
+#[derive(Error, Debug)]
+pub enum DataInterfaceError {
+    #[error("io error")]
+    IoError {
+        #[from]
+        source: io::Error
+    },
+    #[error("acd error")]
+    AcdError {
+        #[from]
+        source: AcdError
+    }
+}
+
 pub trait _DataInterfaceI {
-    fn load(&self);
-    fn get_file_data(&self, filename: &str) -> io::Result<Vec<u8>>;
+    fn get_file_data(&self, filename: &str) -> DataInterfaceResult<Option<Vec<u8>>>;
     fn contains_file(&self, filename: &str) -> bool;
-    fn write_file_data(&mut self, filename: &str, data: Vec<u8>) -> io::Result<()>;
-    fn delete_file(&mut self, filename: &str) -> io::Result<()>;
+    fn update_file_data(&mut self, filename: &str, data: Vec<u8>);
+    fn remove_file(&mut self, filename: &str);
+    fn write(&mut self) -> DataInterfaceResult<()>;
 }
 
 pub trait DataInterface: _DataInterfaceI + Debug {}
