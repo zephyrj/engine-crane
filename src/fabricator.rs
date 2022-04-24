@@ -577,7 +577,7 @@ mod tests {
         std::fs::write("limiter.txt",format!("{}", calculator.limiter()));
         std::fs::write("fuel_cons.txt",format!("{}", calculator.basic_fuel_consumption().unwrap()));
         std::fs::write("torque_curve.txt",format!("{:?}", calculator.naturally_aspirated_wheel_torque_curve(0.85)));
-        std::fs::write("turbo_ctrl.txt",format!("{}", calculator.create_turbo_controllers(PathBuf::from("").as_path()).unwrap()));
+        std::fs::write("turbo_ctrl.txt",format!("{:?}", calculator.create_turbo_controller().unwrap()));
         std::fs::write("turbo.txt",format!("{:?}", calculator.create_turbo().unwrap()));
         std::fs::write("coast.txt",format!("{:?}", calculator.coast_data().unwrap()));
         std::fs::write("metadata.txt",format!("{:?}", calculator.create_metadata()));

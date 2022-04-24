@@ -49,6 +49,7 @@ fn get_parent_folder_str(path: &Path) -> Result<&str> {
         .to_str().ok_or(missing_parent_error(path))?)
 }
 
+#[derive(Debug)]
 pub struct AcdArchive {
     acd_path: PathBuf,
     extract_key: String,
@@ -134,59 +135,61 @@ impl AcdArchive {
 /// This is derived from his quickBMS script which can be found at:
 /// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143
 pub fn generate_acd_key(folder_name: &str) -> Result<String> {
+    type KeyVal = i128;
+
     let mut key_list: Vec<String> = Vec::with_capacity(8);
-    let mut push_key_component = |val: i64| { key_list.push((val & 0xff).to_string()) };
+    let mut push_key_component = |val: KeyVal| { key_list.push((val & 0xff).to_string()) };
 
     let index_error = |idx: usize| {
         key_error(folder_name, format!("Bad index ({}) into folder name", idx))
     };
 
-    let mut key_1 = 0_i64;
-    folder_name.chars().for_each(|c| key_1 += u64::from(c) as i64);
+    let mut key_1: KeyVal = 0;
+    folder_name.chars().for_each(|c| key_1 += u64::from(c) as KeyVal);
     push_key_component(key_1);
 
-    let mut key_2: i64 = 0;
+    let mut key_2: KeyVal = 0;
     for idx in (0..folder_name.len()-1).step_by(2) {
-        key_2 *= u64::from(folder_name.chars().nth(idx).ok_or(index_error(idx))?) as i64;
-        key_2 -= u64::from(folder_name.chars().nth(idx+1).ok_or(index_error(idx+1))?) as i64;
+        key_2 = key_2.wrapping_mul( u64::from(folder_name.chars().nth(idx).ok_or(index_error(idx))?) as KeyVal);
+        key_2 = key_2.wrapping_sub(u64::from(folder_name.chars().nth(idx+1).ok_or(index_error(idx+1))?) as KeyVal);
     }
     push_key_component(key_2);
 
-    let mut key_3: i64 = 0;
+    let mut key_3: KeyVal = 0;
     for idx in (1..folder_name.len()-3).step_by(3) {
-        key_3 *= u64::from(folder_name.chars().nth(idx).ok_or(index_error(idx))?) as i64;
-        key_3 /= (u64::from(folder_name.chars().nth(idx+1).ok_or(index_error(idx+1))?) as i64) + 0x1b;
-        key_3 += -0x1b - u64::from(folder_name.chars().nth(idx-1).ok_or(index_error(idx-1))?) as i64;
+        key_3 *= u64::from(folder_name.chars().nth(idx).ok_or(index_error(idx))?) as KeyVal;
+        key_3 /= (u64::from(folder_name.chars().nth(idx+1).ok_or(index_error(idx+1))?)) as KeyVal + 0x1b;
+        key_3 += -0x1b - u64::from(folder_name.chars().nth(idx-1).ok_or(index_error(idx-1))?) as KeyVal;
     }
     push_key_component(key_3);
 
-    let mut key_4 = 0x1683_i64;
-    folder_name[1..].chars().for_each(|c| key_4 -= u64::from(c) as i64);
+    let mut key_4: KeyVal = 0x1683;
+    folder_name[1..].chars().for_each(|c| key_4 -= u64::from(c) as KeyVal);
     push_key_component(key_4);
 
-    let mut key_5 = 0x42_i64;
+    let mut key_5: KeyVal = 0x42;
     for idx in (1..folder_name.len()-4).step_by(4) {
-        let mut tmp = u64::from(folder_name.chars().nth(idx).ok_or(index_error(idx))?) as i64 + 0xf;
+        let mut tmp = u64::from(folder_name.chars().nth(idx).ok_or(index_error(idx))?) as KeyVal + 0xf;
         tmp *= key_5;
-        let mut tmp2 = u64::from(folder_name.chars().nth(idx-1).ok_or(index_error(idx-1))?) as i64 + 0xf;
+        let mut tmp2 = u64::from(folder_name.chars().nth(idx-1).ok_or(index_error(idx-1))?) as KeyVal + 0xf;
         tmp2 *= tmp;
         tmp2 += 0x16;
         key_5 = tmp2;
     }
     push_key_component(key_5);
 
-    let mut key_6 = 0x65_i64;
-    folder_name[0..folder_name.len()-2].chars().step_by(2).for_each(|c| key_6 -= u64::from(c) as i64 );
+    let mut key_6: KeyVal = 0x65;
+    folder_name[0..folder_name.len()-2].chars().step_by(2).for_each(|c| key_6 = key_6.wrapping_sub(u64::from(c) as KeyVal));
     push_key_component(key_6);
 
-    let mut key_7 = 0xab_i64;
-    folder_name[0..folder_name.len()-2].chars().step_by(2).for_each(|c| key_7 %= u64::from(c) as i64 );
+    let mut key_7: KeyVal = 0xab;
+    folder_name[0..folder_name.len()-2].chars().step_by(2).for_each(|c| key_7 %= u64::from(c) as KeyVal);
     push_key_component(key_7);
 
-    let mut key_8 = 0xab;
+    let mut key_8: KeyVal = 0xab;
     for idx in 0..folder_name.len()-1 {
-        key_8 /= u64::from(folder_name.chars().nth(idx).ok_or(index_error(idx))?) as i64;
-        key_8 += u64::from(folder_name.chars().nth(idx+1).ok_or(index_error(idx+1))?) as i64
+        key_8 /= u64::from(folder_name.chars().nth(idx).ok_or(index_error(idx))?) as KeyVal;
+        key_8 += u64::from(folder_name.chars().nth(idx+1).ok_or(index_error(idx+1))?) as KeyVal;
     }
     push_key_component(key_8);
 
@@ -209,6 +212,11 @@ pub fn extract_acd(acd_path: &Path,
     while current_pos < packed_buffer.len() {
         // 4 bytes contain the length of filename
         let filename_len = LengthField::from_le_bytes(packed_buffer[current_pos..(current_pos+mem::size_of::<LengthField>())].try_into().expect("Failed to parse filename length"));
+        if filename_len > 128 {
+            // The opening of the file isn't the length - skip over it
+            current_pos += 8;
+            continue;
+        }
         current_pos += mem::size_of::<LengthField>();
 
         // The next 'filename_len' bytes are the filename
@@ -227,7 +235,7 @@ pub fn extract_acd(acd_path: &Path,
         let mut unpacked_buffer: Vec<u8> = Vec::new();
         let mut key_byte_iter = extraction_key.chars().cycle();
         packed_buffer[current_pos..current_pos+(content_length*4) as usize].iter().step_by(4).for_each(|byte|{
-            unpacked_buffer.push(byte - u32::from(key_byte_iter.next().unwrap()) as u8);
+            unpacked_buffer.push(byte.wrapping_sub(u32::from(key_byte_iter.next().unwrap()) as u8));
         });
 
         debug!("{} - {} bytes", filename, content_length);
@@ -251,9 +259,19 @@ mod tests {
     }
 
     #[test]
+    fn derive_acd_key_from_long_name() {
+        assert_eq!(generate_acd_key("ks_maserati_gt_mc_gt4").unwrap(), "16-39-7-162-182-31-30-101");
+    }
+
+    #[test]
+    fn derive_acd_key_with_large_values() {
+        println!("{}", generate_acd_key("dallara_f312").unwrap())
+    }
+
+    #[test]
     fn extract_acd() {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/lotus_98t/data.acd");
-        let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/lotus_98t/data");
+        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/dallara_f312/data.acd");
+        let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/dallara_f312/data");
         AcdArchive::load_from_path(path).unwrap().unpack().unwrap();
     }
 

@@ -307,11 +307,11 @@ pub fn write_lut_to_property_value<K, V>(data: &Vec<(K,V)>, delimiter: u8, termi
     };
 }
 
-#[test]
-fn load_lut_string() {
-    let data = String::from("(0=0.12|0.97=13|1=0.40)");
-    let vec: Vec<(f64, f64)> = load_lut_from_property_value(data, Path::new("")).unwrap();
-    println!("{:?}", vec);
-    let out = write_lut_to_property_value(&vec, b'=', Terminator::Any(b'|')).unwrap();
-    println!("{}", out);
-}
+// #[test]
+// fn load_lut_string() {
+//     let data = String::from("(0=0.12|0.97=13|1=0.40)");
+//     let vec: Vec<(f64, f64)> = load_lut_from_property_value(data, Path::new("")).unwrap();
+//     println!("{:?}", vec);
+//     let out = write_lut_to_property_value(&vec, b'=', Terminator::Any(b'|')).unwrap();
+//     println!("{}", out);
+// }
