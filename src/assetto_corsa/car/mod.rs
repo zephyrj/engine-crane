@@ -22,6 +22,7 @@ use crate::assetto_corsa::{ini_utils, load_sfx_data};
 use crate::assetto_corsa::ini_utils::Ini;
 use acd_utils::AcdArchive;
 use crate::assetto_corsa::car::data::CarIniData;
+use crate::assetto_corsa::car::data_interface::AcdDataInterface;
 use crate::assetto_corsa::car::ui::CarUiData;
 
 
@@ -210,10 +211,13 @@ pub struct Car {
 impl Car {
     pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
         let data_dir_path = car_folder_path.join("data");
-        let data_interface = Box::new(DataFolderInterface::new(&data_dir_path));
+        let data_file_path = car_folder_path.join("data.acd");
         Ok(Car{
             root_path: car_folder_path.to_path_buf(),
-            data_interface
+            data_interface: match data_dir_path.is_dir() {
+                true => Box::new(DataFolderInterface::new(&data_dir_path)),
+                false => Box::new(AcdDataInterface::new(&data_file_path)?),
+            }
         })
     }
 
@@ -232,21 +236,27 @@ impl Car {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::{Path, PathBuf};
+    use crate::assetto_corsa;
     use crate::assetto_corsa::car::{Car, create_new_car_spec};
+    use crate::assetto_corsa::car::data::CarIniData;
+    use crate::assetto_corsa::car::ui::CarUiData;
 
     #[test]
     fn load_car() -> Result<(), String> {
         let this_file = Path::new(file!());
         let this_dir = this_file.parent().unwrap();
         let path = this_dir.join("test-data/car-with-turbo-with-ctrls");
-        let car = match Car::load_from_path(&path) {
+        let mut car = match Car::load_from_path(&path) {
             Ok(car) => {
                 car
             }
             Err(e) => {  return Err(e.to_string()) }
         };
-        let ui_info = &car.ui_info;
+        let ui_data = CarUiData::from_car(&mut car).unwrap();
+        let ui_info = ui_data.ui_info;
         assert_eq!(ui_info.name().unwrap(), "Turbo with CTRL");
         assert_eq!(ui_info.brand().unwrap(), "Test");
         assert_eq!(ui_info.class().unwrap(), "street");
@@ -259,5 +269,39 @@ mod tests {
     fn clone_car() {
         let new_car_path = create_new_car_spec("zephyr_za401", "test").unwrap();
         println!("{}", new_car_path.display());
+    }
+
+    #[test]
+    fn installed_car_test() {
+        let installed_cars = assetto_corsa::get_list_of_installed_cars().unwrap();
+        let mut pass_file = File::create(Path::new("pass.txt")).unwrap();
+        let mut fail_file = File::create(Path::new("fail.txt")).unwrap();
+        for path in &installed_cars {
+            match Car::load_from_path(path) {
+                Ok(mut car) => {
+                    {
+                        match CarIniData::from_car(&mut car) {
+                            Ok(ini_data) => {
+                                if let Some(name) = ini_data.screen_name() {
+                                    write!(pass_file, "{} at {} passed\n", name, path.display()).unwrap();
+                                    pass_file.flush();
+                                } else {
+                                    write!(pass_file, "{} has no screen name\n", path.display()).unwrap();
+                                    pass_file.flush();
+                                }
+                            }
+                            Err(err) => {
+                                write!(fail_file, "{} ini load failed. {}\n", path.display(), err.to_string()).unwrap();
+                                fail_file.flush();
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    write!(fail_file, "{} car load failed. {}\n", path.display(), err.to_string()).unwrap();
+                    fail_file.flush();
+                }
+            }
+        }
     }
 }

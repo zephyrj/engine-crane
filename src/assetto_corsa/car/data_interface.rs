@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::env::set_current_dir;
+use std::fmt::Debug;
 use std::fs::File;
 use std::io;
-use std::io::{BufReader, ErrorKind, Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use tracing::info;
 use crate::assetto_corsa::car::acd_utils::AcdArchive;
 use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface, DataInterfaceResult};
 use crate::assetto_corsa::error::Result;
@@ -83,6 +82,7 @@ impl _DataInterfaceI for DataFolderInterface {
 
 impl DataInterface for DataFolderInterface {}
 
+#[derive(Debug)]
 pub struct AcdDataInterface {
     acd_archive: AcdArchive
 }
@@ -115,3 +115,5 @@ impl _DataInterfaceI for AcdDataInterface {
         Ok(())
     }
 }
+
+impl DataInterface for AcdDataInterface {}
