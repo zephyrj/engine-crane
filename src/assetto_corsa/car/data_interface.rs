@@ -89,7 +89,7 @@ pub struct AcdDataInterface {
 
 impl AcdDataInterface {
     pub fn new(path: &Path) -> Result<Self> {
-        Ok(AcdDataInterface { acd_archive: AcdArchive::load_from_path(path)? })
+        Ok(AcdDataInterface { acd_archive: AcdArchive::load_from_acd_file(path)? })
     }
 }
 

@@ -26,7 +26,9 @@ use crate::assetto_corsa::car::data_interface::AcdDataInterface;
 use crate::assetto_corsa::car::ui::CarUiData;
 
 
-pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Result<()> {
+pub fn clone_existing_car(existing_car_path: &Path,
+                          new_car_path: &Path,
+                          unpack_data_dir: bool) -> Result<()> {
     if existing_car_path == new_car_path {
         return Err(Error::new(ErrorKind::CarAlreadyExists,
                               format!("Cannot clone car to its existing location. ({})", existing_car_path.display())));
@@ -42,24 +44,40 @@ pub fn clone_existing_car(existing_car_path: &Path, new_car_path: &Path) -> Resu
     let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
     let data_path = new_car_path.join("data");
     let acd_path = new_car_path.join("data.acd");
-    if !data_path.exists() {
-        if !acd_path.exists() {
+    if !data_path.is_dir() {
+        if !acd_path.is_file() {
             return Err(Error::new(ErrorKind::InvalidCar,
                                   format!("{} doesn't contain a data dir or data.acd file", existing_car_path.display())));
         }
         info!("No data dir present in {}. Data will be extracted from data.acd", new_car_path.display());
-        AcdArchive::load_from_path_with_key(acd_path.as_path(), existing_car_name)?.unpack()?;
+        AcdArchive::load_from_acd_file_with_key(acd_path.as_path(), existing_car_name)?.unpack()?;
     }
-    info!("Deleting {} as data will be invalid after clone completion", acd_path.display());
-    if let Some(err) = delete_data_acd_file(new_car_path).err(){
-        warn!("Warning: {}", err.to_string());
-    }
+
     fix_car_specific_filenames(new_car_path, existing_car_name)?;
     update_car_sfx(new_car_path, existing_car_name)?;
+
+    match unpack_data_dir {
+        true => {
+            info!("Deleting {} as data will be invalid after clone completion", acd_path.display());
+            if let Some(err) = delete_data_acd_file(new_car_path).err(){
+                warn!("Warning: {}", err.to_string());
+            }
+        }
+        false => {
+            info!("Packing {} into an .acd file", data_path.display());
+            AcdArchive::create_from_data_dir(&data_path)?.write()?;
+            if data_path.exists() {
+                info!("Deleting {} as data will be invalid after clone completion", data_path.display());
+                std::fs::remove_dir_all(data_path)?;
+            }
+        }
+    }
     Ok(())
 }
 
-pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<PathBuf>{
+pub fn create_new_car_spec(existing_car_name: &str,
+                           spec_name: &str,
+                           unpack_data: bool) -> Result<PathBuf>{
     let installed_cars_path = match assetto_corsa::get_installed_cars_path() {
         Some(path) => { path },
         None => {
@@ -80,7 +98,9 @@ pub fn create_new_car_spec(existing_car_name: &str, spec_name: &str) -> Result<P
         return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
     }
     info!("Cloning {} to {}", existing_car_path.display(), new_car_path.display());
-    clone_existing_car(existing_car_path.as_path(), new_car_path.as_path())?;
+    clone_existing_car(existing_car_path.as_path(),
+                       new_car_path.as_path(),
+                       unpack_data)?;
     update_car_ui_data(new_car_path.as_path(), spec_name, existing_car_name)?;
     Ok(new_car_path)
 }
@@ -267,7 +287,7 @@ mod tests {
 
     #[test]
     fn clone_car() {
-        let new_car_path = create_new_car_spec("zephyr_za401", "test").unwrap();
+        let new_car_path = create_new_car_spec("zephyr_za401", "test", true).unwrap();
         println!("{}", new_car_path.display());
     }
 
@@ -284,6 +304,9 @@ mod tests {
                             Ok(ini_data) => {
                                 if let Some(name) = ini_data.screen_name() {
                                     write!(pass_file, "{} at {} passed\n", name, path.display()).unwrap();
+                                    if let Some(header_data) = car.data_interface.get_file_data("_header").unwrap() {
+                                        write!(pass_file, "Contained header {:02X?}\n", header_data).unwrap();
+                                    }
                                     pass_file.flush();
                                 } else {
                                     write!(pass_file, "{} has no screen name\n", path.display()).unwrap();

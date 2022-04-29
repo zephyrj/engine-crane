@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, text_input, TextInput, Row, button, Button, HorizontalAlignment};
+use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, text_input, TextInput, Row, button, Button, HorizontalAlignment, Checkbox};
 use crate::{assetto_corsa, beam_ng, fabricator};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
 use tracing::{span, Level, info, error};
@@ -24,6 +24,7 @@ pub struct CarSelector {
     swap_button: button::State,
     minimum_physics_pick_list: pick_list::State<AssettoCorsaPhysicsLevel>,
     current_engine_weight_input: text_input::State,
+    unpack_physics_data: bool,
     status_message: String
 }
 
@@ -46,6 +47,7 @@ pub enum Message {
     ModSelected(String),
     PhysicsLevelSelected(AssettoCorsaPhysicsLevel),
     OldEngineWeightEntered(String),
+    UnpackToggled(bool),
     SwapButtonPressed
 }
 
@@ -115,7 +117,7 @@ impl Sandbox for CarSelector {
                 let new_car_path = {
                     let span = span!(Level::INFO, "Creating new car spec");
                     let _enter = span.enter();
-                    match assetto_corsa::car::create_new_car_spec(existing_car_name, new_spec_name) {
+                    match assetto_corsa::car::create_new_car_spec(existing_car_name, new_spec_name, self.unpack_physics_data) {
                         Ok(path) => { path }
                         Err(e) => {
                             error!("Swap failed: {}", e.to_string());
@@ -170,6 +172,9 @@ impl Sandbox for CarSelector {
                         self.current_engine_weight = None;
                     }
                 }
+            }
+            Message::UnpackToggled(bool_val) => {
+                self.unpack_physics_data = bool_val;
             }
         }
     }
@@ -246,11 +251,17 @@ impl Sandbox for CarSelector {
             Some(self.current_minimum_physics),
             Message::PhysicsLevelSelected
         );
+        let unpack_checkbox = Checkbox::new(
+            self.unpack_physics_data,
+            "Unpack physics data",
+            Message::UnpackToggled
+        );
         let control_row = Row::new()
             .align_items(Align::Start)
             .padding(20)
             .push(swap_button)
-            .push(physics_pick_list);
+            .push(physics_pick_list)
+            .push(unpack_checkbox);
 
         let mut layout = Column::new().width(Length::Fill)
             .align_items(Align::Start)

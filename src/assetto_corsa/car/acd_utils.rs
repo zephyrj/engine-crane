@@ -53,15 +53,23 @@ fn get_parent_folder_str(path: &Path) -> Result<&str> {
 pub struct AcdArchive {
     acd_path: PathBuf,
     extract_key: String,
-    contents: IndexMap<String, Vec<u8>>
+    contents: AcdFileContents
+}
+
+fn load_data_from_file(file_path: &Path) -> io::Result<Vec<u8>> {
+    let f = File::open(file_path)?;
+    let mut reader = BufReader::new(f);
+    let mut data = Vec::new();
+    reader.read_to_end(&mut data)?;
+    Ok(data)
 }
 
 impl AcdArchive {
-    pub fn load_from_path(acd_path: &Path) -> Result<AcdArchive> {
-        AcdArchive::load_from_path_with_key(acd_path, get_parent_folder_str(acd_path)?)
+    pub fn load_from_acd_file(acd_path: &Path) -> Result<AcdArchive> {
+        AcdArchive::load_from_acd_file_with_key(acd_path, get_parent_folder_str(acd_path)?)
     }
 
-    pub fn load_from_path_with_key(acd_path: &Path, in_key: &str) -> Result<AcdArchive> {
+    pub fn load_from_acd_file_with_key(acd_path: &Path, in_key: &str) -> Result<AcdArchive> {
         let key = generate_acd_key(in_key)?;
         let contents = extract_acd(acd_path, &key)?;
         Ok(AcdArchive{
@@ -71,8 +79,26 @@ impl AcdArchive {
         })
     }
 
+    pub fn create_from_data_dir(data_dir_path: &Path) -> Result<AcdArchive> {
+        let mut contents = AcdFileContents::new();
+        for entry in fs::read_dir(data_dir_path)? {
+            let entry = entry?;
+            if entry.path().is_dir() {
+                continue;
+            }
+            let filename = entry.file_name().to_string_lossy().into_owned();
+            let data = load_data_from_file(&entry.path())?;
+            contents.files.insert(filename, data);
+        }
+        Ok(AcdArchive{
+            acd_path: data_dir_path.parent().ok_or(missing_parent_error(data_dir_path))?.join("data.acd"),
+            extract_key: get_parent_folder_str(data_dir_path)?.to_owned(),
+            contents
+        })
+    }
+
     pub fn get_file_data(&self, filename: &str) -> Option<Vec<u8>> {
-        match self.contents.get(filename) {
+        match self.contents.files.get(filename) {
             Some(data) => {
                 Some(data.clone())
             },
@@ -81,15 +107,15 @@ impl AcdArchive {
     }
 
     pub fn contains_file(&self, filename: &str) -> bool {
-        self.contents.contains_key(filename)
+        self.contents.files.contains_key(filename)
     }
 
     pub fn update_file_data(&mut self, filename: String, data: Vec<u8>) -> Option<Vec<u8>> {
-        self.contents.insert(filename, data)
+        self.contents.files.insert(filename, data)
     }
 
     pub fn delete_file(&mut self, filename: &str) -> Option<Vec<u8>> {
-        self.contents.remove(filename)
+        self.contents.files.remove(filename)
     }
 
     pub fn unpack(&self) -> Result<()> {
@@ -100,7 +126,7 @@ impl AcdArchive {
         if !out_path.is_dir() {
             std::fs::create_dir(out_path).unwrap();
         }
-        for (filename, unpacked_buffer) in &self.contents {
+        for (filename, unpacked_buffer) in &self.contents.files {
             fs::write(out_path.join(filename), unpacked_buffer)?;
         }
         Ok(())
@@ -114,14 +140,14 @@ impl AcdArchive {
         let parent_folder = get_parent_folder_str(out_path)?;
         let key = generate_acd_key(parent_folder)?;
         let mut out_file = File::create(out_path)?;
-        for filename in self.contents.keys() {
+        for filename in self.contents.files.keys() {
             let mut key_byte_iter = key.chars().cycle();
             let filename_len = filename.len() as u32;
             out_file.write(&filename_len.to_le_bytes())?;
             out_file.write(filename.as_bytes())?;
-            let data_len = self.contents[filename].len() as u32;
+            let data_len = self.contents.files[filename].len() as u32;
             out_file.write(&data_len.to_le_bytes())?;
-            for byte in &self.contents[filename] {
+            for byte in &self.contents.files[filename] {
                 let out_byte = byte + u32::from(key_byte_iter.next().unwrap()) as u8;
                 out_file.write(&[out_byte, 0, 0, 0])?;
             }
@@ -196,11 +222,65 @@ pub fn generate_acd_key(folder_name: &str) -> Result<String> {
     Ok(key_list.join("-"))
 }
 
+// If first 4 bytes -> [A9, FB, FF, FF] signifies that the car is DLC
+const DLC_BYTE_MARKER: &'static[u8] = &[0xA9, 0xFB, 0xFF, 0xFF];
+
+// Second 4 bytes denotes the DLC pack it belongs to:
+#[derive(Debug)]
+pub enum DlcPack {
+    DreamPack1,
+    DreamPack2,
+    DreamPack3,
+    JapaneseCarPack,
+    RedPack,
+    TRIPL3Pack,
+    PorschePack1,
+    PorschePack2,
+    PorschePack3,
+    ReadytoRace,
+    FerrariPack,
+    Unknown
+}
+
+impl DlcPack {
+    pub fn from_bytes(bytes: &[u8]) -> DlcPack {
+        match bytes {
+            &[0x91, 0x46, 0x0A, 0x00] => DlcPack::DreamPack1,
+            &[0xFD, 0xEA, 0x0D, 0x00] => DlcPack::DreamPack2,
+            &[0xB1, 0xEB, 0x0B, 0x00] => DlcPack::DreamPack3,
+            &[0x87, 0xB7, 0x03, 0x00] => DlcPack::JapaneseCarPack,
+            &[0x35, 0x57, 0x0B, 0x00] => DlcPack::RedPack,
+            &[0x91, 0xC7, 0x04, 0x00] => DlcPack::TRIPL3Pack,
+            &[0xA1, 0x09, 0x0E, 0x00] => DlcPack::PorschePack1,
+            &[0x3F, 0xC0, 0x0C, 0x00] => DlcPack::PorschePack2,
+            &[0xF2, 0x05, 0x09, 0x00] => DlcPack::PorschePack3,
+            &[0xBF, 0xE4, 0x07, 0x00] => DlcPack::ReadytoRace,
+            &[0xDA, 0xEB, 0x0D, 0x00] => DlcPack::FerrariPack,
+            _ => DlcPack::Unknown
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct AcdFileContents {
+    pub dlc_pack: Option<DlcPack>,
+    pub files: IndexMap<String, Vec<u8>>
+}
+
+impl AcdFileContents {
+    pub fn new() -> AcdFileContents {
+        AcdFileContents {
+            dlc_pack: None,
+            files: IndexMap::new()
+        }
+    }
+}
+
 /// Credit for this goes to Luigi Auriemma (me@aluigi.org)
 /// This is derived from his quickBMS script which can be found at:
 /// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143
 pub fn extract_acd(acd_path: &Path,
-                   extraction_key: &str) -> Result<IndexMap<String, Vec<u8>>> {
+                   extraction_key: &str) -> Result<AcdFileContents> {
     let f = File::open(acd_path)?;
     let mut reader = BufReader::new(f);
     let mut packed_buffer = Vec::new();
@@ -209,14 +289,16 @@ pub fn extract_acd(acd_path: &Path,
     let mut out_map = IndexMap::new();
     type LengthField = u32;
     let mut current_pos: usize = 0;
+
+    let mut dlc_pack = None;
+    if &packed_buffer[current_pos..(current_pos+4)] == DLC_BYTE_MARKER {
+        current_pos += 4;
+        dlc_pack = Some(DlcPack::from_bytes(&packed_buffer[current_pos..(current_pos+4)]));
+        current_pos += 4;
+    }
     while current_pos < packed_buffer.len() {
         // 4 bytes contain the length of filename
         let filename_len = LengthField::from_le_bytes(packed_buffer[current_pos..(current_pos+mem::size_of::<LengthField>())].try_into().expect("Failed to parse filename length"));
-        if filename_len > 128 {
-            // The opening of the file isn't the length - skip over it
-            current_pos += 8;
-            continue;
-        }
         current_pos += mem::size_of::<LengthField>();
 
         // The next 'filename_len' bytes are the filename
@@ -237,12 +319,11 @@ pub fn extract_acd(acd_path: &Path,
         packed_buffer[current_pos..current_pos+(content_length*4) as usize].iter().step_by(4).for_each(|byte|{
             unpacked_buffer.push(byte.wrapping_sub(u32::from(key_byte_iter.next().unwrap()) as u8));
         });
-
         debug!("{} - {} bytes", filename, content_length);
         out_map.insert(filename, unpacked_buffer);
         current_pos += (content_length*4) as usize;
     }
-    Ok(out_map)
+    Ok(AcdFileContents{dlc_pack, files: out_map})
 }
 
 
@@ -272,14 +353,14 @@ mod tests {
     fn extract_acd() {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/dallara_f312/data.acd");
         let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/dallara_f312/data");
-        AcdArchive::load_from_path(path).unwrap().unpack().unwrap();
+        AcdArchive::load_from_acd_file(path).unwrap().unpack().unwrap();
     }
 
     #[test]
     fn read_and_write() {
         let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data.acd");
         let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/testdata.acd");
-        let archive = AcdArchive::load_from_path(path).unwrap();
+        let archive = AcdArchive::load_from_acd_file(path).unwrap();
         archive.write_to(out_path).unwrap();
         let mut a = Vec::new();
         File::open(path).unwrap().read_to_end(&mut a).unwrap();
@@ -287,4 +368,6 @@ mod tests {
         File::open(out_path).unwrap().read_to_end(&mut b).unwrap();
         assert_eq!(a, b)
     }
+
+
 }

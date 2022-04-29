@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn clone_and_swap_test() -> Result<(), String> {
-        let new_car_path = create_new_car_spec("zephyr_za401", "test").unwrap();
+        let new_car_path = create_new_car_spec("zephyr_za401", "test", true).unwrap();
         let mods = get_mod_list();
         swap_automation_engine_into_ac_car(mods[0].as_path(),
                                            new_car_path.as_path(),
