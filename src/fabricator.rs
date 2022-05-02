@@ -6,6 +6,8 @@ use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
 use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::data::car_ini_data::CarVersion;
+use crate::assetto_corsa::car::data::digital_instruments::DigitalInstruments;
+use crate::assetto_corsa::car::data::digital_instruments::shift_lights::ShiftLights;
 use crate::assetto_corsa::car::ui::CarUiData;
 use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::Engine;
@@ -14,7 +16,7 @@ use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_contro
 use crate::assetto_corsa::car::lut_utils::{InlineLut, LutType};
 use crate::assetto_corsa::car::structs::LutProperty;
 
-use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, update_car_data};
+use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
 use crate::automation::car::CarFile;
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 
@@ -401,6 +403,9 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
     info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, drive_type.mechanical_efficiency());
 
     let mut mass = 0;
+    let mut old_limiter = 0;
+    let new_limiter = calculator.limiter().round() as i32;
+
     {
         let mut ini_data = CarIniData::from_car(&mut car).unwrap();
         match settings.minimum_physics_level {
@@ -460,8 +465,8 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         let mut engine_data = extract_mandatory_section::<data::engine::EngineData>(&engine).unwrap();
         let inertia = calculator.inertia().unwrap();
         engine_data.inertia = inertia;
-        let limiter = calculator.limiter().round() as i32;
-        engine_data.limiter = limiter;
+        old_limiter = engine_data.limiter;
+        engine_data.limiter = new_limiter;
         engine_data.minimum = calculator.idle_speed().unwrap().round() as i32;
         update_car_data(&mut engine, &engine_data).unwrap();
         update_car_data(&mut engine, &calculator.damage()).unwrap();
@@ -535,6 +540,39 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
             }
         };
     };
+
+    match DigitalInstruments::from_car(&mut car) {
+        Ok(opt) => {
+            if let Some(mut digital_instruments) = opt {
+                info!("Updating digital instruments files");
+                match ShiftLights::load_from_parent(&digital_instruments) {
+                    Ok(opt) => {
+                        if let Some(mut shift_lights) = opt {
+                            shift_lights.update_limiter(old_limiter as u32, new_limiter as u32);
+                            match update_car_data(&mut digital_instruments, &shift_lights) {
+                                Err(err) => {
+                                    warn!("Failed to shift lights in {}. {}",
+                                          DigitalInstruments::INI_FILENAME,
+                                          err.to_string())
+                                }
+                                _ => {}
+                            }
+                            match digital_instruments.write() {
+                                Err(err) => {
+                                    warn!("Failed to write digital_instruments.ini. {}", err.to_string());
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        warn!("Failed to shift lights in {}. {}", DigitalInstruments::INI_FILENAME, err.to_string())
+                    }
+                }
+            }
+        }
+        Err(err) => { warn!("Failed to update {}. {}", DigitalInstruments::INI_FILENAME, err.to_string())}
+    }
 
     {
         info!("Updating ui components");
