@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use directories::{BaseDirs, UserDirs};
 use rusqlite::{Connection, Row};
+use sha2::{Sha256, Digest};
 use tracing::info;
 
 use crate::steam;
@@ -52,10 +53,12 @@ impl Display for SandboxVersion {
 #[derive(Debug)]
 pub struct EngineV1 {
     pub uuid: String,
+    pub family_uuid: String,
     pub family_name: String,
     pub variant_name: String,
     pub family_game_days: i32,
     pub variant_game_days: i32,
+    pub family_quality: i32,
     pub block_config: String,
     pub block_material: String,
     pub block_type: String,
@@ -142,6 +145,7 @@ impl EngineV1 {
     pub fn load_from_row(row: &Row) -> rusqlite::Result<EngineV1> {
         Ok(EngineV1 {
             uuid: row.get("v_uuid")?,
+            family_uuid: row.get("f_uuid")?,
             family_name: row.get("f_name")?,
             variant_name: row.get("v_name")?,
             family_game_days: row.get("f_days")?,
@@ -155,6 +159,7 @@ impl EngineV1 {
             vvl: row.get("VVL")?,
             max_bore: row.get("MaxBore")?,
             max_stroke: row.get("MaxStroke")?,
+            family_quality: row.get("QualityFamily").unwrap_or(0),
             crank: row.get("Crank")?,
             conrods: row.get("Conrods")?,
             pistons: row.get("Pistons")?,
@@ -233,6 +238,27 @@ impl EngineV1 {
         format!("{} - {}", self.family_name, self.variant_name)
     }
 
+    pub fn family_data_checksum(&self) -> String {
+        let mut hash = String::new();
+        let mut hasher = Sha256::new();
+        hasher.update(&self.family_uuid.as_bytes());
+        hasher.update(&self.family_name.as_bytes());
+        hasher.update(&self.family_game_days.to_string().as_bytes());
+        hasher.update(&self.family_quality.to_string().as_bytes());
+        hasher.update(&self.block_config.as_bytes());
+        hasher.update(&self.block_material.as_bytes());
+        hasher.update(&self.block_type.as_bytes());
+        hasher.update(&self.head_type.as_bytes());
+        hasher.update(&self.head_material.as_bytes());
+        hasher.update(&self.valves.as_bytes());
+        hasher.update(&self.max_stroke.to_string().as_bytes());
+        hasher.update(&self.max_bore.to_string().as_bytes());
+        for byte in hasher.finalize() {
+            hash += &format!("{:X?}", byte);
+        }
+        hash
+    }
+
     fn decode_graph_data(row: &Row, graph_row_name: &str) -> rusqlite::Result<Vec<f64>> {
         let blob_packet = row.get_ref(graph_row_name)?.as_bytes()?;
         let data = &blob_packet[2..];
@@ -286,7 +312,7 @@ pub fn load_engine_by_uuid(uuid: &str, version: SandboxVersion) -> Result<Option
 }
 
 fn load_all_engines_query() -> &'static str {
-    r#"select f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
+    r#"select f.uuid as f.uuid, f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
     v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, f.Stroke as VStroke, v.*,
     r.*,
     c.*
@@ -297,7 +323,7 @@ fn load_all_engines_query() -> &'static str {
 }
 
 fn load_engine_by_uuid_query() -> &'static str {
-    r#"select f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
+    r#"select f.uid as f_uuid, f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
     v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, f.Stroke as VStroke, v.*,
     r.*,
     c.*

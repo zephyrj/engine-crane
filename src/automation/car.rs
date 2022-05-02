@@ -58,6 +58,16 @@ impl AttributeValue {
             AttributeValue::True => { "true" }
         }
     }
+
+    pub fn checksum_bytes(&self) -> Vec<u8> {
+        return match self {
+            AttributeValue::Blob(blob) => { blob.chunk.clone() }
+            AttributeValue::Text(t) => { Vec::from(t.as_bytes()) }
+            AttributeValue::Number(num) => { Vec::from(num.to_string().as_bytes()) }
+            AttributeValue::False => { Vec::from("false".as_bytes()) }
+            AttributeValue::True => { Vec::from("true".as_bytes()) }
+        }
+    }
     
     pub fn as_num(&self) -> Result<f64, String> {
         return match self {
@@ -120,6 +130,10 @@ impl Section {
             return self.num_children == (self.attributes.len() + self.sections.len())
         }
         return false;
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn get_section(&self, section_name: &str) -> Option<&Section> {

@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::path::Path;
+use sha2::{Sha256, Digest};
 use tracing::{error, info, warn};
 use crate::{automation, beam_ng};
 use crate::assetto_corsa::Car;
@@ -17,7 +18,7 @@ use crate::assetto_corsa::car::lut_utils::{InlineLut, LutType};
 use crate::assetto_corsa::car::structs::LutProperty;
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
-use crate::automation::car::CarFile;
+use crate::automation::car::{Attribute, AttributeValue, CarFile, Section};
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 
 enum ACEngineParameterVersion {
@@ -145,6 +146,7 @@ impl AcEngineParameterCalculatorV1 {
             }
             Some(eng) => { eng }
         };
+        checksum_engine_data_v1(&automation_car_file, &engine_sqlite_data)?;
         Ok(AcEngineParameterCalculatorV1 {
             automation_car_file,
             engine_jbeam_data,
@@ -596,6 +598,56 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
     Ok(())
 }
 
+struct Checksummer {
+    car_file_hasher: Sha256,
+    sandbox_hasher: Sha256
+}
+
+impl Checksummer {
+    pub fn new() -> Checksummer {
+        Checksummer {
+            car_file_hasher: Sha256::new(),
+            sandbox_hasher: Sha256::new()
+        }
+    }
+}
+
+fn checksum_engine_data_v1(car_file: &CarFile, sandbox_data: &EngineV1) -> Result<(), String> {
+    let mut car_file_hasher = Sha256::new();
+    let get_attribute_bytes = |section: &Section, attr: &str| {
+        match section.get_attribute(attr) {
+            None => { Err(format!("Car file section {} is missing attribute {}", section.name(), attr))}
+            Some(attribute) => Ok(attribute.value.checksum_bytes())
+        }
+    };
+    let family_data = car_file.get_section("Car").unwrap().get_section("Family").unwrap();
+    car_file_hasher.update(get_attribute_bytes(family_data, "UID")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"Name")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"InternalDays")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"QualityFamily")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"BlockConfig")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"BlockMaterial")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"BlockType")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"Head")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"HeadMaterial")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"Valves")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"Stroke")?);
+    car_file_hasher.update(get_attribute_bytes(family_data,"Bore")?);
+
+    // info!("{} - {}", u.to_string(), v);
+    // info!("{:X?} - {:X?}", u.as_bytes(), v.to_string().as_bytes());
+
+    let mut car_file_family_hash = String::new();
+    for byte in car_file_hasher.finalize() {
+        car_file_family_hash += &format!("{:X?}", byte);
+    }
+    let sandbox_family_hash = sandbox_data.family_data_checksum();
+    if car_file_family_hash != sandbox_family_hash {
+        return Err(format!("Checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_family_hash, car_file_family_hash));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -636,8 +688,8 @@ mod tests {
 
     #[test]
     fn dump_automation_car_file() -> Result<(), String> {
-        let mods = get_mod_list();
-        let mod_data = beam_ng::extract_mod_data(mods[0].as_path())?;
+        let path = Path::new("~/.steam/debian-installation/steamapps/compatdata/293760/pfx/drive_c/users/steamuser/AppData/Local/BeamNG.drive/mods/italia_m.zip");
+        let mod_data = beam_ng::load_mod_data("italia_m.zip")?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
         fs::write(Path::new("car_temp.toml"), format!("{}", automation_car_file));
         Ok(())

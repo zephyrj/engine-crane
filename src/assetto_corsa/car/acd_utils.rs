@@ -351,8 +351,7 @@ mod tests {
 
     #[test]
     fn extract_acd() {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/dallara_f312/data.acd");
-        let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/dallara_f312/data");
+        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/ks_maserati_gt_mc_gt4/data.acd");
         AcdArchive::load_from_acd_file(path).unwrap().unpack().unwrap();
     }
 
