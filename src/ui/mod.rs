@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
-use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Align, Text, Settings, Error, text_input, TextInput, Row, button, Button, HorizontalAlignment, Checkbox};
+use iced::{Column, Element, Length, pick_list, PickList, Sandbox, Alignment, Text, Settings, Error, text_input, TextInput, Row, button, Button, Checkbox};
+use iced::alignment::Horizontal;
 use crate::{assetto_corsa, beam_ng, fabricator};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
 use tracing::{span, Level, info, error};
@@ -181,7 +182,7 @@ impl Sandbox for CarSelector {
 
     fn view(&mut self) -> Element<Message> {
         let car_select_container = Column::new()
-            .align_items(Align::Center)
+            .align_items(Alignment::Center)
             //.padding(10)
             .push(Text::new("Assetto Corsa car"))
             .push(PickList::new(
@@ -191,7 +192,7 @@ impl Sandbox for CarSelector {
                 Message::CarSelected,
             ));
         let mod_select_container = Column::new()
-            .align_items(Align::Center)
+            .align_items(Alignment::Center)
             .push(Text::new("BeamNG mod"))
             .push(PickList::new(
                 &mut self.mod_pick_list,
@@ -233,17 +234,17 @@ impl Sandbox for CarSelector {
             Message::NameEntered,
         ).width(Length::Units(500));
         let car_name_container = Column::new()
-            .align_items(Align::Center)
+            .align_items(Alignment::Center)
             .padding(10)
             .push(Text::new("New spec name (this will be appended to the created car)"))
             .push(input);
         let selection_row = Row::new()
-            .align_items(Align::Center)
+            .align_items(Alignment::Center)
             .push(select_container.width(Length::FillPortion(1)))
             .push(car_name_container.width(Length::FillPortion(1)));
 
         let swap_button = Button::new(&mut self.swap_button, Text::new("Swap"))
-            .min_width(60)
+            .width(Length::Units(60))
             .on_press(Message::SwapButtonPressed);
         let physics_pick_list = PickList::new(
             &mut self.minimum_physics_pick_list,
@@ -257,14 +258,14 @@ impl Sandbox for CarSelector {
             Message::UnpackToggled
         );
         let control_row = Row::new()
-            .align_items(Align::Start)
+            .align_items(Alignment::Start)
             .padding(20)
             .push(swap_button)
             .push(physics_pick_list)
             .push(unpack_checkbox);
 
         let mut layout = Column::new().width(Length::Fill)
-            .align_items(Align::Start)
+            .align_items(Alignment::Start)
             .padding(10)
             .spacing(30)
             .push(selection_row)
@@ -273,8 +274,8 @@ impl Sandbox for CarSelector {
         if !self.status_message.is_empty() {
             layout = layout.push(
                 Row::new()
-                    .align_items(Align::Center)
-                    .push(Text::new(self.status_message.as_str()).horizontal_alignment(HorizontalAlignment::Center))
+                    .align_items(Alignment::Center)
+                    .push(Text::new(self.status_message.as_str()).horizontal_alignment(Horizontal::Center))
             )
         }
         layout.into()
