@@ -614,37 +614,74 @@ impl Checksummer {
 
 fn checksum_engine_data_v1(car_file: &CarFile, sandbox_data: &EngineV1) -> Result<(), String> {
     let mut car_file_hasher = Sha256::new();
-    let get_attribute_bytes = |section: &Section, attr: &str| {
+    let get_mandatory_attribute_bytes = |section: &Section, attr: &str| {
         match section.get_attribute(attr) {
             None => { Err(format!("Car file section {} is missing attribute {}", section.name(), attr))}
             Some(attribute) => Ok(attribute.value.checksum_bytes())
         }
     };
-    let family_data = car_file.get_section("Car").unwrap().get_section("Family").unwrap();
-    car_file_hasher.update(get_attribute_bytes(family_data, "UID")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"Name")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"InternalDays")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"QualityFamily")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"BlockConfig")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"BlockMaterial")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"BlockType")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"Head")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"HeadMaterial")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"Valves")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"Stroke")?);
-    car_file_hasher.update(get_attribute_bytes(family_data,"Bore")?);
+    let get_optional_attribute_bytes = |section: &Section, attr: &str| {
+        match section.get_attribute(attr) {
+            None => { None }
+            Some(attribute) => Some(attribute.value.checksum_bytes())
+        }
+    };
 
-    // info!("{} - {}", u.to_string(), v);
-    // info!("{:X?} - {:X?}", u.as_bytes(), v.to_string().as_bytes());
+    // TODO
+    // GameVersion
+
+    let family_data = car_file.get_section("Car").unwrap().get_section("Family").unwrap();
+    for key in ["UID", "Name", "InternalDays", "QualityFamily", "BlockConfig", "BlockMaterial",
+                      "BlockType", "Head", "HeadMaterial", "Valves", "Stroke", "Bore"] {
+        car_file_hasher.update(get_mandatory_attribute_bytes(family_data, key)?);
+    }
 
     let mut car_file_family_hash = String::new();
     for byte in car_file_hasher.finalize() {
         car_file_family_hash += &format!("{:X?}", byte);
     }
+
     let sandbox_family_hash = sandbox_data.family_data_checksum();
     if car_file_family_hash != sandbox_family_hash {
-        return Err(format!("Checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_family_hash, car_file_family_hash));
+        return Err(format!("Family checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_family_hash, car_file_family_hash));
     }
+    info!("Family checksum match: {}", sandbox_family_hash);
+
+    let mut car_file_hasher = Sha256::new();
+    let variant_data = car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
+    for key in ["FUID", "UID", "Name", "InternalDays", "VVL", "Crank", "Conrods", "Pistons", "VVT",
+                      "AspirationType", "IntercoolerSetting", "FuelSystemType", "FuelSystem", ] {
+        car_file_hasher.update(get_mandatory_attribute_bytes(variant_data, key)?);
+    }
+    for key in ["FuelType", "FuelLeaded"] {
+        if let Some(bytes) = get_optional_attribute_bytes(variant_data, key) {
+            car_file_hasher.update(bytes);
+        }
+    }
+    for key in ["IntakeManifold", "Intake", "Headers", "ExhaustCount", "ExhaustBypassValves", "Cat", "Muffler1",
+                      "Muffler2", "Bore", "Stroke", "Capacity", "Compression", "CamProfileSetting", "VVLCamProfileSetting",
+                      "AFR", "AFRLean", "RPMLimit", "IgnitionTimingSetting", "ExhaustDiameter", "QualityBottomEnd",
+                      "QualityTopEnd", "QualityAspiration", "QualityFuelSystem", "QualityExhaust"] {
+        car_file_hasher.update(get_mandatory_attribute_bytes(variant_data, key)?);
+    }
+    for key in ["BalanceShaft", "SpringStiffnessSetting", "ListedOctane", "TuneOctaneOffset", "AspirationSetup",
+                      "AspirationItemOption_1", "AspirationItemOption_2", "AspirationItemSubOption_1", "AspirationItemSubOption_2",
+                      "AspirationBoostControl", "ChargerSize_1", "ChargerSize_2", "ChargerTune_1", "ChargerTune_2", "ChargerMaxBoost_1",
+                      "ChargerMaxBoost_2", "TurbineSize_1", "TurbineSize_2"] {
+        if let Some(bytes) = get_optional_attribute_bytes(variant_data, key) {
+            car_file_hasher.update(bytes);
+        }
+    }
+    let mut car_file_variant_hash = String::new();
+    for byte in car_file_hasher.finalize() {
+        car_file_variant_hash += &format!("{:X?}", byte);
+    }
+    let sandbox_variant_hash = sandbox_data.variant_data_checksum();
+    if car_file_variant_hash != sandbox_variant_hash {
+        return Err(format!("Variant checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_variant_hash, car_file_variant_hash));
+    }
+    info!("Variant checksum match: {}", sandbox_variant_hash);
+
     Ok(())
 }
 

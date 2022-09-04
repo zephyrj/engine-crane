@@ -78,7 +78,8 @@ pub struct EngineV1 {
     pub fuel_system: String,
     pub intake_manifold: String,
     pub intake: String,
-    pub fuel_type: String,
+    pub fuel_type: Option<String>,
+    pub fuel_leaded: Option<i32>,
     pub headers: String,
     pub exhaust_count: String,
     pub exhaust_bypass_valves: String,
@@ -101,6 +102,24 @@ pub struct EngineV1 {
     pub quality_aspiration: i32,
     pub quality_fuel_system: i32,
     pub quality_exhaust: i32,
+    pub balance_shaft: Option<String>,
+    pub spring_stiffness: Option<f64>,
+    pub listed_octane: Option<i32>,
+    pub tune_octane_offset: Option<i32>,
+    pub aspiration_setup: Option<String>,
+    pub aspiration_item_1: Option<String>,
+    pub aspiration_item_2: Option<String>,
+    pub aspiration_item_suboption_1: Option<String>,
+    pub aspiration_item_suboption_2: Option<String>,
+    pub aspiration_boost_control: Option<String>,
+    pub charger_size_1: Option<f64>,
+    pub charger_size_2: Option<f64>,
+    pub charger_tune_1: Option<f64>,
+    pub charger_tune_2: Option<f64>,
+    pub charger_max_boost_1: Option<f64>,
+    pub charger_max_boost_2: Option<f64>,
+    pub turbine_size_1: Option<f64>,
+    pub turbine_size_2: Option<f64>,
     pub adjusted_afr: f64,
     pub average_cruise_econ: f64,
     pub cooling_required: f64,
@@ -118,7 +137,7 @@ pub struct EngineV1 {
     pub material_cost: f64,
     pub noise: f64,
     pub peak_boost: f64,
-    pub peak_boost_rpm: f64,
+    pub peak_boost_rpm: Option<f64>,
     pub performance_index: f64,
     pub ron: f64,
     pub reliability_post_engineering: f64,
@@ -168,9 +187,10 @@ impl EngineV1 {
             intercooler_setting: row.get("IntercoolerSetting")?,
             fuel_system_type: row.get("FuelSystemType")?,
             fuel_system: row.get("FuelSystem")?,
+            fuel_leaded: row.get("FuelLeaded").unwrap_or(None),
             intake_manifold: row.get("IntakeManifold")?,
             intake: row.get("Intake")?,
-            fuel_type: row.get("Crank")?,  // TODO
+            fuel_type: row.get("FuelType").unwrap_or(None),
             headers: row.get("Headers")?,
             exhaust_count: row.get("ExhaustCount")?,
             exhaust_bypass_valves: row.get("ExhaustBypassValves")?,
@@ -193,6 +213,24 @@ impl EngineV1 {
             quality_aspiration: row.get("QualityAspiration")?,
             quality_fuel_system: row.get("QualityFuelSystem")?,
             quality_exhaust: row.get("QualityExhaust")?,
+            balance_shaft: row.get("BalanceShaft").unwrap_or(None),
+            spring_stiffness: row.get("SpringStiffnessSetting").unwrap_or(None),
+            listed_octane: row.get("ListedOctane").unwrap_or(None),
+            tune_octane_offset: row.get("TuneOctaneOffset").unwrap_or(None),
+            aspiration_setup: row.get("AspirationSetup").unwrap_or(None),
+            aspiration_item_1: row.get("AspirationItemOption_1").unwrap_or(None),
+            aspiration_item_2: row.get("AspirationItemOption_2").unwrap_or(None),
+            aspiration_item_suboption_1: row.get("AspirationItemSubOption_1").unwrap_or(None),
+            aspiration_item_suboption_2: row.get("AspirationItemSubOption_2").unwrap_or(None),
+            aspiration_boost_control: row.get("AspirationBoostControl").unwrap_or(None),
+            charger_size_1: row.get("ChargerSize_1").unwrap_or(None),
+            charger_size_2: row.get("ChargerSize_2").unwrap_or(None),
+            charger_tune_1: row.get("ChargerTune_1").unwrap_or(None),
+            charger_tune_2: row.get("ChargerTune_2").unwrap_or(None),
+            charger_max_boost_1: row.get("ChargerMaxBoost_1").unwrap_or(None),
+            charger_max_boost_2: row.get("ChargerMaxBoost_2").unwrap_or(None),
+            turbine_size_1: row.get("TurbineSize_1").unwrap_or(None),
+            turbine_size_2: row.get("TurbineSize_2").unwrap_or(None),
             adjusted_afr: row.get("AdjustedAFR")?,
             average_cruise_econ: row.get("AverageCruiseEcon")?,
             cooling_required: row.get("CoolingRequired")?,
@@ -210,7 +248,7 @@ impl EngineV1 {
             material_cost: row.get("MaterialCost")?,
             noise: row.get("Noise")?,
             peak_boost: row.get("PeakBoost")?,
-            peak_boost_rpm: 0.0, // TODO row.get("PeakBoostRPM")? - handle Null,
+            peak_boost_rpm: row.get("PeakBoostRPM").unwrap_or(None),
             performance_index: row.get("PerformanceIndex")?,
             ron: row.get("RON")?,
             reliability_post_engineering: row.get("ReliabilityPostEngineering")?,
@@ -253,6 +291,117 @@ impl EngineV1 {
         hasher.update(&self.valves.as_bytes());
         hasher.update(&self.max_stroke.to_string().as_bytes());
         hasher.update(&self.max_bore.to_string().as_bytes());
+        for byte in hasher.finalize() {
+            hash += &format!("{:X?}", byte);
+        }
+        hash
+    }
+
+    pub fn variant_data_checksum(&self) -> String {
+        let mut hash = String::new();
+        let mut hasher = Sha256::new();
+        hasher.update(&self.family_uuid.as_bytes());
+        hasher.update(&self.uuid.as_bytes());
+        hasher.update(&self.variant_name.as_bytes());
+        hasher.update(&self.variant_game_days.to_string().as_bytes());
+        hasher.update(&self.vvl.as_bytes());
+        hasher.update(&self.crank.as_bytes());
+        hasher.update(&self.conrods.as_bytes());
+        hasher.update(&self.pistons.as_bytes());
+        hasher.update(&self.vvt.as_bytes());
+        hasher.update(&self.aspiration.as_bytes());
+        hasher.update(&self.intercooler_setting.to_string().as_bytes());
+        hasher.update(&self.fuel_system_type.as_bytes());
+        hasher.update(&self.fuel_system.as_bytes());
+        if let Some(str) = &self.fuel_type { hasher.update(str.as_bytes()); }
+        if let Some(str) = &self.fuel_leaded { hasher.update(str.to_string().as_bytes()); }
+        hasher.update(&self.intake_manifold.as_bytes());
+        hasher.update(&self.intake.as_bytes());
+        hasher.update(&self.headers.as_bytes());
+        hasher.update(&self.exhaust_count.as_bytes());
+        hasher.update(&self.exhaust_bypass_valves.as_bytes());
+        hasher.update(&self.cat.as_bytes());
+        hasher.update(&self.muffler_1.as_bytes());
+        hasher.update(&self.muffler_2.as_bytes());
+        hasher.update(&self.bore.to_string().as_bytes());
+        hasher.update(&self.stroke.to_string().as_bytes());
+        hasher.update(&self.capacity.to_string().as_bytes());
+        hasher.update(&self.compression.to_string().as_bytes());
+        hasher.update(&self.cam_profile_setting.to_string().as_bytes());
+        hasher.update(&self.vvl_cam_profile_setting.to_string().as_bytes());
+        hasher.update(&self.afr.to_string().as_bytes());
+        hasher.update(&self.afr_lean.to_string().as_bytes());
+        hasher.update(&self.rpm_limit.to_string().as_bytes());
+        hasher.update(&self.ignition_timing_setting.to_string().as_bytes());
+        hasher.update(&self.exhaust_diameter.to_string().as_bytes());
+        hasher.update(&self.quality_bottom_end.to_string().as_bytes());
+        hasher.update(&self.quality_top_end.to_string().as_bytes());
+        hasher.update(&self.quality_aspiration.to_string().as_bytes());
+        hasher.update(&self.quality_fuel_system.to_string().as_bytes());
+        hasher.update(&self.quality_exhaust.to_string().as_bytes());
+        if let Some(str) = &self.balance_shaft { hasher.update(str.as_bytes()); }
+        if let Some(str) = &self.spring_stiffness { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.listed_octane { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.tune_octane_offset { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.aspiration_setup { hasher.update(str.as_bytes()); }
+        if let Some(str) = &self.aspiration_item_1 { hasher.update(str.as_bytes()); }
+        if let Some(str) = &self.aspiration_item_2 { hasher.update(str.as_bytes()); }
+        if let Some(str) = &self.aspiration_item_suboption_1 { hasher.update(str.as_bytes()); }
+        if let Some(str) = &self.aspiration_item_suboption_2 { hasher.update(str.as_bytes()); }
+        if let Some(str) = &self.aspiration_boost_control { hasher.update(str.as_bytes()); }
+        if let Some(str) = &self.charger_size_1 { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.charger_size_2 { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.charger_tune_1 { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.charger_tune_2 { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.charger_max_boost_1 { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.charger_max_boost_2 { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.turbine_size_1 { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.turbine_size_2 { hasher.update(str.to_string().as_bytes()); }
+        for byte in hasher.finalize() {
+            hash += &format!("{:X?}", byte);
+        }
+        hash
+    }
+
+    pub fn result_data_checksum(&self) -> String {
+        let mut hash = String::new();
+        let mut hasher = Sha256::new();
+        hasher.update(&self.adjusted_afr.to_string().as_bytes());
+        hasher.update(&self.average_cruise_econ.to_string().as_bytes());
+        hasher.update(&self.cooling_required.to_string().as_bytes());
+        hasher.update(&self.econ.to_string().as_bytes());
+        hasher.update(&self.econ_eff.to_string().as_bytes());
+        hasher.update(&self.min_econ.to_string().as_bytes());
+        hasher.update(&self.worst_econ.to_string().as_bytes());
+        hasher.update(&self.emissions.to_string().as_bytes());
+        hasher.update(&self.engineering_cost.to_string().as_bytes());
+        hasher.update(&self.engineering_time.to_string().as_bytes());
+        hasher.update(&self.idle.to_string().as_bytes());
+        hasher.update(&self.idle_speed.to_string().as_bytes());
+        hasher.update(&self.mttf.to_string().as_bytes());
+        hasher.update(&self.man_hours.to_string().as_bytes());
+        hasher.update(&self.material_cost.to_string().as_bytes());
+        hasher.update(&self.noise.to_string().as_bytes());
+        hasher.update(&self.peak_boost.to_string().as_bytes());
+        hasher.update(&self.performance_index.to_string().as_bytes());
+        hasher.update(&self.ron.to_string().as_bytes());
+        hasher.update(&self.reliability_post_engineering.to_string().as_bytes());
+        hasher.update(&self.responsiveness.to_string().as_bytes());
+        hasher.update(&self.service_cost.to_string().as_bytes());
+        hasher.update(&self.smoothness.to_string().as_bytes());
+        hasher.update(&self.service_cost.to_string().as_bytes());
+        hasher.update(&self.tooling_costs.to_string().as_bytes());
+        hasher.update(&self.total_cost.to_string().as_bytes());
+        hasher.update(&self.weight.to_string().as_bytes());
+        hasher.update(&self.peak_torque_rpm.to_string().as_bytes());
+        hasher.update(&self.peak_torque.to_string().as_bytes());
+        hasher.update(&self.peak_power.to_string().as_bytes());
+        hasher.update(&self.peak_power_rpm.to_string().as_bytes());
+        hasher.update(&self.max_rpm.to_string().as_bytes());
+        if let Some(peak_boost_rpm) = &self.peak_boost_rpm {
+            hasher.update(peak_boost_rpm.to_string().as_bytes());
+        }
+
         for byte in hasher.finalize() {
             hash += &format!("{:X?}", byte);
         }
