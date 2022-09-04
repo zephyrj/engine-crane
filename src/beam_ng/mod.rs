@@ -3,6 +3,8 @@ pub mod jbeam;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use directories::BaseDirs;
+use parselnk::Lnk;
 use crate::steam;
 use tracing::{debug, info};
 
