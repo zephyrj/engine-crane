@@ -4,6 +4,8 @@ use iced::alignment::Horizontal;
 use crate::{assetto_corsa, beam_ng, fabricator};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
 use tracing::{span, Level, info, error};
+use rfd::FileDialog;
+
 
 pub fn launch() -> Result<(), Error> {
     CarSelector::run((Settings::default()))
@@ -11,6 +13,7 @@ pub fn launch() -> Result<(), Error> {
 
 #[derive(Default)]
 pub struct CarSelector {
+    ac_install_path: Option<String>,
     available_cars: Vec<String>,
     available_mods: Vec<String>,
     available_physics: Vec<AssettoCorsaPhysicsLevel>,
@@ -23,10 +26,35 @@ pub struct CarSelector {
     new_spec_name: text_input::State,
     mod_pick_list: pick_list::State<String>,
     swap_button: button::State,
+    ac_path_select_button: button::State,
     minimum_physics_pick_list: pick_list::State<AssettoCorsaPhysicsLevel>,
     current_engine_weight_input: text_input::State,
     unpack_physics_data: bool,
     status_message: String
+}
+
+impl CarSelector {
+    fn load_available_cars(ac_install_path: &PathBuf) -> Vec<String> {
+        let span = span!(Level::INFO, "Loading Assetto Corsa cars");
+        let _enter = span.enter();
+        return match &assetto_corsa::get_list_of_installed_cars_for(ac_install_path) {
+            Ok(vec) => {
+                info!("Found {} cars", vec.len());
+                to_filename_vec(vec)
+            }
+            Err(err) => {
+                error!("{}", err.to_string());
+                Vec::new()
+            }
+        }
+    }
+
+    fn set_ac_install_path(&mut self, ac_install_path: &PathBuf) {
+        self.current_car = None;
+        self.available_cars = Self::load_available_cars(ac_install_path);
+        self.available_cars.sort();
+        self.ac_install_path = Some(String::from(ac_install_path.to_string_lossy()));
+    }
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
@@ -49,7 +77,8 @@ pub enum Message {
     PhysicsLevelSelected(AssettoCorsaPhysicsLevel),
     OldEngineWeightEntered(String),
     UnpackToggled(bool),
-    SwapButtonPressed
+    SwapButtonPressed,
+    AcPathSelectPressed
 }
 
 fn to_filename_vec(path_vec: &Vec<PathBuf>) -> Vec<String> {
@@ -62,6 +91,13 @@ impl Sandbox for CarSelector {
     type Message = Message;
 
     fn new() -> Self {
+        let mut ac_install_path: Option<String> = None;
+        let mut available_cars = Vec::new();
+        if let Some(base_path) = assetto_corsa::get_default_install_path() {
+            available_cars = Self::load_available_cars(&base_path);
+            available_cars.sort();
+            ac_install_path = Some(base_path.to_string_lossy().into_owned());
+        }
         let available_mods = {
             let span = span!(Level::INFO, "Loading beamNG mods");
             let _enter = span.enter();
@@ -69,15 +105,8 @@ impl Sandbox for CarSelector {
             info!("Found {} mods", mods.len());
             mods
         };
-        let mut available_cars = {
-            let span = span!(Level::INFO, "Loading Assetto Corsa cars");
-            let _enter = span.enter();
-            let cars = to_filename_vec(&assetto_corsa::get_list_of_installed_cars().unwrap());
-            info!("Found {} cars", cars.len());
-            cars
-        };
-        available_cars.sort();
         CarSelector {
+            ac_install_path,
             available_cars,
             available_mods,
             available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame, AssettoCorsaPhysicsLevel::CspExtendedPhysics],
@@ -177,6 +206,24 @@ impl Sandbox for CarSelector {
             Message::UnpackToggled(bool_val) => {
                 self.unpack_physics_data = bool_val;
             }
+            Message::AcPathSelectPressed => {
+                let install_path = FileDialog::new()
+                    .set_directory(match &self.ac_install_path {
+                        Some(str) => str,
+                        None => "/"
+                    })
+                    .pick_folder();
+                match install_path {
+                    Some(p) => {
+                        self.status_message.clear();
+                        self.set_ac_install_path(&p);
+                        if self.available_cars.is_empty() {
+                            self.status_message = format!("No cars found")
+                        }
+                    },
+                    None => self.status_message = format!("No path selected")
+                };
+            }
         }
     }
 
@@ -257,9 +304,25 @@ impl Sandbox for CarSelector {
             "Unpack physics data",
             Message::UnpackToggled
         );
+
+        let base_path_str = match &self.ac_install_path {
+            None => format!("Assetto Corsa install path: Not Set"),
+            Some(path) => format!("Assetto Corsa install path: {}", path)
+        };
+        let path_select_button =
+            Button::new(&mut self.ac_path_select_button, Text::new("Browse"))
+                .on_press(Message::AcPathSelectPressed);
+        let path_select_row = Row::new()
+            .align_items(Alignment::Start)
+            .padding(10)
+            .spacing(20)
+            .push(Text::new(base_path_str))
+            .push(path_select_button);
+
         let control_row = Row::new()
             .align_items(Alignment::Start)
-            .padding(20)
+            .padding(10)
+            .spacing(10)
             .push(swap_button)
             .push(physics_pick_list)
             .push(unpack_checkbox);
@@ -268,6 +331,7 @@ impl Sandbox for CarSelector {
             .align_items(Alignment::Start)
             .padding(10)
             .spacing(30)
+            .push(path_select_row)
             .push(selection_row)
             .push(control_row);
 

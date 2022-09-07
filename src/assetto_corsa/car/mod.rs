@@ -78,7 +78,7 @@ pub fn clone_existing_car(existing_car_path: &Path,
 pub fn create_new_car_spec(existing_car_name: &str,
                            spec_name: &str,
                            unpack_data: bool) -> Result<PathBuf>{
-    let installed_cars_path = match assetto_corsa::get_installed_cars_path() {
+    let installed_cars_path = match assetto_corsa::get_default_installed_cars_path() {
         Some(path) => { path },
         None => {
             return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::info;
 use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 use crate::steam;
@@ -18,19 +18,20 @@ use crate::steam;
 pub const STEAM_GAME_NAME: &str = "assettocorsa";
 pub const STEAM_GAME_ID: i64 = 244210;
 
+
 pub fn is_installed() -> bool {
-    if let Some(install_path) = get_install_path() {
+    if let Some(install_path) = get_default_install_path() {
         install_path.is_dir()
     } else {
         false
     }
 }
 
-pub fn get_install_path() -> Option<PathBuf> {
+pub fn get_default_install_path() -> Option<PathBuf> {
     steam::get_game_install_path(STEAM_GAME_NAME)
 }
 
-pub fn get_installed_cars_path() -> Option<PathBuf> {
+pub fn get_default_installed_cars_path() -> Option<PathBuf> {
     if let Some(mut install_path) = steam::get_game_install_path(STEAM_GAME_NAME) {
         for path in ["content", "cars"] {
             install_path.push(path)
@@ -57,14 +58,23 @@ pub fn get_root_sfx_path() -> Result<PathBuf> {
     }
 }
 
+pub fn get_list_of_installed_cars_for(ac_install_path: &PathBuf) -> Result<Vec<PathBuf>> {
+    let car_path = ac_install_path.join(PathBuf::from_iter(["content", "cars"]));
+    read_cars_in_path(&car_path)
+}
+
 pub fn get_list_of_installed_cars() -> Result<Vec<PathBuf>> {
-    let car_dir = match get_installed_cars_path() {
+    let car_dir = match get_default_installed_cars_path() {
         Some(path) => path,
         None => return Err(Error::new(ErrorKind::NotInstalled,
                                       String::from("Assetto Corsa isn't installed")))
     };
     info!("AC cars directory is {}", car_dir.display());
-    let dir_entries = match fs::read_dir(car_dir) {
+    read_cars_in_path(&car_dir)
+}
+
+fn read_cars_in_path(car_path: &PathBuf) -> Result<Vec<PathBuf>> {
+    let dir_entries = match fs::read_dir(car_path) {
         Ok(entry_list) => entry_list,
         Err(e) => return Err(Error::new(ErrorKind::NotInstalled,
                                         String::from(
@@ -75,7 +85,8 @@ pub fn get_list_of_installed_cars() -> Result<Vec<PathBuf>> {
     let cars = dir_entries.filter_map(|e| {
         match e {
             Ok(dir_entry) => {
-                if dir_entry.path().is_dir() {
+                let path = dir_entry.path();
+                if path.is_dir() && (path.join("data").is_dir() || path.join("data.acd").is_file()) {
                     Some(dir_entry.path())
                 } else {
                     None

@@ -42,7 +42,7 @@ fn main() -> Result<(), iced::Error> {
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
     if assetto_corsa::is_installed() {
-        info!("Assetto Corsa is installed at {}", assetto_corsa::get_install_path().unwrap().display());
+        info!("Assetto Corsa is installed at {}", assetto_corsa::get_default_install_path().unwrap().display());
     } else {
         error!("Assetto Corsa is not installed");
         return Ok(());

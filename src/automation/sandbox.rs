@@ -53,6 +53,8 @@ impl Display for SandboxVersion {
 #[derive(Debug)]
 pub struct EngineV1 {
     pub uuid: String,
+    pub family_version: u64,
+    pub variant_version: u64,
     pub family_uuid: String,
     pub family_name: String,
     pub variant_name: String,
@@ -164,6 +166,8 @@ impl EngineV1 {
     pub fn load_from_row(row: &Row) -> rusqlite::Result<EngineV1> {
         Ok(EngineV1 {
             uuid: row.get("v_uuid")?,
+            family_version: row.get("f_version")?,
+            variant_version: row.get("v_version")?,
             family_uuid: row.get("f_uuid")?,
             family_name: row.get("f_name")?,
             variant_name: row.get("v_name")?,
@@ -279,6 +283,7 @@ impl EngineV1 {
     pub fn family_data_checksum(&self) -> String {
         let mut hash = String::new();
         let mut hasher = Sha256::new();
+        hasher.update(&self.family_version.to_string().as_bytes());
         hasher.update(&self.family_uuid.as_bytes());
         hasher.update(&self.family_name.as_bytes());
         hasher.update(&self.family_game_days.to_string().as_bytes());
@@ -300,6 +305,7 @@ impl EngineV1 {
     pub fn variant_data_checksum(&self) -> String {
         let mut hash = String::new();
         let mut hasher = Sha256::new();
+        hasher.update(&self.variant_version.to_string().as_bytes());
         hasher.update(&self.family_uuid.as_bytes());
         hasher.update(&self.uuid.as_bytes());
         hasher.update(&self.variant_name.as_bytes());
@@ -461,7 +467,7 @@ pub fn load_engine_by_uuid(uuid: &str, version: SandboxVersion) -> Result<Option
 }
 
 fn load_all_engines_query() -> &'static str {
-    r#"select f.uuid as f.uuid, f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
+    r#"select f.GameVersion as f_version, v.GameVersion as v_version, f.uuid as f.uuid, f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
     v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, f.Stroke as VStroke, v.*,
     r.*,
     c.*
@@ -472,7 +478,7 @@ fn load_all_engines_query() -> &'static str {
 }
 
 fn load_engine_by_uuid_query() -> &'static str {
-    r#"select f.uid as f_uuid, f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
+    r#"select f.GameVersion as f_version, v.GameVersion as v_version, f.uid as f_uuid, f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
     v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, f.Stroke as VStroke, v.*,
     r.*,
     c.*
