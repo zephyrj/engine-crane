@@ -146,7 +146,9 @@ impl AcEngineParameterCalculatorV1 {
             }
             Some(eng) => { eng }
         };
-        checksum_engine_data_v1(&automation_car_file, &engine_sqlite_data)?;
+        checksum_engine_data_v1(&automation_car_file, &engine_sqlite_data).map_err(|err|{
+            format!("{}. The BeamNG mod may be out-of-date; try recreating a mod with the latest engine version", err)
+        })?;
         Ok(AcEngineParameterCalculatorV1 {
             automation_car_file,
             engine_jbeam_data,
@@ -627,11 +629,8 @@ fn checksum_engine_data_v1(car_file: &CarFile, sandbox_data: &EngineV1) -> Resul
         }
     };
 
-    // TODO
-    // GameVersion
-
     let family_data = car_file.get_section("Car").unwrap().get_section("Family").unwrap();
-    for key in ["UID", "Name", "InternalDays", "QualityFamily", "BlockConfig", "BlockMaterial",
+    for key in ["GameVersion", "UID", "Name", "InternalDays", "QualityFamily", "BlockConfig", "BlockMaterial",
                       "BlockType", "Head", "HeadMaterial", "Valves", "Stroke", "Bore"] {
         car_file_hasher.update(get_mandatory_attribute_bytes(family_data, key)?);
     }
@@ -649,7 +648,7 @@ fn checksum_engine_data_v1(car_file: &CarFile, sandbox_data: &EngineV1) -> Resul
 
     let mut car_file_hasher = Sha256::new();
     let variant_data = car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-    for key in ["FUID", "UID", "Name", "InternalDays", "VVL", "Crank", "Conrods", "Pistons", "VVT",
+    for key in ["GameVersion", "FUID", "UID", "Name", "InternalDays", "VVL", "Crank", "Conrods", "Pistons", "VVT",
                       "AspirationType", "IntercoolerSetting", "FuelSystemType", "FuelSystem", ] {
         car_file_hasher.update(get_mandatory_attribute_bytes(variant_data, key)?);
     }
@@ -681,7 +680,6 @@ fn checksum_engine_data_v1(car_file: &CarFile, sandbox_data: &EngineV1) -> Resul
         return Err(format!("Variant checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_variant_hash, car_file_variant_hash));
     }
     info!("Variant checksum match: {}", sandbox_variant_hash);
-
     Ok(())
 }
 
