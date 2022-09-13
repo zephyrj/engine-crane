@@ -14,6 +14,7 @@ pub fn launch() -> Result<(), Error> {
 #[derive(Default)]
 pub struct CarSelector {
     ac_install_path: Option<String>,
+    beamng_mod_path: Option<String>,
     available_cars: Vec<String>,
     available_mods: Vec<String>,
     available_physics: Vec<AssettoCorsaPhysicsLevel>,
@@ -27,6 +28,7 @@ pub struct CarSelector {
     mod_pick_list: pick_list::State<String>,
     swap_button: button::State,
     ac_path_select_button: button::State,
+    beamng_mod_path_select_button: button::State,
     minimum_physics_pick_list: pick_list::State<AssettoCorsaPhysicsLevel>,
     current_engine_weight_input: text_input::State,
     unpack_physics_data: bool,
@@ -49,11 +51,25 @@ impl CarSelector {
         }
     }
 
+    fn load_available_mods(beamng_mod_path: &PathBuf) -> Vec<String> {
+        let span = span!(Level::INFO, "Loading beamNG mods");
+        let _enter = span.enter();
+        let mods = to_filename_vec(&beam_ng::get_mod_list_for(beamng_mod_path));
+        info!("Found {} mods", mods.len());
+        mods
+    }
+
     fn set_ac_install_path(&mut self, ac_install_path: &PathBuf) {
         self.current_car = None;
         self.available_cars = Self::load_available_cars(ac_install_path);
         self.available_cars.sort();
         self.ac_install_path = Some(String::from(ac_install_path.to_string_lossy()));
+    }
+
+    fn set_beam_ng_mod_path(&mut self, beam_ng_mod_path: &PathBuf) {
+        self.current_mod = None;
+        self.available_mods = Self::load_available_mods(beam_ng_mod_path);
+        self.beamng_mod_path = Some(String::from(beam_ng_mod_path.to_string_lossy()));
     }
 }
 
@@ -78,7 +94,8 @@ pub enum Message {
     OldEngineWeightEntered(String),
     UnpackToggled(bool),
     SwapButtonPressed,
-    AcPathSelectPressed
+    AcPathSelectPressed,
+    BeamNGModPathSelectPressed
 }
 
 fn to_filename_vec(path_vec: &Vec<PathBuf>) -> Vec<String> {
@@ -98,15 +115,16 @@ impl Sandbox for CarSelector {
             available_cars.sort();
             ac_install_path = Some(base_path.to_string_lossy().into_owned());
         }
-        let available_mods = {
-            let span = span!(Level::INFO, "Loading beamNG mods");
-            let _enter = span.enter();
-            let mods = to_filename_vec(&beam_ng::get_mod_list());
-            info!("Found {} mods", mods.len());
-            mods
-        };
+        let mut beamng_mod_path: Option<String> = None;
+        let mut available_mods = Vec::new();
+        if let Some(mod_path) = beam_ng::get_default_mod_path() {
+            available_mods = Self::load_available_mods(&mod_path);
+            beamng_mod_path = Some(mod_path.to_string_lossy().into_owned());
+        }
+
         CarSelector {
             ac_install_path,
+            beamng_mod_path,
             available_cars,
             available_mods,
             available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame, AssettoCorsaPhysicsLevel::CspExtendedPhysics],
@@ -157,7 +175,7 @@ impl Sandbox for CarSelector {
                     }
                 };
 
-                let mut mod_path = beam_ng::get_mod_path().unwrap();
+                let mut mod_path = beam_ng::get_default_mod_path().unwrap();
                 if let Some(mod_name) = &self.current_mod {
                     mod_path = mod_path.join(Path::new(mod_name.as_str()));
                 }
@@ -219,6 +237,24 @@ impl Sandbox for CarSelector {
                         self.set_ac_install_path(&p);
                         if self.available_cars.is_empty() {
                             self.status_message = format!("No cars found")
+                        }
+                    },
+                    None => self.status_message = format!("No path selected")
+                };
+            }
+            Message::BeamNGModPathSelectPressed => {
+                let mod_path = FileDialog::new()
+                    .set_directory(match &self.beamng_mod_path {
+                        Some(str) => str,
+                        None => "/"
+                    })
+                    .pick_folder();
+                match mod_path {
+                    Some(p) => {
+                        self.status_message.clear();
+                        self.set_beam_ng_mod_path(&p);
+                        if self.available_mods.is_empty() {
+                            self.status_message = format!("No mods found")
                         }
                     },
                     None => self.status_message = format!("No path selected")
@@ -312,12 +348,26 @@ impl Sandbox for CarSelector {
         let path_select_button =
             Button::new(&mut self.ac_path_select_button, Text::new("Browse"))
                 .on_press(Message::AcPathSelectPressed);
-        let path_select_row = Row::new()
+        let ac_path_select_row = Row::new()
             .align_items(Alignment::Start)
-            .padding(10)
+            .padding([10, 0, 1, 10])
             .spacing(20)
             .push(Text::new(base_path_str))
             .push(path_select_button);
+
+        let mod_path_str = match &self.beamng_mod_path {
+            None => format!("BeamNG mod path: Not Set"),
+            Some(path) => format!("BeamNG mod path: {}", path)
+        };
+        let mod_path_select_button =
+            Button::new(&mut self.beamng_mod_path_select_button, Text::new("Browse"))
+                .on_press(Message::BeamNGModPathSelectPressed);
+        let mod_path_select_row = Row::new()
+            .align_items(Alignment::Start)
+            .padding([1, 10, 2, 10])
+            .spacing(20)
+            .push(Text::new(mod_path_str))
+            .push(mod_path_select_button);
 
         let control_row = Row::new()
             .align_items(Alignment::Start)
@@ -331,7 +381,9 @@ impl Sandbox for CarSelector {
             .align_items(Alignment::Start)
             .padding(10)
             .spacing(30)
-            .push(path_select_row)
+            .push(ac_path_select_row)
+            .push(mod_path_select_row)
+            .push(iced::Rule::horizontal(5))
             .push(selection_row)
             .push(control_row);
 

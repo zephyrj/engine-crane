@@ -12,7 +12,7 @@ pub const STEAM_GAME_NAME: &str = "BeamNG.drive";
 pub const STEAM_GAME_ID: i64 = 284160;
 
 #[cfg(target_os = "windows")]
-pub fn get_mod_path() -> Option<PathBuf> {
+pub fn get_default_mod_path() -> Option<PathBuf> {
     let mut mod_path_buf: PathBuf = BaseDirs::new().unwrap().cache_dir().to_path_buf();
     mod_path_buf.push(STEAM_GAME_NAME);
     match steam::get_game_install_path(STEAM_GAME_NAME) {
@@ -35,7 +35,7 @@ pub fn get_mod_path() -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn get_mod_path() -> Option<PathBuf> {
+pub fn get_default_mod_path() -> Option<PathBuf> {
     use crate::automation;
     let mut mod_path_buf: PathBuf = steam::get_wine_prefix_dir(automation::STEAM_GAME_ID)?;
     for path in ["users", "steamuser", "AppData", "Local", "BeamNG.drive", "mods"] {
@@ -44,19 +44,27 @@ pub fn get_mod_path() -> Option<PathBuf> {
     Some(mod_path_buf)
 }
 
+pub fn get_mod_list_for(path: &PathBuf) -> Vec<PathBuf> {
+    info!("Looking for BeamNG mods in {}", path.display());
+    read_mods_in_path(&path)
+}
+
 pub fn get_mod_list() -> Vec<PathBuf> {
-    let mod_dir = match get_mod_path() {
+    let mod_dir = match get_default_mod_path() {
         None => { return Vec::new(); }
         Some(dir) => { dir }
     };
-    info!("Mod dir is {}", mod_dir.display());
-    
-    let dir_entries = match fs::read_dir(mod_dir) {
+    info!("Looking for BeamNG mods in {}", mod_dir.display());
+    read_mods_in_path(&mod_dir)
+}
+
+fn read_mods_in_path(path: &PathBuf) -> Vec<PathBuf> {
+    let dir_entries = match fs::read_dir(path) {
         Ok(entry_list) => entry_list,
         Err(e) => { return Vec::new(); }
     };
 
-    let mods: Vec<PathBuf> = dir_entries.filter_map(|e| {
+    dir_entries.filter_map(|e| {
         match e {
             Ok(dir_entry) => {
                 if dir_entry.path().is_file() {
@@ -75,8 +83,7 @@ pub fn get_mod_list() -> Vec<PathBuf> {
             },
             _ => None
         }
-    }).collect();
-    mods
+    }).collect()
 }
 
 #[derive(Debug)]
@@ -86,7 +93,7 @@ pub struct ModData {
 }
 
 pub fn load_mod_data(mod_name: &str) -> Result<ModData, String> {
-    let mod_path = &get_mod_path();
+    let mod_path = &get_default_mod_path();
     let mod_path = match mod_path {
         None => { return Err(String::from("Cannot find Beam.NG mods path")); }
         Some(mod_path) => { mod_path.join(mod_name) }
@@ -142,18 +149,18 @@ pub fn extract_mod_data(mod_path: &Path) -> Result<ModData, String> {
 mod tests {
     use std::ffi::OsString;
     use std::path::PathBuf;
-    use crate::beam_ng::{get_mod_list, get_mod_path};
+    use crate::beam_ng::{get_mod_list, get_default_mod_path};
 
     #[test]
     fn get_beam_ng_mod_path() -> Result<(), String> {
-        let path = PathBuf::from(get_mod_path().unwrap());
+        let path = PathBuf::from(get_default_mod_path().unwrap());
         println!("BeamNG mod path is {}", path.display());
         Ok(())
     }
 
     #[test]
     fn get_beam_ng_mod_list() -> Result<(), String> {
-        let path = PathBuf::from(get_mod_path().unwrap());
+        let path = PathBuf::from(get_default_mod_path().unwrap());
         let mods = get_mod_list();
         if mods.len() == 0 {
             println!("No mods found in {}", path.display());
