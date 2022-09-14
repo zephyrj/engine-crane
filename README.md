@@ -1,5 +1,5 @@
 # engine-crane
-A tool to put engines created in Automation into Assetto Corsa.
+A tool to put engines created in [Automation](https://store.steampowered.com/app/293760/Automation__The_Car_Company_Tycoon_Game/) into [Assetto Corsa](https://store.steampowered.com/app/244210/Assetto_Corsa/).
 
 It is a stand-alone program that takes data from a combination of:
  - a BeamNG mod exported from Automation (the car is irrelevant - just the engine data is used at the moment)
