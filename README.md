@@ -10,7 +10,7 @@ It generates the following data:
  - If a turbo is used for the engine then it will generate a turbo section and accompanying turbo controller file to match the boost@RPM values from Automation as closely as it can
  - A coast torque value based on the friction values of the engine in the BeamNG mod
  - The inertia of the engine; again taken from the BeamNG mod
- - fuel consumption based of the of the efficiency data of the engine. You can either specify a AC vanilla physics fuel consumption calculation (which is not very accurate) or it can generate a lut for the more accurate CSP extended physics fuel calculations (details here)
+ - fuel consumption based of the of the efficiency data of the engine. You can either specify a AC vanilla physics fuel consumption calculation (which is not very accurate) or it can generate a lut for the more accurate CSP extended physics fuel calculations ([details here](https://trello.com/c/0R8cqB1v/48-powertrain))
  - If the existing cars engine weight is known then it will update the car weight based on the difference between the old and new engine weights
  - It updates the auto-shifter based on the RPM of the new engine and if it can find shift leds in the target AC car it will update those to the new engine RPM
  - It generates a new set of UI data for the car based of the new engine
