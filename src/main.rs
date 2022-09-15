@@ -42,23 +42,11 @@ fn main() -> Result<(), iced::Error> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
-    if assetto_corsa::is_installed() {
-        info!("Assetto Corsa is installed at {}", assetto_corsa::get_default_install_path().unwrap().display());
-    } else {
-        error!("Assetto Corsa is not installed");
-        return Ok(());
+    if let Some(legacy_db_path) = automation::sandbox::get_db_path() {
+        info!("Automation sandbox.db for game version < 4.2 found at {}", PathBuf::from(legacy_db_path).display())
     }
-
-    if automation::is_installed() {
-        info!("Automation is installed at {}", automation::get_install_path().unwrap().display());
-        if let Some(legacy_db_path) = automation::sandbox::get_db_path() {
-            info!("Automation sandbox.db for game version < 4.2 found at {}", PathBuf::from(legacy_db_path).display())
-        }
-        if let Some(db_path) = automation::sandbox::get_db_path_4_2() {
-            info!("Automation sandbox.db for game version >= 4.2 found at {}", PathBuf::from(db_path).display())
-        }
-    } else {
-        warn!("Automation is not installed");
+    if let Some(db_path) = automation::sandbox::get_db_path_4_2() {
+        info!("Automation sandbox.db for game version >= 4.2 found at {}", PathBuf::from(db_path).display())
     }
 
     info!("Launching UI");

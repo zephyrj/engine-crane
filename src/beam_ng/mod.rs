@@ -36,8 +36,9 @@ pub const STEAM_GAME_ID: i64 = 284160;
 pub fn get_default_mod_path() -> Option<PathBuf> {
     let mut mod_path_buf: PathBuf = BaseDirs::new().unwrap().cache_dir().to_path_buf();
     mod_path_buf.push(STEAM_GAME_NAME);
-    match steam::get_game_install_path(STEAM_GAME_NAME) {
-        Some(_) => {
+    let beamng_installed = steam::get_game_install_path(STEAM_GAME_NAME).is_dir();
+    match beamng_installed {
+        true => {
             let mut link_path = mod_path_buf.clone();
             link_path.push("latest.lnk");
             match Lnk::try_from(link_path.as_path()) {
@@ -49,7 +50,7 @@ pub fn get_default_mod_path() -> Option<PathBuf> {
                 Err(_) => {}
             }
         }
-        None => {}
+        false => {}
     }
     mod_path_buf.push("mods");
     Some(mod_path_buf)
@@ -65,7 +66,7 @@ pub fn get_default_mod_path() -> Option<PathBuf> {
     Some(mod_path_buf)
 }
 
-pub fn get_mod_list_for(path: &PathBuf) -> Vec<PathBuf> {
+pub fn get_mod_list_in(path: &PathBuf) -> Vec<PathBuf> {
     info!("Looking for BeamNG mods in {}", path.display());
     read_mods_in_path(&path)
 }

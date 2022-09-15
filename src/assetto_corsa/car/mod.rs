@@ -39,7 +39,7 @@ use walkdir::WalkDir;
 use crate::assetto_corsa;
 use crate::assetto_corsa::traits:: DataInterface;
 use crate::assetto_corsa::error::{Error, ErrorKind, Result};
-use crate::assetto_corsa::{ini_utils, load_sfx_data};
+use crate::assetto_corsa::{ini_utils};
 use crate::assetto_corsa::ini_utils::Ini;
 use acd_utils::AcdArchive;
 use crate::assetto_corsa::car::data::CarIniData;
@@ -47,7 +47,8 @@ use crate::assetto_corsa::car::data_interface::AcdDataInterface;
 use crate::assetto_corsa::car::ui::CarUiData;
 
 
-pub fn clone_existing_car(existing_car_path: &Path,
+pub fn clone_existing_car(ac_installation: &assetto_corsa::Installation,
+                          existing_car_path: &Path,
                           new_car_path: &Path,
                           unpack_data_dir: bool) -> Result<()> {
     if existing_car_path == new_car_path {
@@ -75,7 +76,7 @@ pub fn clone_existing_car(existing_car_path: &Path,
     }
 
     fix_car_specific_filenames(new_car_path, existing_car_name)?;
-    update_car_sfx(new_car_path, existing_car_name)?;
+    update_car_sfx(ac_installation, new_car_path, existing_car_name)?;
 
     match unpack_data_dir {
         true => {
@@ -96,33 +97,29 @@ pub fn clone_existing_car(existing_car_path: &Path,
     Ok(())
 }
 
-pub fn create_new_car_spec(existing_car_name: &str,
+pub fn create_new_car_spec(ac_installation: &assetto_corsa::Installation,
+                           existing_car_path: &PathBuf,
                            spec_name: &str,
                            unpack_data: bool) -> Result<PathBuf>{
-    let installed_cars_path = match assetto_corsa::get_default_installed_cars_path() {
-        Some(path) => { path },
-        None => {
-            return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
-        }
-    };
-    let existing_car_path = installed_cars_path.join(existing_car_name);
+    let existing_car_name = existing_car_path.file_name().unwrap().to_string_lossy().into_owned();
     if !existing_car_path.exists() {
-        return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name.to_owned()));
+        return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name));
     }
     let new_car_name = format!(
         "{}_{}",
         existing_car_name,
         spec_name.to_lowercase().split_whitespace().collect::<Vec<&str>>().join("_")
     );
-    let new_car_path = installed_cars_path.join(&new_car_name);
+    let new_car_path = existing_car_path.parent().unwrap().join(&new_car_name);
     if new_car_path.exists() {
         return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
     }
     info!("Cloning {} to {}", existing_car_path.display(), new_car_path.display());
-    clone_existing_car(existing_car_path.as_path(),
+    clone_existing_car(ac_installation,
+                       existing_car_path.as_path(),
                        new_car_path.as_path(),
                        unpack_data)?;
-    update_car_ui_data(new_car_path.as_path(), spec_name, existing_car_name)?;
+    update_car_ui_data(new_car_path.as_path(), spec_name, &existing_car_name)?;
     Ok(new_car_path)
 }
 
@@ -211,7 +208,9 @@ pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_n
     Ok(())
 }
 
-fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
+fn update_car_sfx(ac_installation: &assetto_corsa::Installation,
+                  car_path: &Path,
+                  name_to_change: &str) -> Result<()> {
     let guids_file_path = car_path.join(PathBuf::from_iter(["sfx", "GUIDs.txt"]));
     let car_name = car_path.file_name().unwrap().to_str().unwrap();
 
@@ -232,7 +231,7 @@ fn update_car_sfx(car_path: &Path, name_to_change: &str) -> Result<()> {
         }).collect();
     } else {
         info!("Generating new '{}' with contents from the installation sfx data", guids_file_path.display());
-        updated_lines = load_sfx_data()?.generate_clone_guid_info(name_to_change, car_name);
+        updated_lines = ac_installation.load_sfx_data()?.generate_clone_guid_info(name_to_change, car_name);
     }
 
     let file = File::create(&guids_file_path)?;
@@ -308,13 +307,18 @@ mod tests {
 
     #[test]
     fn clone_car() {
-        let new_car_path = create_new_car_spec("zephyr_za401", "test", true).unwrap();
+        let ac_install = assetto_corsa::Installation::new();
+        let new_car_path = create_new_car_spec(&ac_install,
+                                               &ac_install.get_installed_car_path().join("zephyr_za401"),
+                                               "test",
+                                               true).unwrap();
         println!("{}", new_car_path.display());
     }
 
     #[test]
     fn installed_car_test() {
-        let installed_cars = assetto_corsa::get_list_of_installed_cars().unwrap();
+        let ac_install = assetto_corsa::Installation::new();
+        let installed_cars = ac_install.get_list_of_installed_cars().unwrap();
         let mut pass_file = File::create(Path::new("pass.txt")).unwrap();
         let mut fail_file = File::create(Path::new("fail.txt")).unwrap();
         for path in &installed_cars {

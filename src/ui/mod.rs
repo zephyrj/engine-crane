@@ -29,24 +29,24 @@ use rfd::FileDialog;
 
 
 pub fn launch() -> Result<(), Error> {
-    CarSelector::run((Settings::default()))
+    CarSelector::run(Settings::default())
 }
 
 #[derive(Default)]
 pub struct CarSelector {
-    ac_install_path: Option<String>,
+    ac_install_path: Option<PathBuf>,
     beamng_mod_path: Option<String>,
-    available_cars: Vec<String>,
-    available_mods: Vec<String>,
+    available_cars: Vec<ListPathRef>,
+    available_mods: Vec<ListPathRef>,
     available_physics: Vec<AssettoCorsaPhysicsLevel>,
-    current_car: Option<String>,
-    current_mod: Option<String>,
+    current_car: Option<PathBuf>,
+    current_mod: Option<PathBuf>,
     current_new_spec_name: String,
     current_engine_weight: Option<String>,
     current_minimum_physics: AssettoCorsaPhysicsLevel,
-    car_pick_list: pick_list::State<String>,
+    car_pick_list: pick_list::State<ListPathRef>,
     new_spec_name: text_input::State,
-    mod_pick_list: pick_list::State<String>,
+    mod_pick_list: pick_list::State<ListPathRef>,
     swap_button: button::State,
     ac_path_select_button: button::State,
     beamng_mod_path_select_button: button::State,
@@ -57,10 +57,10 @@ pub struct CarSelector {
 }
 
 impl CarSelector {
-    fn load_available_cars(ac_install_path: &PathBuf) -> Vec<String> {
+    fn load_available_cars(ac_install_path: &PathBuf) -> Vec<ListPathRef> {
         let span = span!(Level::INFO, "Loading Assetto Corsa cars");
         let _enter = span.enter();
-        return match &assetto_corsa::get_list_of_installed_cars_for(ac_install_path) {
+        return match &assetto_corsa::Installation::from_path(ac_install_path.clone()).get_list_of_installed_cars() {
             Ok(vec) => {
                 info!("Found {} cars", vec.len());
                 to_filename_vec(vec)
@@ -72,10 +72,10 @@ impl CarSelector {
         }
     }
 
-    fn load_available_mods(beamng_mod_path: &PathBuf) -> Vec<String> {
+    fn load_available_mods(beamng_mod_path: &PathBuf) -> Vec<ListPathRef> {
         let span = span!(Level::INFO, "Loading beamNG mods");
         let _enter = span.enter();
-        let mods = to_filename_vec(&beam_ng::get_mod_list_for(beamng_mod_path));
+        let mods = to_filename_vec(&beam_ng::get_mod_list_in(beamng_mod_path));
         info!("Found {} mods", mods.len());
         mods
     }
@@ -84,7 +84,7 @@ impl CarSelector {
         self.current_car = None;
         self.available_cars = Self::load_available_cars(ac_install_path);
         self.available_cars.sort();
-        self.ac_install_path = Some(String::from(ac_install_path.to_string_lossy()));
+        self.ac_install_path = Some(ac_install_path.clone());
     }
 
     fn set_beam_ng_mod_path(&mut self, beam_ng_mod_path: &PathBuf) {
@@ -94,23 +94,22 @@ impl CarSelector {
     }
 }
 
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub struct EngineRef {
-    uid: String,
-    display_name: String
+#[derive(Debug, Default, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ListPathRef {
+    full_path: PathBuf,
 }
 
-impl std::fmt::Display for EngineRef {
+impl std::fmt::Display for ListPathRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display_name)
+        write!(f, "{}", &self.full_path.file_name().unwrap().to_string_lossy())
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    CarSelected(String),
+    CarSelected(ListPathRef),
     NameEntered(String),
-    ModSelected(String),
+    ModSelected(ListPathRef),
     PhysicsLevelSelected(AssettoCorsaPhysicsLevel),
     OldEngineWeightEntered(String),
     UnpackToggled(bool),
@@ -119,9 +118,9 @@ pub enum Message {
     BeamNGModPathSelectPressed
 }
 
-fn to_filename_vec(path_vec: &Vec<PathBuf>) -> Vec<String> {
+fn to_filename_vec(path_vec: &Vec<PathBuf>) -> Vec<ListPathRef> {
     path_vec.iter().map(|path|{
-        String::from(path.file_name().unwrap().to_string_lossy())
+        ListPathRef{full_path: path.clone()}
     }).collect()
 }
 
@@ -129,12 +128,13 @@ impl Sandbox for CarSelector {
     type Message = Message;
 
     fn new() -> Self {
-        let mut ac_install_path: Option<String> = None;
+        let mut ac_install_path: Option<PathBuf> = None;
         let mut available_cars = Vec::new();
-        if let Some(base_path) = assetto_corsa::get_default_install_path() {
+        let base_path = assetto_corsa::get_default_install_path();
+        if base_path.is_dir() {
             available_cars = Self::load_available_cars(&base_path);
             available_cars.sort();
-            ac_install_path = Some(base_path.to_string_lossy().into_owned());
+            ac_install_path = Some(base_path);
         }
         let mut beamng_mod_path: Option<String> = None;
         let mut available_mods = Vec::new();
@@ -158,12 +158,12 @@ impl Sandbox for CarSelector {
 
     fn update(&mut self, message: Self::Message) {
         match message {
-            Message::CarSelected(car_path) => {
-                self.current_car = Some(car_path);
+            Message::CarSelected(path_ref) => {
+                self.current_car = Some(path_ref.full_path.clone());
             },
-            Message::ModSelected(mod_name) => {
-                self.current_new_spec_name = String::from(mod_name.strip_suffix(".zip").unwrap());
-                self.current_mod = Some(mod_name)
+            Message::ModSelected(path_ref) => {
+                self.current_new_spec_name = String::from(path_ref.to_string().strip_suffix(".zip").unwrap());
+                self.current_mod = Some(path_ref.full_path.clone())
             },
             Message::NameEntered(new_car_name) => {
                 self.current_new_spec_name = new_car_name
@@ -172,6 +172,10 @@ impl Sandbox for CarSelector {
                 self.current_minimum_physics = new_physics_level;
             }
             Message::SwapButtonPressed => {
+                if self.ac_install_path.is_none() {
+                    self.status_message = String::from("Please set the Assetto Corsa install path");
+                    return;
+                }
                 if self.current_car.is_none() {
                     self.status_message = String::from("Please select an Assetto Corsa car");
                     return;
@@ -180,13 +184,16 @@ impl Sandbox for CarSelector {
                     return;
                 }
 
-                let existing_car_name = (&self.current_car).as_ref().unwrap().as_str();
                 let new_spec_name = self.current_new_spec_name.as_str();
-
                 let new_car_path = {
                     let span = span!(Level::INFO, "Creating new car spec");
                     let _enter = span.enter();
-                    match assetto_corsa::car::create_new_car_spec(existing_car_name, new_spec_name, self.unpack_physics_data) {
+                    let ac_install = assetto_corsa::Installation::from_path(self.ac_install_path.as_ref().unwrap().clone());
+                    match assetto_corsa::car::create_new_car_spec(&ac_install,
+                                                                  self.current_car.as_ref().unwrap(),
+                                                                  new_spec_name,
+                                                                  self.unpack_physics_data)
+                    {
                         Ok(path) => { path }
                         Err(e) => {
                             error!("Swap failed: {}", e.to_string());
@@ -196,11 +203,7 @@ impl Sandbox for CarSelector {
                     }
                 };
 
-                let mut mod_path = beam_ng::get_default_mod_path().unwrap();
-                if let Some(mod_name) = &self.current_mod {
-                    mod_path = mod_path.join(Path::new(mod_name.as_str()));
-                }
-
+                let mod_path = self.current_mod.as_ref().unwrap();
                 {
                     let span = span!(Level::INFO, "Updating car physics");
                     let _enter = span.enter();
@@ -249,7 +252,7 @@ impl Sandbox for CarSelector {
                 let install_path = FileDialog::new()
                     .set_directory(match &self.ac_install_path {
                         Some(str) => str,
-                        None => "/"
+                        None => Path::new("/")
                     })
                     .pick_folder();
                 match install_path {
@@ -285,6 +288,12 @@ impl Sandbox for CarSelector {
     }
 
     fn view(&mut self) -> Element<Message> {
+        let current_car = match &self.current_car {
+            None => { None }
+            Some(path) => {
+                Some(ListPathRef{full_path: path.clone()})
+            }
+        };
         let car_select_container = Column::new()
             .align_items(Alignment::Center)
             //.padding(10)
@@ -292,16 +301,22 @@ impl Sandbox for CarSelector {
             .push(PickList::new(
                 &mut self.car_pick_list,
                 &self.available_cars,
-                self.current_car.clone(),
+                current_car,
                 Message::CarSelected,
             ));
+        let current_mod = match &self.current_mod {
+            None => { None }
+            Some(path) => {
+                Some(ListPathRef{full_path: path.clone()})
+            }
+        };
         let mod_select_container = Column::new()
             .align_items(Alignment::Center)
             .push(Text::new("BeamNG mod"))
             .push(PickList::new(
                 &mut self.mod_pick_list,
                 &self.available_mods,
-                self.current_mod.clone(),
+                current_mod,
                 Message::ModSelected
             ));
         let current_weight_value = match &self.current_engine_weight {
@@ -364,7 +379,7 @@ impl Sandbox for CarSelector {
 
         let base_path_str = match &self.ac_install_path {
             None => format!("Assetto Corsa install path: Not Set"),
-            Some(path) => format!("Assetto Corsa install path: {}", path)
+            Some(path) => format!("Assetto Corsa install path: {}", path.to_string_lossy().into_owned())
         };
         let path_select_button =
             Button::new(&mut self.ac_path_select_button, Text::new("Browse"))
