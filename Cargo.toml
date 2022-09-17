@@ -1,7 +1,9 @@
 [package]
 name = "engine-crane"
-version = "0.1.3-alpha"
+version = "0.1.4-alpha"
 edition = "2021"
+build = "build.rs"
+authors = ["zephyrj <zephyrj@protonmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -30,3 +32,6 @@ rfd = "0.10"
 [dependencies.rusqlite]
 version = "0.28.0"
 features = ["bundled"]
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
