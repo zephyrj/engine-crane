@@ -413,10 +413,16 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                                           additional_car_data: AdditionalAcCarData) -> Result<(), String> {
     let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
     info!("Loading car {}", ac_car_path.display());
-    let mut car = Car::load_from_path(ac_car_path).unwrap();
+    let mut car = Car::load_from_path(ac_car_path).map_err(|err|{
+        let err_str = format!("Failed to load {}. {}", ac_car_path.display(), err.to_string());
+        error!("{}", &err_str);
+        err_str
+    })?;
     let drive_type = match Drivetrain::from_car(&mut car) {
         Ok(drivetrain) => {
-            extract_mandatory_section::<data::drivetrain::Traction>(&drivetrain).unwrap().drive_type
+            extract_mandatory_section::<data::drivetrain::Traction>(&drivetrain).map_err(|err|{
+                format!("Failed to load drivetrain. {}", err.to_string())
+            })?.drive_type
         },
         Err(err) => {
             return Err(format!("Failed to load drivetrain. {}", err.to_string()));
