@@ -25,6 +25,7 @@ mod automation;
 mod ui;
 mod beam_ng;
 mod fabricator;
+mod utils;
 
 use std::env;
 use std::path::PathBuf;

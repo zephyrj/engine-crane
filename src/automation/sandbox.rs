@@ -30,6 +30,7 @@ use tracing::info;
 
 use crate::steam;
 use crate::automation::{STEAM_GAME_ID};
+use crate::utils::round_float_to;
 
 pub enum SandboxVersion {
     Legacy,
@@ -315,8 +316,8 @@ impl EngineV1 {
         hasher.update(&self.head_type.as_bytes());
         hasher.update(&self.head_material.as_bytes());
         hasher.update(&self.valves.as_bytes());
-        hasher.update(&self.max_stroke.to_string().as_bytes());
-        hasher.update(&self.max_bore.to_string().as_bytes());
+        hasher.update(&round_float_to(self.max_stroke, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.max_bore, 10).to_string().as_bytes());
         for byte in hasher.finalize() {
             hash += &format!("{:X?}", byte);
         }
@@ -337,7 +338,7 @@ impl EngineV1 {
         hasher.update(&self.pistons.as_bytes());
         hasher.update(&self.vvt.as_bytes());
         hasher.update(&self.aspiration.as_bytes());
-        hasher.update(&self.intercooler_setting.to_string().as_bytes());
+        hasher.update(&round_float_to(self.intercooler_setting, 10).to_string().as_bytes());
         hasher.update(&self.fuel_system_type.as_bytes());
         hasher.update(&self.fuel_system.as_bytes());
         if let Some(str) = &self.fuel_type { hasher.update(str.as_bytes()); }
@@ -350,24 +351,24 @@ impl EngineV1 {
         hasher.update(&self.cat.as_bytes());
         hasher.update(&self.muffler_1.as_bytes());
         hasher.update(&self.muffler_2.as_bytes());
-        hasher.update(&self.bore.to_string().as_bytes());
-        hasher.update(&self.stroke.to_string().as_bytes());
-        hasher.update(&self.capacity.to_string().as_bytes());
-        hasher.update(&self.compression.to_string().as_bytes());
-        hasher.update(&self.cam_profile_setting.to_string().as_bytes());
-        hasher.update(&self.vvl_cam_profile_setting.to_string().as_bytes());
-        hasher.update(&self.afr.to_string().as_bytes());
-        hasher.update(&self.afr_lean.to_string().as_bytes());
-        hasher.update(&self.rpm_limit.to_string().as_bytes());
-        hasher.update(&self.ignition_timing_setting.to_string().as_bytes());
-        hasher.update(&self.exhaust_diameter.to_string().as_bytes());
+        hasher.update(&round_float_to(self.bore, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.stroke, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.capacity, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.compression, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.cam_profile_setting, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.vvl_cam_profile_setting, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.afr, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.afr_lean, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.rpm_limit, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.ignition_timing_setting, 10).to_string().as_bytes());
+        hasher.update(&round_float_to(self.exhaust_diameter, 10).to_string().as_bytes());
         hasher.update(&self.quality_bottom_end.to_string().as_bytes());
         hasher.update(&self.quality_top_end.to_string().as_bytes());
         hasher.update(&self.quality_aspiration.to_string().as_bytes());
         hasher.update(&self.quality_fuel_system.to_string().as_bytes());
         hasher.update(&self.quality_exhaust.to_string().as_bytes());
         if let Some(str) = &self.balance_shaft { hasher.update(str.as_bytes()); }
-        if let Some(str) = &self.spring_stiffness { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.spring_stiffness { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
         if let Some(str) = &self.listed_octane { hasher.update(str.to_string().as_bytes()); }
         if let Some(str) = &self.tune_octane_offset { hasher.update(str.to_string().as_bytes()); }
         if let Some(str) = &self.aspiration_setup { hasher.update(str.as_bytes()); }
@@ -376,14 +377,14 @@ impl EngineV1 {
         if let Some(str) = &self.aspiration_item_suboption_1 { hasher.update(str.as_bytes()); }
         if let Some(str) = &self.aspiration_item_suboption_2 { hasher.update(str.as_bytes()); }
         if let Some(str) = &self.aspiration_boost_control { hasher.update(str.as_bytes()); }
-        if let Some(str) = &self.charger_size_1 { hasher.update(str.to_string().as_bytes()); }
-        if let Some(str) = &self.charger_size_2 { hasher.update(str.to_string().as_bytes()); }
-        if let Some(str) = &self.charger_tune_1 { hasher.update(str.to_string().as_bytes()); }
-        if let Some(str) = &self.charger_tune_2 { hasher.update(str.to_string().as_bytes()); }
-        if let Some(str) = &self.charger_max_boost_1 { hasher.update(str.to_string().as_bytes()); }
-        if let Some(str) = &self.charger_max_boost_2 { hasher.update(str.to_string().as_bytes()); }
-        if let Some(str) = &self.turbine_size_1 { hasher.update(str.to_string().as_bytes()); }
-        if let Some(str) = &self.turbine_size_2 { hasher.update(str.to_string().as_bytes()); }
+        if let Some(str) = &self.charger_size_1 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
+        if let Some(str) = &self.charger_size_2 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
+        if let Some(str) = &self.charger_tune_1 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
+        if let Some(str) = &self.charger_tune_2 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
+        if let Some(str) = &self.charger_max_boost_1 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
+        if let Some(str) = &self.charger_max_boost_2 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
+        if let Some(str) = &self.turbine_size_1 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
+        if let Some(str) = &self.turbine_size_2 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
         for byte in hasher.finalize() {
             hash += &format!("{:X?}", byte);
         }
@@ -489,7 +490,7 @@ pub fn load_engine_by_uuid(uuid: &str, version: SandboxVersion) -> Result<Option
 
 fn load_all_engines_query() -> &'static str {
     r#"select f.GameVersion as f_version, v.GameVersion as v_version, f.uuid as f.uuid, f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
-    v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, f.Stroke as VStroke, v.*,
+    v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, v.Stroke as VStroke, v.*,
     r.*,
     c.*
     from "Variants" as v
@@ -500,7 +501,7 @@ fn load_all_engines_query() -> &'static str {
 
 fn load_engine_by_uuid_query() -> &'static str {
     r#"select f.GameVersion as f_version, v.GameVersion as v_version, f.uid as f_uuid, f.name as f_name, f.InternalDays as f_days, f.Bore as MaxBore, f.Stroke as MaxStroke, f.*,
-    v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, f.Stroke as VStroke, v.*,
+    v.uid as v_uuid, v.name as v_name, v.InternalDays as v_days, v.Bore as VBore, v.Stroke as VStroke, v.*,
     r.*,
     c.*
     from "Variants" as v

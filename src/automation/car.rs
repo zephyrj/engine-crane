@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use std::default::Default;
 use std::fmt::{Display, Formatter};
 use std::mem;
+use crate::utils::round_float_to;
 
 
 #[derive(Copy, Clone, Debug)]
@@ -84,7 +85,9 @@ impl AttributeValue {
         return match self {
             AttributeValue::Blob(blob) => { blob.chunk.clone() }
             AttributeValue::Text(t) => { Vec::from(t.as_bytes()) }
-            AttributeValue::Number(num) => { Vec::from(num.to_string().as_bytes()) }
+            AttributeValue::Number(num) => {
+                Vec::from(round_float_to(*num, 10).to_string().as_bytes())
+            }
             AttributeValue::False => { Vec::from("false".as_bytes()) }
             AttributeValue::True => { Vec::from("true".as_bytes()) }
         }
