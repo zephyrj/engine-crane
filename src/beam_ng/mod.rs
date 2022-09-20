@@ -59,7 +59,7 @@ pub fn get_default_mod_path() -> Option<PathBuf> {
 #[cfg(target_os = "linux")]
 pub fn get_default_mod_path() -> Option<PathBuf> {
     use crate::automation;
-    let mut mod_path_buf: PathBuf = steam::get_wine_prefix_dir(automation::STEAM_GAME_ID)?;
+    let mut mod_path_buf: PathBuf = steam::get_wine_prefix_dir(automation::STEAM_GAME_ID);
     for path in ["users", "steamuser", "AppData", "Local", "BeamNG.drive", "mods"] {
         mod_path_buf.push(path);
     }

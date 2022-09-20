@@ -531,7 +531,7 @@ pub fn get_db_path_4_2() -> Option<OsString> {
 
 #[cfg(target_os = "linux")]
 pub fn get_db_path() -> Option<OsString> {
-    let sandbox_path = steam::get_wine_documents_dir(STEAM_GAME_ID)?.join(PathBuf::from_iter(legacy_sandbox_path()));
+    let sandbox_path = steam::get_wine_documents_dir(STEAM_GAME_ID).join(PathBuf::from_iter(legacy_sandbox_path()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
         false => None
@@ -540,7 +540,7 @@ pub fn get_db_path() -> Option<OsString> {
 
 #[cfg(target_os = "linux")]
 pub fn get_db_path_4_2() -> Option<OsString> {
-    let sandbox_path = steam::get_wine_appdata_local_dir(STEAM_GAME_ID)?.join(PathBuf::from_iter(sandbox_dir_4_2()));
+    let sandbox_path = steam::get_wine_appdata_local_dir(STEAM_GAME_ID).join(PathBuf::from_iter(sandbox_dir_4_2()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
         false => None
