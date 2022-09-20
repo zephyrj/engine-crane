@@ -47,13 +47,16 @@ impl error::Error for Error {}
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
-        Error::new(ErrorKind::IOError, e.to_string())
+        Error::new(ErrorKind::IOError, format!("{}. {}", e.to_string(), e.kind().to_string()))
     }
 }
 
 impl From<fs_extra::error::Error> for Error {
     fn from(e: fs_extra::error::Error) -> Self {
-        Error::new(ErrorKind::IOError, e.to_string())
+        return match e.kind {
+            fs_extra::error::ErrorKind::Io(io_error) => { Error::new(ErrorKind::IOError, format!("{}. {}", io_error.to_string(), io_error.kind().to_string())) }
+            _ => { Error::new(ErrorKind::IOError, e.to_string()) }
+        }
     }
 }
 
