@@ -1,6 +1,6 @@
 [package]
 name = "engine-crane"
-version = "0.1.6-alpha"
+version = "0.1.7-alpha"
 edition = "2021"
 build = "build.rs"
 authors = ["zephyrj <zephyrj@protonmail.com>"]

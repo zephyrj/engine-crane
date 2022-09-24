@@ -20,9 +20,11 @@
  */
 
 use std::fmt::{Display, Formatter};
+use std::num::ParseFloatError;
 use std::path::Path;
+use itertools::Itertools;
 use sha2::{Sha256, Digest};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use crate::{automation, beam_ng};
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
@@ -154,7 +156,7 @@ impl AcEngineParameterCalculatorV1 {
         let version_num = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap();
         info!("Engine uuid: {}", uid);
         info!("Engine version number: {}", version_num);
-        let version = SandboxVersion::from_version_number(version_num as i32);
+        let version = SandboxVersion::from_version_number(version_num as u64);
         info!("Deduced as {}", version);
         let engine_sqlite_data = match load_engine_by_uuid(uid, version)? {
             None => {
@@ -180,7 +182,22 @@ impl AcEngineParameterCalculatorV1 {
 
     pub fn inertia(&self) -> Option<f64> {
         let eng_map = self.engine_jbeam_data.get("Camso_Engine")?.as_object()?.get("mainEngine")?.as_object()?;
-        eng_map.get("inertia")?.as_f64()
+        eng_map.get("inertia")?.as_f64().or_else(||{
+            if let Some(str_data) = eng_map.get("inertia")?.as_str() {
+                let end_trimmed_data = str_data.split("*$").collect_vec();
+                debug!("End trimmed inertia is {:?}", end_trimmed_data);
+                let trimmed_data = end_trimmed_data[0].rsplit("$=").collect_vec();
+                debug!("Trimmed inertia is {:?}", trimmed_data);
+                return match trimmed_data[0].parse::<f64>() {
+                    Ok(val) => {
+                        debug!("inertia is {}", val);
+                        Some(val)
+                    }
+                    Err(_) => { None }
+                }
+            }
+            None
+        })
     }
 
     pub fn idle_speed(&self) -> Option<f64> {
@@ -366,6 +383,17 @@ impl AcEngineParameterCalculatorV1 {
     }
 
     pub fn coast_data(&self) -> Option<engine::CoastCurve> {
+        let variant_info = self.automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
+        let version_num = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap() as u64;
+        if version_num < 2209220000 {
+            info!("Using v1 coast calculation for version {}", version_num);
+            return self.coast_data_v1();
+        }
+        info!("Using v2 coast calculation for version {}", version_num);
+        return self.coast_data_v2();
+    }
+
+    pub fn coast_data_v1(&self) -> Option<engine::CoastCurve> {
         //   The following data is available from the engine.jbeam exported file
         //   The dynamic friction torque on the engine in Nm/s.
         //   This is a friction torque which increases proportional to engine AV (rad/s).
@@ -380,6 +408,22 @@ impl AcEngineParameterCalculatorV1 {
         let static_friction = eng_map.get("friction")?.as_f64().unwrap();
         let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm * 2_f64 * std::f64::consts::PI) / 60_f64;
         let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + (2_f64 * static_friction);
+        Some(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
+                                                    friction_torque.round() as i32,
+                                                    0.0))
+    }
+
+    pub fn coast_data_v2(&self) -> Option<engine::CoastCurve> {
+        let eng_map = self.engine_jbeam_data.get("Camso_Engine")?.as_object()?.get("mainEngine")?.as_object()?;
+        let dynamic_friction = eng_map.get("dynamicFriction")?.as_f64().unwrap();
+        // Not sure if this is set correctly in the outputted jbeam files but the best we can work with atm
+        let static_friction = eng_map.get("engineBrakeTorque")?.as_f64().unwrap();
+        let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm / 60_f64) * 2_f64 * std::f64::consts::PI;
+        // TODO Assuming the jbeam files are correct I think this should be:
+        // friction + dynamicFriction * engineAV + engineBrakeTorque
+        // however friction and engineBrakeTorque are the same in the output jbeam files which
+        // would result in too high a value. Add only engineBrakeTorque for now
+        let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + static_friction;
         Some(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
                                                     friction_torque.round() as i32,
                                                     0.0))
@@ -498,6 +542,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
         engine_data.minimum = calculator.idle_speed().unwrap().round() as i32;
         update_car_data(&mut engine, &engine_data).unwrap();
         update_car_data(&mut engine, &calculator.damage()).unwrap();
+
         update_car_data(&mut engine, &calculator.coast_data().unwrap()).unwrap();
 
         let mut power_curve = extract_mandatory_section::<engine::PowerCurve>(&engine).unwrap();
@@ -761,7 +806,7 @@ impl<'a, 'b> EngineDataValidator<'a, 'b> {
         self.validate_strings(&self.sandbox_data.fuel_system_type, variant_data,"FuelSystemType")?;
         self.validate_strings(&self.sandbox_data.fuel_system, variant_data,"FuelSystem")?;
         if let Some(fuel_type) = &self.sandbox_data.fuel_type { self.validate_strings(fuel_type, variant_data,"FuelType")?; }
-        if let Some(fuel_leaded) = &self.sandbox_data.fuel_type { self.validate_strings(fuel_leaded, variant_data,"FuelLeaded")?; }
+        if let Some(fuel_leaded) = &self.sandbox_data.fuel_leaded { self.validate_i32(*fuel_leaded, variant_data,"FuelLeaded")?; }
         self.validate_strings(&self.sandbox_data.intake_manifold, variant_data,"IntakeManifold")?;
         self.validate_strings(&self.sandbox_data.intake, variant_data,"Intake")?;
         self.validate_strings(&self.sandbox_data.headers, variant_data,"Headers")?;
@@ -776,8 +821,8 @@ impl<'a, 'b> EngineDataValidator<'a, 'b> {
         self.validate_floats(*&self.sandbox_data.compression, variant_data,"Compression")?;
         self.validate_floats(*&self.sandbox_data.cam_profile_setting, variant_data,"CamProfileSetting")?;
         self.validate_floats(*&self.sandbox_data.vvl_cam_profile_setting, variant_data,"VVLCamProfileSetting")?;
-        self.validate_floats(*&self.sandbox_data.afr, variant_data,"AFR")?;
-        self.validate_floats(*&self.sandbox_data.afr_lean, variant_data,"AFRLean")?;
+        if let Some(afr) = &self.sandbox_data.afr { self.validate_floats(*afr, variant_data,"AFR")?; }
+        if let Some(afr_lean) = &self.sandbox_data.afr {self.validate_floats(*afr_lean, variant_data,"AFRLean")?; }
         self.validate_floats(*&self.sandbox_data.rpm_limit, variant_data,"RPMLimit")?;
         self.validate_floats(*&self.sandbox_data.ignition_timing_setting, variant_data,"IgnitionTimingSetting")?;
         self.validate_floats(*&self.sandbox_data.exhaust_diameter, variant_data,"ExhaustDiameter")?;
@@ -909,8 +954,8 @@ mod tests {
 
     #[test]
     fn dump_automation_car_file() -> Result<(), String> {
-        let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods/");
-        let mod_data = beam_ng::extract_mod_data(&path.join("beast.zip"))?;
+        let path = PathBuf::from("/home/josykes/.steam/debian-installation/steamapps/compatdata/293760/pfx/drive_c/users/steamuser/AppData/Local/BeamNG.drive/mods/");
+        let mod_data = beam_ng::extract_mod_data(&path.join("tank.zip"))?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
         fs::write(Path::new("car_temp.toml"), format!("{}", automation_car_file));
         Ok(())

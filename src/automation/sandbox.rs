@@ -38,7 +38,7 @@ pub enum SandboxVersion {
 }
 
 impl SandboxVersion {
-    pub fn from_version_number(version_num: i32) -> SandboxVersion {
+    pub fn from_version_number(version_num: u64) -> SandboxVersion {
         if version_num < 2111220000 {
             return SandboxVersion::Legacy;
         }
@@ -116,8 +116,8 @@ pub struct EngineV1 {
     pub compression: f64,
     pub cam_profile_setting: f64,
     pub vvl_cam_profile_setting: f64,
-    pub afr: f64,
-    pub afr_lean: f64,
+    pub afr: Option<f64>,
+    pub afr_lean: Option<f64>,
     pub rpm_limit: f64,
     pub ignition_timing_setting: f64,
     pub exhaust_diameter: f64,
@@ -357,8 +357,8 @@ impl EngineV1 {
         hasher.update(&round_float_to(self.compression, 10).to_string().as_bytes());
         hasher.update(&round_float_to(self.cam_profile_setting, 10).to_string().as_bytes());
         hasher.update(&round_float_to(self.vvl_cam_profile_setting, 10).to_string().as_bytes());
-        hasher.update(&round_float_to(self.afr, 10).to_string().as_bytes());
-        hasher.update(&round_float_to(self.afr_lean, 10).to_string().as_bytes());
+        if let Some(str) = &self.afr { hasher.update(&round_float_to(*str, 10).to_string().as_bytes()); }
+        if let Some(str) = &self.afr_lean { hasher.update(&round_float_to(*str, 10).to_string().as_bytes()); }
         hasher.update(&round_float_to(self.rpm_limit, 10).to_string().as_bytes());
         hasher.update(&round_float_to(self.ignition_timing_setting, 10).to_string().as_bytes());
         hasher.update(&round_float_to(self.exhaust_diameter, 10).to_string().as_bytes());
@@ -585,12 +585,16 @@ fn sandbox_dir_4_2() -> Vec<&'static str> {
 
 mod tests {
     use std::path::PathBuf;
-    use crate::automation::sandbox::{get_db_path, get_db_path_4_2};
+    use crate::automation::sandbox::{get_db_path, get_db_path_4_2, SandboxVersion};
 
     #[test]
     fn get_sandbox_db_path() -> Result<(), String> {
         let path = PathBuf::from(get_db_path_4_2().unwrap());
         println!("Sandbox path is {}", path.display());
+        let engine_data = crate::automation::sandbox::load_engine_by_uuid("7F98B2EA4A9E928278F355860DF3B4DF", SandboxVersion::FourDotTwo)?;
+        if let Some(engine) = engine_data {
+            println!("Econ data {:?}", engine.econ_eff_curve);
+        }
         Ok(())
     }
 
