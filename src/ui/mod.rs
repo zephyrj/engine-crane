@@ -148,7 +148,7 @@ impl Sandbox for CarSelector {
             beamng_mod_path,
             available_cars,
             available_mods,
-            available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame, AssettoCorsaPhysicsLevel::CspExtendedPhysics],
+            available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame],
             ..Default::default() }
     }
 
