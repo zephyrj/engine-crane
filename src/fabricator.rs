@@ -181,9 +181,10 @@ impl AcEngineParameterCalculatorV1 {
     }
 
     pub fn get_engine_jbeam_key(&self) -> String {
-        let mut engine_key = String::from("Camso_Engine_");
+        let mut engine_key = String::from("Camso_Engine");
+        let test_key = String::from(engine_key.clone() + "_");
         for key in self.engine_jbeam_data.keys() {
-            if key.starts_with(&engine_key) {
+            if key.starts_with(&test_key) {
                 engine_key = String::from(key);
                 break;
             }
