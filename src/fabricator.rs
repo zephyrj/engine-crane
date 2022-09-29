@@ -180,8 +180,21 @@ impl AcEngineParameterCalculatorV1 {
         self.engine_sqlite_data.weight.round() as u32
     }
 
+    pub fn get_engine_jbeam_key(&self) -> String {
+        let mut engine_key = String::from("Camso_Engine_");
+        for key in self.engine_jbeam_data.keys() {
+            if key.starts_with(&engine_key) {
+                engine_key = String::from(key);
+                break;
+            }
+        }
+        engine_key
+    }
+
     pub fn inertia(&self) -> Option<f64> {
-        let eng_map = self.engine_jbeam_data.get("Camso_Engine")?.as_object()?.get("mainEngine")?.as_object()?;
+        let engine_key= self.get_engine_jbeam_key();
+        info!("JBeam engine key is {}", engine_key);
+        let eng_map = self.engine_jbeam_data.get(&engine_key)?.as_object()?.get("mainEngine")?.as_object()?;
         eng_map.get("inertia")?.as_f64().or_else(||{
             if let Some(str_data) = eng_map.get("inertia")?.as_str() {
                 let end_trimmed_data = str_data.split("*$").collect_vec();
@@ -403,7 +416,7 @@ impl AcEngineParameterCalculatorV1 {
         //   #### NOTE ####
         //   I'm assuming that all of the sources of friction are being taken into account in the BeamNG parameters used above
         //   this may not be correct.
-        let eng_map = self.engine_jbeam_data.get("Camso_Engine")?.as_object()?.get("mainEngine")?.as_object()?;
+        let eng_map = self.engine_jbeam_data.get(&self.get_engine_jbeam_key())?.as_object()?.get("mainEngine")?.as_object()?;
         let dynamic_friction = eng_map.get("dynamicFriction")?.as_f64().unwrap();
         let static_friction = eng_map.get("friction")?.as_f64().unwrap();
         let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm * 2_f64 * std::f64::consts::PI) / 60_f64;
@@ -414,7 +427,7 @@ impl AcEngineParameterCalculatorV1 {
     }
 
     pub fn coast_data_v2(&self) -> Option<engine::CoastCurve> {
-        let eng_map = self.engine_jbeam_data.get("Camso_Engine")?.as_object()?.get("mainEngine")?.as_object()?;
+        let eng_map = self.engine_jbeam_data.get(&self.get_engine_jbeam_key())?.as_object()?.get("mainEngine")?.as_object()?;
         let dynamic_friction = eng_map.get("dynamicFriction")?.as_f64().unwrap();
         // Not sure if this is set correctly in the outputted jbeam files but the best we can work with atm
         let static_friction = eng_map.get("engineBrakeTorque")?.as_f64().unwrap();
