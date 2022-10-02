@@ -19,6 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::default::Default;
 use std::fmt::{Display, Formatter};
@@ -63,7 +64,7 @@ impl<'a> ByteChunk<'a> {
 
 #[derive(Debug)]
 pub enum AttributeValue {
-    Blob(Blob),
+    Blob(Vec<u8>),
     Text(String),
     Number(f64),
     False,
@@ -83,7 +84,7 @@ impl AttributeValue {
 
     pub fn checksum_bytes(&self) -> Vec<u8> {
         return match self {
-            AttributeValue::Blob(blob) => { blob.chunk.clone() }
+            AttributeValue::Blob(blob) => { blob.clone() }
             AttributeValue::Text(t) => { Vec::from(t.as_bytes()) }
             AttributeValue::Number(num) => {
                 Vec::from(round_float_to(*num, 10).to_string().as_bytes())
@@ -129,6 +130,7 @@ impl Display for Attribute {
 #[derive(Debug)]
 pub struct Section {
     name: String,
+    section_type: u32,
     num_children: usize,
     attributes: HashMap<String, Attribute>,
     sections: HashMap<String, Section>,
@@ -164,8 +166,16 @@ impl Section {
         self.sections.get(section_name)
     }
 
+    pub fn section_keys(&self) -> Keys<'_, String, Section> {
+        self.sections.keys()
+    }
+
     pub fn get_attribute(&self, attribute_name: &str) -> Option<&Attribute> {
         self.attributes.get(attribute_name)
+    }
+
+    pub fn attribute_keys(&self) -> Keys<'_, String, Attribute> {
+        self.attributes.keys()
     }
 
     fn finalise_sections_if_complete(&mut self) {
@@ -246,6 +256,10 @@ impl CarFile {
         self.sections.get(section_name)
     }
 
+    pub fn section_keys(&self) -> Keys<'_, String, Section> {
+        self.sections.keys()
+    }
+
     fn parse_opening_blob_mark(&mut self) -> Result<(), String> {
         if self.byte_stream[self.current_pos] != TypeIdentifier::BlobMark as u8 {
             return Err(String::from("Stream doesn't open with expected blob mark - is it valid .car data?"))
@@ -299,9 +313,10 @@ impl CarFile {
                             TypeIdentifier::Text | TypeIdentifier::BlobMark => {
                                 let len = self.parse_length();
                                 if self.peek_is_blob() {
-                                    self.increment_position(2);
-                                    let section = self.parse_section(attribute_name);
-                                    self.add_section(section);
+                                    let attr = Attribute { name: attribute_name,
+                                        value: AttributeValue::Blob(self.parse_blob(len))
+                                    };
+                                    self.add_attribute(attr);
                                 } else {
                                     let attr = Attribute { name: attribute_name,
                                         value: AttributeValue::Text(self.parse_text(len)) };
@@ -339,16 +354,17 @@ impl CarFile {
     }
 
     fn parse_section(&mut self, name: String) -> Section {
-        let section_byte_stream = self.peek_byte_slice(mem::size_of::<u64>());
-        let mut num_children = 0;
-        if u32::from_le_bytes(section_byte_stream[0..4].try_into().expect("Section header too small")) > 0 {
-            num_children = u64::from_le_bytes(section_byte_stream[0..8].try_into().expect("Failed to determine num_children")) as usize;
-        } else {
-            num_children = u32::from_le_bytes(section_byte_stream[4..8].try_into().expect("Failed to determine num_children")) as usize;
-        }
-        self.increment_position(mem::size_of::<u64>());
+        let section_type_len = mem::size_of::<u32>();
+        let section_type = u32::from_le_bytes(self.peek_byte_slice(section_type_len).try_into().expect("Failed to determine num_children"));
+        self.increment_position(section_type_len);
+
+        let num_children_len  = mem::size_of::<u32>();
+        let num_children = u32::from_le_bytes(self.peek_byte_slice(num_children_len).try_into().expect("Failed to determine num_children")) as usize;
+        self.increment_position(num_children_len);
+
         Section {
             name,
+            section_type,
             num_children,
             attributes: HashMap::new(),
             sections: HashMap::new(),
@@ -373,6 +389,12 @@ impl CarFile {
         let str = String::from_utf8(Vec::from(self.peek_byte_slice(len))).expect("Failed to parse UTF-8 text");
         self.increment_position(len);
         return str;
+    }
+
+    fn parse_blob(&mut self, len: usize) -> Vec<u8> {
+        let vec = Vec::from(self.peek_byte_slice(len));
+        self.increment_position(len);
+        return vec;
     }
 
     fn parse_number(&mut self) -> f64 {
