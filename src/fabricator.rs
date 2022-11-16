@@ -148,16 +148,21 @@ struct AcEngineParameterCalculatorV1 {
 impl AcEngineParameterCalculatorV1 {
     pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<AcEngineParameterCalculatorV1, String> {
         info!("Creating AC parameter calculator for {}", beam_ng_mod_path.to_path_buf().display());
-        let mod_data = beam_ng::extract_mod_data(beam_ng_mod_path)?;
-        let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
-        let engine_jbeam_data = mod_data.engine_jbeam_data;
+        let mut mod_data = beam_ng::ModData::from_path(beam_ng_mod_path)?;
+        let automation_car_file = automation::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or(format!("Couldn't get .car data for {}", beam_ng_mod_path.display()))?.clone())?;
         let variant_info = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-        let uid = variant_info.get_attribute("UID").unwrap().value.as_str();
         let version_num = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap();
-        info!("Engine uuid: {}", uid);
+
         info!("Engine version number: {}", version_num);
         let version = SandboxVersion::from_version_number(version_num as u64);
         info!("Deduced as {}", version);
+
+        let engine_jbeam_data = mod_data.get_engine_jbeam_data().map_err(|e|{
+            format!("Couldn't load engine data from {}. {}", beam_ng_mod_path.display(), &e)
+        })?;
+        let uid = variant_info.get_attribute("UID").unwrap().value.as_str();
+
+        info!("Engine uuid: {}", uid);
         let engine_sqlite_data = match load_engine_by_uuid(uid, version)? {
             None => {
                 return Err(format!("No engine found with uuid {}", uid));
@@ -171,7 +176,7 @@ impl AcEngineParameterCalculatorV1 {
         }
         Ok(AcEngineParameterCalculatorV1 {
             automation_car_file,
-            engine_jbeam_data,
+            engine_jbeam_data: engine_jbeam_data.clone(),
             engine_sqlite_data
         })
     }
@@ -1039,8 +1044,8 @@ mod tests {
         //let path = PathBuf::from("/home/josykes/.steam/debian-installation/steamapps/compatdata/293760/pfx/drive_c/users/steamuser/AppData/Local/BeamNG.drive/mods/");
         let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods");
         // C:\Users\zephy\AppData\Local\BeamNG.drive\mods\dae1.zip
-        let mod_data = beam_ng::extract_mod_data(&path.join("dae1.zip"))?;
-        let automation_car_file = automation::car::CarFile::from_bytes( mod_data.car_file_data)?;
+        let mod_data = beam_ng::ModData::from_path(&path.join("dae1.zip"))?;
+        let automation_car_file = automation::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or("Couldn't find car data")?.clone())?;
         //println!("{:#?}", automation_car_file);
         for section in automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().attribute_keys() {
             println!("{}", section);
