@@ -25,6 +25,8 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use directories::BaseDirs;
+use parselnk::Lnk;
 use serde_hjson::{Map, Value};
 use crate::steam;
 use tracing::{debug, info};
