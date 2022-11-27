@@ -140,7 +140,7 @@ mod tests {
     use crate::assetto_corsa::car::data::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, Gearbox, Traction};
     use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
 
-    const TEST_DATA: &'static str = r#"
+    const RWD_TEST_DATA: &'static str = r#"
 [HEADER]
 VERSION=3
 

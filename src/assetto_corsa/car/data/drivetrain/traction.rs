@@ -31,19 +31,22 @@ use crate::assetto_corsa::error::{PropertyParseError, Result};
 pub enum DriveType {
     RWD,
     FWD,
-    AWD
+    AWD,
+    AWD2
 }
 
 impl DriveType {
     pub const RWD_VALUE: &'static str = "RWD";
     pub const FWD_VALUE: &'static str = "FWD";
     pub const AWD_VALUE: &'static str = "AWD";
+    pub const AWD2_VALUE: &'static str = "AWD2";
 
     pub fn as_str(&self) -> &'static str {
         match self {
             DriveType::RWD => { DriveType::RWD_VALUE }
             DriveType::FWD => { DriveType::FWD_VALUE }
             DriveType::AWD => { DriveType::AWD_VALUE }
+            DriveType::AWD2 => { DriveType::AWD2_VALUE }
         }
     }
 
@@ -52,6 +55,7 @@ impl DriveType {
             DriveType::RWD => { 0.85 }
             DriveType::FWD => { 0.9 }
             DriveType::AWD => { 0.75 }
+            DriveType::AWD2 => { 0.75 }
         }
     }
 }
@@ -63,6 +67,7 @@ impl FromStr for DriveType {
             DriveType::RWD_VALUE => Ok(DriveType::RWD),
             DriveType::FWD_VALUE => Ok(DriveType::FWD),
             DriveType::AWD_VALUE => Ok(DriveType::AWD),
+            DriveType::AWD2_VALUE => Ok(DriveType::AWD2),
             _ => Err(PropertyParseError::new(s))
         }
     }
