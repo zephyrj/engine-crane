@@ -70,6 +70,13 @@ impl GlobalSettings {
     const BEAMNG_MOD_PATH: &'static str = "beamng_mod_path";
     const CONFIG_FILENAME: &'static str = "engine-crane-conf";
 
+    fn default() -> Self {
+        GlobalSettings {
+            ac_install_path: assetto_corsa::get_default_install_path().to_string_lossy().into_owned(),
+            beamng_mod_path: beam_ng::get_default_mod_path().to_string_lossy().into_owned()
+        }
+    }
+
     fn load() -> Result<Self, ConfigError> {
         let builder = Config::builder();
         return match builder
@@ -244,7 +251,10 @@ pub struct ApplicationData {
 
 impl ApplicationData {
     fn new() -> ApplicationData {
-        let settings = GlobalSettings::load().unwrap();
+        let settings = GlobalSettings::load().unwrap_or_else(|e| {
+            error!("Failed to load settings. {}", e.to_string());
+            GlobalSettings::default()
+        });
         let assetto_corsa_data = AssettoCorsaData::from_settings(&settings);
         let beam_ng_data = BeamNGData::from_settings(&settings);
         ApplicationData {
