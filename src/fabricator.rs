@@ -28,6 +28,7 @@ use tracing::{debug, error, info, warn};
 use crate::{automation, beam_ng};
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
+use crate::assetto_corsa::car::data::ai::Ai;
 use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::data::car_ini_data::CarVersion;
 use crate::assetto_corsa::car::data::digital_instruments::DigitalInstruments;
@@ -626,6 +627,38 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
             }
         };
     };
+
+    {
+        info!("Updating ai ini files");
+        match Ai::from_car(&mut car) {
+            Ok(ai_option) => {
+                if let Some(mut ai) = ai_option {
+                    match extract_mandatory_section::<data::ai::Gears>(&ai) {
+                        Ok(mut gears) => {
+                            let limiter = calculator.limiter().round() as i32;
+                            gears.up = (limiter / 100) * 97;
+                            gears.down = (limiter / 100) * 70;
+                            if update_car_data(&mut ai, &gears).is_err() {
+                                error!("Failed to update ai shift points");
+                            }
+                            match ai.write() {
+                                Err(err) => {
+                                    warn!("Failed to write {}. {}", data::ai::INI_FILENAME, err.to_string());
+                                }
+                                _ => {}
+                            }
+                        }
+                        Err(_) => {}
+                    }
+                } else {
+                    error!("Failed to load ai data");
+                }
+            }
+            Err(err) => {
+                error!("Failed to load ai data. {}", err.to_string());
+            }
+        }
+    }
 
     match DigitalInstruments::from_car(&mut car) {
         Ok(opt) => {
