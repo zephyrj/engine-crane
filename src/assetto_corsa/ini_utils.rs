@@ -76,8 +76,8 @@ impl From<FieldTypeError> for Error {
 
 #[derive(Debug)]
 pub struct MissingMandatoryProperty {
-    section_name: String,
-    property_name: String
+    pub section_name: String,
+    pub property_name: String
 }
 
 impl MissingMandatoryProperty {
