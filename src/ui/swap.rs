@@ -148,9 +148,11 @@ impl EngineSwapTab {
                         } else {
                             None
                         };
+                    let mut car_settings = AssettoCorsaCarSettings::default();
+                    car_settings.minimum_physics_level = self.current_minimum_physics;
                     match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
                                                                          new_car_path.as_path(),
-                                                                         AssettoCorsaCarSettings::from_physics_level(self.current_minimum_physics),
+                                                                         car_settings,
                                                                          AdditionalAcCarData::new(current_engine_weight)) {
                         Ok(_) => { self.status_message = format!("Created {} successfully", new_car_path.display()) }
                         Err(err_str) => { self.status_message = err_str }

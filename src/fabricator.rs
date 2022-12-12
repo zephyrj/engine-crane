@@ -94,20 +94,14 @@ impl Display for AssettoCorsaPhysicsLevel {
 
 pub struct AssettoCorsaCarSettings {
     pub minimum_physics_level: AssettoCorsaPhysicsLevel,
-}
-
-impl AssettoCorsaCarSettings {
-    pub fn from_physics_level(level: AssettoCorsaPhysicsLevel) -> AssettoCorsaCarSettings {
-        AssettoCorsaCarSettings {
-            minimum_physics_level: level,
-        }
-    }
+    pub auto_adjust_clutch: bool
 }
 
 impl Default for AssettoCorsaCarSettings {
     fn default() -> AssettoCorsaCarSettings {
-        AssettoCorsaCarSettings{
-            ..Default::default()
+        AssettoCorsaCarSettings {
+            minimum_physics_level: AssettoCorsaPhysicsLevel::default(),
+            auto_adjust_clutch: true
         }
     }
 }

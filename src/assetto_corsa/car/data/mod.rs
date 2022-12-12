@@ -23,6 +23,7 @@ pub mod car_ini_data;
 pub mod drivetrain;
 pub mod engine;
 pub mod digital_instruments;
+pub mod ai;
 
 pub use car_ini_data::CarIniData;
 pub use engine::Engine;
