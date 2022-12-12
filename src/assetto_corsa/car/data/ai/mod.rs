@@ -20,12 +20,15 @@ along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
 */
 
 pub mod gears;
+pub use gears::Gears;
 
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::error::{Result, Error, ErrorKind};
-use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
+
+
+pub const INI_FILENAME: &'static str = "ai.ini";
 
 #[derive(Debug)]
 pub struct Ai<'a> {
@@ -34,7 +37,7 @@ pub struct Ai<'a> {
 }
 
 impl<'a> Ai<'a> {
-    pub const INI_FILENAME: &'static str = "ai.ini";
+    pub const INI_FILENAME: &'static str = INI_FILENAME;
 
     pub fn from_car(car: &'a mut Car) -> Result<Option<Ai<'a>>> {
         match car.data_interface.get_file_data(Ai::INI_FILENAME)? {
