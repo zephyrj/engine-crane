@@ -121,6 +121,15 @@ impl UiInfo {
         None
     }
 
+    pub fn has_tag(&self, tag: &str) -> bool {
+        if let Some(value) = self.json_config.get("tags") {
+            if let Some(list) = value.as_array() {
+                return list.contains(&serde_json::Value::String(tag.to_string()));
+            }
+        }
+        false
+    }
+
     pub fn add_tag(&mut self, new_tag: String) {
         let obj = self.json_config.as_object_mut().unwrap();
         if let Some(value) = obj.get_mut("tags") {
@@ -128,6 +137,20 @@ impl UiInfo {
                 list.push(serde_json::Value::String(new_tag));
             }
         }
+    }
+
+    pub fn add_tag_if_unique(&mut self, new_tag: String) -> bool {
+        let obj = self.json_config.as_object_mut().unwrap();
+        if let Some(value) = obj.get_mut("tags") {
+            if let Some(list) = value.as_array_mut() {
+                let new_tag = serde_json::Value::String(new_tag);
+                if !list.contains(&new_tag) {
+                    list.push(new_tag);
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub fn specs(&self) -> Option<HashMap<&str, SpecValue>> {

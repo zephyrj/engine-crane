@@ -30,10 +30,11 @@ pub use data_interface::DataFolderInterface;
 
 use std::fmt::Debug;
 use std::fs::File;
+use std::io;
 use std::io::{BufRead, BufReader, LineWriter, Write};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use walkdir::WalkDir;
 
 use crate::assetto_corsa;
@@ -56,45 +57,66 @@ pub fn clone_existing_car(ac_installation: &assetto_corsa::Installation,
                               format!("Cannot clone car to its existing location. ({})", existing_car_path.display())));
     }
 
-    std::fs::create_dir(&new_car_path)?;
-    let mut copy_options = fs_extra::dir::CopyOptions::new();
-    copy_options.content_only = true;
-    fs_extra::dir::copy(&existing_car_path,
-                        &new_car_path,
-                        &copy_options)?;
-
-    let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
-    let data_path = new_car_path.join("data");
-    let acd_path = new_car_path.join("data.acd");
-    if !data_path.is_dir() {
-        if !acd_path.is_file() {
-            return Err(Error::new(ErrorKind::InvalidCar,
-                                  format!("{} doesn't contain a data dir or data.acd file", existing_car_path.display())));
-        }
-        info!("No data dir present in {}. Data will be extracted from data.acd", new_car_path.display());
-        AcdArchive::load_from_acd_file_with_key(acd_path.as_path(), existing_car_name)?.unpack()?;
-    }
-
-    fix_car_specific_filenames(new_car_path, existing_car_name)?;
-    update_car_sfx(ac_installation, new_car_path, existing_car_name)?;
-
-    match unpack_data_dir {
-        true => {
-            info!("Deleting {} as data will be invalid after clone completion", acd_path.display());
-            if let Some(err) = delete_data_acd_file(new_car_path).err(){
-                warn!("Warning: {}", err.to_string());
-            }
-        }
-        false => {
-            info!("Packing {} into an .acd file", data_path.display());
-            AcdArchive::create_from_data_dir(&data_path)?.write()?;
-            if data_path.exists() {
-                info!("Deleting {} as data will be invalid after clone completion", data_path.display());
-                std::fs::remove_dir_all(data_path)?;
-            }
+    if let Err(e) = std::fs::create_dir(&new_car_path) {
+        return if e.kind() == io::ErrorKind::AlreadyExists {
+            Err(Error::new(ErrorKind::CarAlreadyExists,
+                           format!("Car {} directory already exists", new_car_path.display())))
+        } else {
+            Err(Error::from(e))
         }
     }
-    Ok(())
+
+    let clone_actions = || -> Result<()> {
+        let mut copy_options = fs_extra::dir::CopyOptions::new();
+        copy_options.content_only = true;
+        fs_extra::dir::copy(&existing_car_path,
+                            &new_car_path,
+                            &copy_options)?;
+
+        let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
+        let data_path = new_car_path.join("data");
+        let acd_path = new_car_path.join("data.acd");
+        if !data_path.is_dir() {
+            if !acd_path.is_file() {
+                return Err(Error::new(ErrorKind::InvalidCar,
+                                      format!("{} doesn't contain a data dir or data.acd file", existing_car_path.display())));
+            }
+            info!("No data dir present in {}. Data will be extracted from data.acd", new_car_path.display());
+            AcdArchive::load_from_acd_file_with_key(acd_path.as_path(), existing_car_name)?.unpack()?;
+        }
+
+        fix_car_specific_filenames(new_car_path, existing_car_name)?;
+        update_car_sfx(ac_installation, new_car_path, existing_car_name)?;
+
+        match unpack_data_dir {
+            true => {
+                info!("Deleting {} as data will be invalid after clone completion", acd_path.display());
+                if let Some(err) = delete_data_acd_file(new_car_path).err(){
+                    warn!("Warning: {}", err.to_string());
+                }
+            }
+            false => {
+                info!("Packing {} into an .acd file", data_path.display());
+                AcdArchive::create_from_data_dir(&data_path)?.write()?;
+                if data_path.exists() {
+                    info!("Deleting {} as data will be invalid after clone completion", data_path.display());
+                    std::fs::remove_dir_all(data_path)?;
+                }
+            }
+        }
+        Ok(())
+    };
+
+    return match clone_actions() {
+        Ok(_) => { Ok(()) }
+        Err(e) => {
+            error!("Clone of {} failed. {}", existing_car_path.display(), e.to_string());
+            if let Err(remove_err) = std::fs::remove_dir_all(new_car_path) {
+                warn!("Failed to remove {}. {}", new_car_path.display(), remove_err.to_string())
+            }
+            Err(e)
+        }
+    }
 }
 
 pub fn create_new_car_spec(ac_installation: &assetto_corsa::Installation,
@@ -202,7 +224,7 @@ pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_n
                 info!("Parent name already set to {}", existing_parent);
             }
         }
-        ui_data.ui_info.add_tag("engine crane".to_owned());
+        ui_data.ui_info.add_tag_if_unique("engine crane".to_owned());
         ui_data.write()?;
     }
     Ok(())
