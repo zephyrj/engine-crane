@@ -26,6 +26,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use csv::Terminator;
+use serde::de::Unexpected::Str;
 use tracing::error;
 use crate::assetto_corsa::traits::DataInterface;
 
@@ -218,7 +219,7 @@ pub fn load_lut_from_reader<K, V, R>(lut_reader: R, delimiter: u8, terminator: T
         R: io::Read
 {
     let mut lut_data: Vec<(K, V)> = Vec::new();
-    let mut rdr = csv::ReaderBuilder::new().has_headers(false).delimiter(delimiter).terminator(terminator).from_reader(lut_reader);
+    let mut rdr = csv::ReaderBuilder::new().has_headers(false).delimiter(delimiter).terminator(terminator).comment(Some(b';')).from_reader(lut_reader);
     for result in rdr.records() {
         match result {
             Ok(record) => {

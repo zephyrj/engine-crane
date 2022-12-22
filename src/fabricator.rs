@@ -298,13 +298,13 @@ impl AcEngineParameterCalculatorV1 {
         kw_to_bhp(self.engine_sqlite_data.peak_power).round() as i32
     }
 
-    pub fn naturally_aspirated_wheel_torque_curve(&self, drivetrain_efficiency: f64) -> Vec<(i32, i32)> {
-        let mut out_vec = Vec::new();
+    pub fn naturally_aspirated_wheel_torque_curve(&self, drivetrain_efficiency: f64) -> Vec<(i32, f64)> {
+        let mut out_vec: Vec<(i32, f64)> = Vec::new();
         if self.engine_sqlite_data.aspiration.starts_with("Aspiration_Natural") {
             info!("Writing torque curve for NA engine");
             for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
                 let wheel_torque = self.engine_sqlite_data.torque_curve[idx] * drivetrain_efficiency;
-                out_vec.push(((*rpm as i32), wheel_torque.round() as i32));
+                out_vec.push(((*rpm as i32), wheel_torque.round()));
             }
         }
         else {
@@ -312,7 +312,7 @@ impl AcEngineParameterCalculatorV1 {
             for (idx, rpm) in self.engine_sqlite_data.rpm_curve.iter().enumerate() {
                 let boost_pressure = vec![0.0, self.engine_sqlite_data.boost_curve[idx]].into_iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
                 info!("Adjusting {}@{} for boost pressure {}", self.engine_sqlite_data.torque_curve[idx], *rpm as i32, 1f64+boost_pressure);
-                let adjusted_value = ((self.engine_sqlite_data.torque_curve[idx] / (1f64+boost_pressure)) * drivetrain_efficiency).round() as i32;
+                let adjusted_value = ((self.engine_sqlite_data.torque_curve[idx] / (1f64+boost_pressure)) * drivetrain_efficiency).round();
                 info!("Adjusted value = {}", adjusted_value);
                 out_vec.push(((*rpm as i32), adjusted_value));
             }
@@ -324,8 +324,8 @@ impl AcEngineParameterCalculatorV1 {
             let penultimate_item = out_vec.get(out_vec.len()-2).unwrap();
             rpm_increment = last_item.0 - penultimate_item.0;
         }
-        out_vec.push((out_vec.last().unwrap().0 + rpm_increment, out_vec.last().unwrap().1/2));
-        out_vec.push((out_vec.last().unwrap().0 + rpm_increment, 0));
+        out_vec.push((out_vec.last().unwrap().0 + rpm_increment, out_vec.last().unwrap().1/2f64));
+        out_vec.push((out_vec.last().unwrap().0 + rpm_increment, 0f64));
         out_vec
     }
 
@@ -559,7 +559,13 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
 
         update_car_data(&mut engine, &calculator.coast_data().unwrap()).unwrap();
 
-        let mut power_curve = extract_mandatory_section::<engine::PowerCurve>(&engine).unwrap();
+        let mut power_curve = match extract_mandatory_section::<engine::PowerCurve>(&engine) {
+            Ok(p) => { p }
+            Err(e) => {
+                error!("Failed to load power curver from engine data. {}", e.to_string());
+                return Err( format!("Failed to load power curver from engine data. {}", e.to_string()));
+            }
+        };
         power_curve.update(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
         update_car_data(&mut engine, &power_curve).unwrap();
 
