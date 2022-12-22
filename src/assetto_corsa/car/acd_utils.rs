@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn extract_acd() {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/ks_audi_r8_plus/data.acd");
+        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/ks_ferrari_f2004/data.acd");
         AcdArchive::load_from_acd_file(path).unwrap().unpack().unwrap();
     }
 

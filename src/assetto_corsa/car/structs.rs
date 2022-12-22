@@ -121,6 +121,7 @@ impl<K,V> LutProperty<K, V>
     pub fn get_type(&self) -> &LutType<K, V> {
         &self.lut
     }
+
 }
 
 impl <K,V> CarDataUpdater for LutProperty<K, V>
