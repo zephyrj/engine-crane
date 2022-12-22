@@ -52,6 +52,8 @@ pub fn clone_existing_car(ac_installation: &assetto_corsa::Installation,
                           existing_car_path: &Path,
                           new_car_path: &Path,
                           unpack_data_dir: bool) -> Result<()> {
+    let existing_car_name = get_final_path_part(existing_car_path)?;
+
     if existing_car_path == new_car_path {
         return Err(Error::new(ErrorKind::CarAlreadyExists,
                               format!("Cannot clone car to its existing location. ({})", existing_car_path.display())));
@@ -73,7 +75,6 @@ pub fn clone_existing_car(ac_installation: &assetto_corsa::Installation,
                             &new_car_path,
                             &copy_options)?;
 
-        let existing_car_name = existing_car_path.file_name().unwrap().to_str().unwrap();
         let data_path = new_car_path.join("data");
         let acd_path = new_car_path.join("data.acd");
         if !data_path.is_dir() {
@@ -82,11 +83,11 @@ pub fn clone_existing_car(ac_installation: &assetto_corsa::Installation,
                                       format!("{} doesn't contain a data dir or data.acd file", existing_car_path.display())));
             }
             info!("No data dir present in {}. Data will be extracted from data.acd", new_car_path.display());
-            AcdArchive::load_from_acd_file_with_key(acd_path.as_path(), existing_car_name)?.unpack()?;
+            AcdArchive::load_from_acd_file_with_key(acd_path.as_path(), &existing_car_name)?.unpack()?;
         }
 
-        fix_car_specific_filenames(new_car_path, existing_car_name)?;
-        update_car_sfx(ac_installation, new_car_path, existing_car_name)?;
+        fix_car_specific_filenames(new_car_path, &existing_car_name)?;
+        update_car_sfx(ac_installation, new_car_path, &existing_car_name)?;
 
         match unpack_data_dir {
             true => {
@@ -123,7 +124,7 @@ pub fn create_new_car_spec(ac_installation: &assetto_corsa::Installation,
                            existing_car_path: &PathBuf,
                            spec_name: &str,
                            unpack_data: bool) -> Result<PathBuf>{
-    let existing_car_name = existing_car_path.file_name().unwrap().to_string_lossy().into_owned();
+    let existing_car_name = get_final_path_part(existing_car_path)?;
     if !existing_car_path.exists() {
         return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name));
     }
@@ -132,7 +133,7 @@ pub fn create_new_car_spec(ac_installation: &assetto_corsa::Installation,
         existing_car_name,
         spec_name.to_lowercase().split_whitespace().collect::<Vec<&str>>().join("_")
     );
-    let new_car_path = existing_car_path.parent().unwrap().join(&new_car_name);
+    let new_car_path = get_parent_path_part(existing_car_path)?.join(&new_car_name);
     if new_car_path.exists() {
         return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
     }
@@ -154,12 +155,18 @@ pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
 }
 
 fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<()> {
-    let new_car_name = car_path.file_name().unwrap().to_str().unwrap();
+    let new_car_name = get_final_path_part(car_path)?;
     let mut paths_to_update: Vec<PathBuf> = Vec::new();
     for entry in WalkDir::new(&car_path).into_iter().filter_map(|e| e.ok()) {
-        if !entry.metadata().unwrap().is_file() {
-            continue
+        match entry.metadata() {
+            Ok(metadata) => if !metadata.is_file() { continue; }
+            Err(e) => {
+                warn!("Error occurred whilst trying to obtain metadata during walk of {}. {}",
+                      car_path.display(), e.to_string());
+                continue;
+            }
         }
+
         let filename = entry.file_name();
         let filename_string = filename.to_string_lossy();
         if (filename_string.starts_with(name_to_change)) &&
@@ -174,11 +181,14 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
                     break
                 }
                 info!("Updating {}", current_lod_name);
-                let old_value: String = ini_utils::get_value(&lod_ini, &current_lod_name, "FILE").unwrap();
-                ini_utils::set_value(&mut lod_ini,
-                                     &current_lod_name,
-                                     "FILE",
-                                     old_value.replace(name_to_change, new_car_name));
+                if let Some(old_value) = ini_utils::get_value::<String>(&lod_ini, &current_lod_name, "FILE") {
+                    ini_utils::set_value(&mut lod_ini,
+                                         &current_lod_name,
+                                         "FILE",
+                                         old_value.replace(name_to_change, &new_car_name));
+                } else {
+                    warn!("{} was unexpectedly missing from {}", current_lod_name, entry.path().display());
+                }
                 idx += 1;
             }
             lod_ini.write_to_file(entry.path())?;
@@ -187,11 +197,15 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
 
     for path in paths_to_update {
         let mut new_path = path.clone();
-        let new_filename = path.file_name().unwrap().to_str().unwrap().replace(name_to_change, new_car_name);
-        info!("Changing {} to {}", path.display(), new_filename);
-        new_path.pop();
-        new_path.push(new_filename);
-        std::fs::rename(&path, &new_path)?;
+        if let Some(os_string) = path.file_name() {
+            if let Some(filename) = os_string.to_str() {
+                let new_filename = filename.replace(name_to_change, &new_car_name);
+                info!("Changing {} to {}", path.display(), new_filename);
+                new_path.pop();
+                new_path.push(new_filename);
+                std::fs::rename(&path, &new_path)?;
+            }
+        }
     }
     Ok(())
 }
@@ -203,7 +217,7 @@ pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_n
     {
         let mut ini_data = CarIniData::from_car(&mut car)?;
         existing_name = match ini_data.screen_name() {
-            None => { String::from(car_path.file_name().unwrap().to_str().unwrap()) }
+            None => { get_final_path_part(car_path)? }
             Some(name) => { name }
         };
         new_name = existing_name.clone().add(format!(" {}", new_suffix).as_str());
@@ -234,15 +248,15 @@ fn update_car_sfx(ac_installation: &assetto_corsa::Installation,
                   car_path: &Path,
                   name_to_change: &str) -> Result<()> {
     let guids_file_path = car_path.join(PathBuf::from_iter(["sfx", "GUIDs.txt"]));
-    let car_name = car_path.file_name().unwrap().to_str().unwrap();
+    let car_name = get_final_path_part(car_path)?;
 
     let mut updated_lines: Vec<String> = Vec::new();
     if guids_file_path.exists() {
-        info!("Updating contents of '{}'. Replacing refs to '{}' with '{}'", guids_file_path.display(), name_to_change, car_name);
+        info!("Updating contents of '{}'. Replacing refs to '{}' with '{}'", guids_file_path.display(), name_to_change, &car_name);
         let file = File::open(&guids_file_path)?;
         updated_lines = BufReader::new(file).lines().into_iter().filter_map(|res| {
             match res {
-                Ok(string) => Some(string.replace(name_to_change, car_name)),
+                Ok(string) => Some(string.replace(name_to_change, &car_name)),
                 Err(err) => {
                     println!("Warning: Encountered error reading from {}. {}",
                              guids_file_path.display(),
@@ -253,7 +267,7 @@ fn update_car_sfx(ac_installation: &assetto_corsa::Installation,
         }).collect();
     } else {
         info!("Generating new '{}' with contents from the installation sfx data", guids_file_path.display());
-        updated_lines = ac_installation.load_sfx_data()?.generate_clone_guid_info(name_to_change, car_name);
+        updated_lines = ac_installation.load_sfx_data()?.generate_clone_guid_info(name_to_change, &car_name);
     }
 
     let file = File::create(&guids_file_path)?;
@@ -293,6 +307,26 @@ impl Car {
 
     pub fn mut_data_interface(&mut self) -> & mut dyn DataInterface {
         self.data_interface.as_mut()
+    }
+}
+
+fn get_final_path_part(full_path: &Path) -> Result<String> {
+    return match full_path.file_name() {
+        Some(n) => { Ok(n.to_string_lossy().to_string()) }
+        None => {
+            return Err(Error::new(ErrorKind::ArgumentError,
+                                  format!("Can't get last part from provided path ({})", full_path.display())));
+        }
+    };
+}
+
+fn get_parent_path_part(full_path: &Path) -> Result<&Path> {
+    return match full_path.parent() {
+        Some(n) => { Ok(n) }
+        None => {
+            return Err(Error::new(ErrorKind::ArgumentError,
+                                  format!("Can't get  parent part from provided path ({})", full_path.display())));
+        }
     }
 }
 

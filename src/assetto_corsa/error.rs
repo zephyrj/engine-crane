@@ -96,6 +96,8 @@ pub enum ErrorKind {
     JsonDecodeError,
     TomlDecodeError,
     AcdError,
+    UpdateError,
+    ArgumentError,
     Uncategorized
 }
 
@@ -111,7 +113,9 @@ impl ErrorKind {
             ErrorKind::JsonDecodeError => "json decode error",
             ErrorKind::TomlDecodeError => "toml decode error",
             ErrorKind::AcdError => "acd decode error",
-            ErrorKind::Uncategorized => "uncategorized error"
+            ErrorKind::ArgumentError => "argument error",
+            ErrorKind::Uncategorized => "uncategorized error",
+            ErrorKind::UpdateError => "update error"
         }
     }
 }

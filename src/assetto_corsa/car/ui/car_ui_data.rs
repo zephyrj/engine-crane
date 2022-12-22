@@ -24,9 +24,10 @@ use std::fs;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+use tracing::warn;
 use crate::assetto_corsa::car::Car;
-use crate::assetto_corsa::error::Result;
+use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 
 
 #[derive(Debug)]
@@ -130,27 +131,41 @@ impl UiInfo {
         false
     }
 
-    pub fn add_tag(&mut self, new_tag: String) {
-        let obj = self.json_config.as_object_mut().unwrap();
-        if let Some(value) = obj.get_mut("tags") {
-            if let Some(list) = value.as_array_mut() {
-                list.push(serde_json::Value::String(new_tag));
+    pub fn add_tag(&mut self, new_tag: String) -> Result<()> {
+        if let Some(obj) = self.json_config.as_object_mut() {
+            if !obj.contains_key("tags") {
+                obj.insert("tags".to_string(), serde_json::Value::Array(Vec::new()));
             }
-        }
-    }
-
-    pub fn add_tag_if_unique(&mut self, new_tag: String) -> bool {
-        let obj = self.json_config.as_object_mut().unwrap();
-        if let Some(value) = obj.get_mut("tags") {
-            if let Some(list) = value.as_array_mut() {
-                let new_tag = serde_json::Value::String(new_tag);
-                if !list.contains(&new_tag) {
-                    list.push(new_tag);
-                    return true;
+            if let Some(value) = obj.get_mut("tags") {
+                if let Some(list) = value.as_array_mut() {
+                    list.push(serde_json::Value::String(new_tag));
+                    return Ok(())
                 }
             }
         }
-        false
+        Err(Error::new(ErrorKind::UpdateError,
+                       "'tags' element of ui data couldn't be accessed".to_string()))
+    }
+
+    pub fn add_tag_if_unique(&mut self, new_tag: String) -> Result<bool> {
+        if let Some(obj) = self.json_config.as_object_mut() {
+            if !obj.contains_key("tags") {
+                obj.insert("tags".to_string(), serde_json::Value::Array(Vec::new()));
+            }
+            if let Some(value) = obj.get_mut("tags") {
+                if let Some(list) = value.as_array_mut() {
+                    let new_tag = serde_json::Value::String(new_tag);
+                    return if !list.contains(&new_tag) {
+                        list.push(new_tag);
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                }
+            }
+        }
+        Err(Error::new(ErrorKind::UpdateError,
+                       "'tags' element of ui data couldn't be accessed".to_string()))
     }
 
     pub fn specs(&self) -> Option<HashMap<&str, SpecValue>> {
@@ -168,20 +183,28 @@ impl UiInfo {
         None
     }
 
-    pub fn update_spec(&mut self, spec_key: &str, val: String) {
-        let obj = self.json_config.as_object_mut().unwrap();
-        if let Some(value) = obj.get_mut("specs") {
-            let map = value.as_object_mut().unwrap();
-            map.remove(spec_key);
-            map.insert(String::from(spec_key), serde_json::Value::String(val));
+    pub fn update_spec(&mut self, spec_key: &str, val: String) -> Result<()> {
+        if let Some(obj) = self.json_config.as_object_mut() {
+            if !obj.contains_key("specs") {
+                obj.insert("specs".to_owned(), serde_json::Value::Object(Map::new()));
+            }
+            if let Some(value) = obj.get_mut("specs") {
+                if let Some(map) = value.as_object_mut() {
+                    map.remove(spec_key);
+                    map.insert(String::from(spec_key), serde_json::Value::String(val));
+                    return Ok(());
+                }
+            }
         }
+        Err(Error::new(ErrorKind::UpdateError,
+                       "'specs' element of ui data couldn't be accessed".to_string()))
     }
 
     pub fn torque_curve(&self) -> Option<Vec<Vec<&str>>> {
         self.load_curve_data("torqueCurve")
     }
 
-    pub fn update_torque_curve(&mut self, new_curve_data: Vec<(i32, i32)>) {
+    pub fn update_torque_curve(&mut self, new_curve_data: Vec<(i32, i32)>) -> Result<()> {
         self.update_curve_data("torqueCurve", new_curve_data)
     }
 
@@ -189,7 +212,7 @@ impl UiInfo {
         self.load_curve_data("powerCurve")
     }
 
-    pub fn update_power_curve(&mut self, new_curve_data: Vec<(i32, i32)>) {
+    pub fn update_power_curve(&mut self, new_curve_data: Vec<(i32, i32)>) -> Result<()>  {
         self.update_curve_data("powerCurve", new_curve_data)
     }
 
@@ -240,22 +263,32 @@ impl UiInfo {
         None
     }
 
-    fn update_curve_data(&mut self, key: &str, new_curve_data: Vec<(i32, i32)>) {
+    fn update_curve_data(&mut self, key: &str, new_curve_data: Vec<(i32, i32)>) -> Result<()> {
         let mut data_vec: Vec<serde_json::Value> = Vec::new();
         for (rpm, power_bhp) in new_curve_data {
             data_vec.push(json!([format!("{}", rpm), format!("{}", power_bhp)]));
         }
-        match self.json_config.get_mut(key) {
+        return match self.json_config.get_mut(key) {
             None => {
-                let map = self.json_config.as_object_mut().unwrap();
-                map.insert(String::from(key),
-                           serde_json::Value::Array(data_vec));
+                if let Some(map) = self.json_config.as_object_mut() {
+                    map.insert(String::from(key),
+                               serde_json::Value::Array(data_vec));
+                    Ok(())
+                } else {
+                    Err(Error::new(ErrorKind::UpdateError,
+                                   format!("Couldn't access json ui data to update {} curve", key)))
+                }
             }
             Some(val) => {
-                let mut torque_array = val.as_array_mut().unwrap();
-                torque_array.clear();
-                for val in data_vec {
-                    torque_array.push(val);
+                if let Some(mut torque_array) = val.as_array_mut() {
+                    torque_array.clear();
+                    for val in data_vec {
+                        torque_array.push(val);
+                    }
+                    Ok(())
+                } else {
+                    Err(Error::new(ErrorKind::UpdateError,
+                                   format!("Couldn't access {} curve data", key)))
                 }
             }
         }

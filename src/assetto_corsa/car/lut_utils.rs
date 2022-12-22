@@ -26,6 +26,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use csv::Terminator;
+use tracing::error;
 use crate::assetto_corsa::traits::DataInterface;
 
 
@@ -51,8 +52,12 @@ impl<K, V> LutFile<K, V>
     }
 
     pub fn from_path(lut_path: &Path) -> Result<LutFile<K, V>, String> {
+        let filename = match lut_path.file_name() {
+            None => { return Err(format!("Failed to get filename for {}", lut_path.display()))}
+            Some(n) => { n.to_string_lossy().to_string() }
+        };
         Ok(LutFile {
-            filename: lut_path.file_name().unwrap().to_string_lossy().to_string(),
+            filename,
             data: load_lut_from_path::<K, V>(lut_path)?
         })
     }
@@ -66,7 +71,10 @@ impl<K, V> LutFile<K, V>
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        write_lut_to_bytes(&self.data).unwrap()
+        write_lut_to_bytes(&self.data).unwrap_or_else(|e|{
+            error!("Couldn't write lut as bytes. {}", e.to_string());
+            Vec::new()
+        })
     }
 
     pub fn write_to_dir(&self, dir: &Path) -> Result<(), String> {
@@ -257,7 +265,11 @@ pub fn parse_lut_element<T>(record: &csv::StringRecord, index: usize) -> Result<
     where
         T: std::str::FromStr + Display, <T as FromStr>::Err: fmt::Debug
 {
-    match remove_whitespace(record.get(index).unwrap()).parse::<T>() {
+    let record_opt = record.get(index);
+    if record_opt.is_none() {
+        return Err(format!("Cannot access index {} of lut", index));
+    }
+    match remove_whitespace(record_opt.unwrap()).parse::<T>() {
         Ok(s) => { Ok(s) },
         Err(e) => {
             let mut err_str = String::from("Invalid lut types, Cannot convert first item");
