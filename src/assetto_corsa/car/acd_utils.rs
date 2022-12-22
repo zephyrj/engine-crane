@@ -145,7 +145,7 @@ impl AcdArchive {
 
     pub fn unpack_to(&self, out_path: &Path) -> Result<()> {
         if !out_path.is_dir() {
-            std::fs::create_dir(out_path).unwrap();
+            fs::create_dir(out_path)?;
         }
         for (filename, unpacked_buffer) in &self.contents.files {
             fs::write(out_path.join(filename), unpacked_buffer)?;

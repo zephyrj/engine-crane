@@ -25,6 +25,7 @@ use std::fs::File;
 use std::path::Path;
 use toml::Value;
 use toml::value::Table;
+use tracing::error;
 use crate::assetto_corsa::error::{Result};
 use crate::assetto_corsa::car::lut_utils::load_lut_from_path;
 
@@ -199,10 +200,20 @@ impl Metadata {
     }
 
     pub fn set_string_value(&mut self, key: String, val: String) -> Option<toml::Value> {
-        self.toml_config.as_table_mut().unwrap().insert(key, toml::Value::String(val))
+        return if let Some(table) = self.toml_config.as_table_mut() {
+            table.insert(key, toml::Value::String(val))
+        } else {
+            error!("Failed to get metadata toml config as a table");
+            None
+        }
     }
 
     pub fn set_int_value(&mut self, key: String, val: i64) -> Option<toml::Value> {
-        self.toml_config.as_table_mut().unwrap().insert(key, toml::Value::Integer(val))
+        return if let Some(table) = self.toml_config.as_table_mut() {
+            table.insert(key, toml::Value::Integer(val))
+        } else {
+            error!("Failed to get metadata toml config as a table");
+            None
+        }
     }
 }
