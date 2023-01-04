@@ -25,7 +25,7 @@ use std::path::Path;
 use itertools::Itertools;
 use sha2::{Sha256, Digest};
 use tracing::{debug, error, info, warn};
-use crate::{automation, beam_ng};
+use crate::{automation, beam_ng, utils};
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
 use crate::assetto_corsa::car::data::ai::Ai;
@@ -617,6 +617,23 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                     }
                     Err(err) => {
                         error!("Failed to update drivetrain autoshifer. {}", err.to_string());
+                    }
+                }
+
+                if settings.auto_adjust_clutch {
+                    match extract_mandatory_section::<data::drivetrain::Clutch>(&drivetrain) {
+                        Ok(mut clutch) => {
+                            let peak_torque = calculator.peak_torque();
+                            if peak_torque > clutch.max_torque {
+                                clutch.max_torque = utils::round_up_to_nearest_multiple(peak_torque+30, 50)
+                            }
+                            if update_car_data(&mut drivetrain, &clutch).is_err() {
+                                error!("Failed to update drivetrain with clutch data");
+                            }
+                        }
+                        Err(err) => {
+                            error!("Failed to update clutch MAX_TORQUE. {}", err.to_string());
+                        }
                     }
                 }
 

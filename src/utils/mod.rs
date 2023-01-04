@@ -24,3 +24,31 @@ pub fn round_float_to(float: f64, decimal_places: u32) -> f64 {
     let precision_factor = precision_base.pow(decimal_places) as f64;
     (float * precision_factor).round() / precision_factor
 }
+
+pub fn round_up_to_nearest_multiple(val: i32, multiple: i32) -> i32 {
+    if val < multiple {
+        return multiple;
+    }
+    ((val + (multiple-1)) / multiple) * multiple
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::round_up_to_nearest_multiple;
+
+    #[test]
+    fn round_multiple_tests()  {
+        assert_eq!(round_up_to_nearest_multiple(0, 1), 1);
+        assert_eq!(round_up_to_nearest_multiple(1, 1), 1);
+        assert_eq!(round_up_to_nearest_multiple(2, 1), 2);
+        assert_eq!(round_up_to_nearest_multiple(0, 50), 50);
+        assert_eq!(round_up_to_nearest_multiple(1, 50), 50);
+        assert_eq!(round_up_to_nearest_multiple(10, 50), 50);
+        assert_eq!(round_up_to_nearest_multiple(49, 50), 50);
+        assert_eq!(round_up_to_nearest_multiple(50, 50), 50);
+        assert_eq!(round_up_to_nearest_multiple(51, 50), 100);
+        assert_eq!(round_up_to_nearest_multiple(99, 50), 100);
+        assert_eq!(round_up_to_nearest_multiple(100, 50), 100);
+        assert_eq!(round_up_to_nearest_multiple(101, 50), 150);
+    }
+}
