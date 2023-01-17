@@ -30,10 +30,15 @@ use settings::{SettingsMessage, SettingsTab};
 
 use std::path::{Path, PathBuf};
 use config::{Config, ConfigError};
-use iced::{Column, Element, Length, Sandbox, Text, Error, Settings, Container, Background, Color, Rule};
+use iced::{Element, Length, Sandbox, Error, Settings, Background, Color};
+use iced::widget::{Column, Text, Container};
 use iced_aw::{TabLabel, Tabs};
 use iced::alignment::{Horizontal, Vertical};
-use iced_aw::tab_bar::{Style, StyleSheet};
+//use iced_aw::tab_bar::{StyleSheet};
+use iced::Theme;
+use iced_aw::style::tab_bar::Appearance;
+use iced_aw::style::TabBarStyles;
+use iced_aw::tab_bar::StyleSheet;
 use crate::{assetto_corsa, beam_ng};
 use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
@@ -285,11 +290,13 @@ impl ApplicationData {
 
 /// The default appearance of a [`TabBar`](crate::native::TabBar).
 #[derive(Clone, Copy, Debug)]
-pub struct TabStyle;
+pub struct CustomStyleSheet;
 
-impl StyleSheet for TabStyle {
-    fn active(&self, is_active: bool) -> Style {
-        Style {
+impl StyleSheet for CustomStyleSheet {
+    type Style = Theme;
+
+    fn active(&self, style: &Self::Style, is_active: bool) -> Appearance {
+        Appearance {
             background: None,
             border_color: None,
             border_width: 0.0,
@@ -313,11 +320,11 @@ impl StyleSheet for TabStyle {
         }
     }
 
-    fn hovered(&self, is_active: bool) -> Style {
-        Style {
+    fn hovered(&self, style: &Self::Style, is_active: bool) -> Appearance {
+        Appearance {
             tab_label_background: Background::Color([0.3, 0.3, 0.3].into()),
             text_color: Color::WHITE,
-            ..self.active(is_active)
+            ..self.active(style, is_active)
         }
     }
 }
@@ -407,7 +414,7 @@ impl Sandbox for UIMain {
         }
     }
 
-    fn view(&mut self) -> Element<'_, Self::Message> {
+    fn view(&self) -> Element<'_, Self::Message> {
         Tabs::new(self.active_tab, Message::TabSelected)
             .push(
                 self.engine_swap_tab.tab_label(),
@@ -421,7 +428,7 @@ impl Sandbox for UIMain {
                 self.settings_tab.tab_label(),
                 self.settings_tab.view(&self.app_data)
             )
-            .tab_bar_style(TabStyle)
+            .tab_bar_style(TabBarStyles::Custom(Box::new(CustomStyleSheet)))
             .tab_bar_position(iced_aw::TabBarPosition::Top)
             .into()
     }
@@ -436,7 +443,7 @@ trait Tab {
     fn tab_label(&self) -> TabLabel;
 
     fn view<'a, 'b>(
-        &'a mut self,
+        &'a self,
         app_data: &'b ApplicationData
     ) -> Element<'_, Self::Message>
     where 'b: 'a
@@ -456,7 +463,7 @@ trait Tab {
     }
 
     fn content<'a, 'b>(
-        &'a mut self,
+        &'a self,
         ac_data: &'b ApplicationData
     ) -> Element<'_, Self::Message>
     where 'b: 'a;

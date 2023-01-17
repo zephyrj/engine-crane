@@ -1,6 +1,6 @@
 [package]
 name = "engine-crane"
-version = "0.1.13-alpha"
+version = "0.1.14-alpha"
 edition = "2021"
 build = "build.rs"
 authors = ["zephyrj <zephyrj@protonmail.com>"]
@@ -8,6 +8,7 @@ authors = ["zephyrj <zephyrj@protonmail.com>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+winit = "0.27.5"
 regex = "1.6.0"
 directories = "4.0.1"
 parselnk = "0.1.1"
@@ -15,8 +16,9 @@ derive-new = "0.5"
 serde = {version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde-hjson = { version = "0.9.1", default-features = false }
-iced = { version = "0.4.2", features = ["default_system_font"] }
-iced_aw = { version = "0.2", default-features = false, features = ["tab_bar", "tabs", "colors"] }
+iced = { version = "0.7", features = ["default_system_font"] }
+iced_aw = { git = "https://github.com/zephyrj/iced_aw", branch = "tab-custom-styling", default-features = false, features = ["tab_bar", "tabs", "colors"] }
+#iced_aw = { version = "0.2", default-features = false, features = ["tab_bar", "tabs", "colors"] }
 zip = "0.6.2"
 toml = "0.5.9"
 csv = "1.1"

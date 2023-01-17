@@ -20,15 +20,15 @@
  */
 
 use super::{Message, Tab};
-use iced::{Alignment, button, Button, Column, Container, Element, Padding, Row, Text, text_input, TextInput};
+use iced::{Alignment,Element, Padding};
+use iced::widget::{button, Button, Column, Container, Row, Text, text_input, TextInput};
 use iced_aw::{TabLabel};
 use crate::ui::{ApplicationData};
 
 
 #[derive(Default)]
 pub struct SettingsTab {
-    ac_path_select_button: button::State,
-    beamng_mod_path_select_button: button::State,
+
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +63,7 @@ impl Tab for SettingsTab {
     }
 
     fn content<'a, 'b>(
-        &'a mut self,
+        &'a self,
         app_data: &'b ApplicationData
     ) -> Element<'_, Self::Message>
     where 'b: 'a
@@ -73,7 +73,7 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let path_select_button =
-            Button::new(&mut self.ac_path_select_button, Text::new("Browse"))
+            Button::new(Text::new("Browse"))
                 .on_press(Message::AcPathSelectPressed);
         let ac_path_select_row = Column::new()
             .align_items(Alignment::Start)
@@ -88,7 +88,7 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let mod_path_select_button =
-            Button::new(&mut self.beamng_mod_path_select_button, Text::new("Browse"))
+            Button::new( Text::new("Browse"))
                 .on_press(Message::BeamNGModPathSelectPressed);
         let mod_path_select_row = Column::new()
             .align_items(Alignment::Start)

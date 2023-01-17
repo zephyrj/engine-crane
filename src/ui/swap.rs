@@ -21,7 +21,8 @@
 
 use super::{Message, Tab};
 use std::path::{PathBuf};
-use iced::{Alignment, button, Button, Checkbox, Column, Container, Element, Length, pick_list, PickList, Row, Text, text_input, TextInput};
+use iced::{Alignment, Element, Length};
+use iced::widget::{button, Button, Checkbox, checkbox, Column, Container, pick_list, PickList, Row, Text, text_input, TextInput};
 use iced_aw::{TabLabel};
 use iced::alignment::Horizontal;
 use tracing::{span, Level, error};
@@ -48,12 +49,6 @@ pub struct EngineSwapTab {
     current_new_spec_name: String,
     current_engine_weight: Option<String>,
     current_minimum_physics: AssettoCorsaPhysicsLevel,
-    car_pick_list: pick_list::State<ListPath>,
-    new_spec_name: text_input::State,
-    mod_pick_list: pick_list::State<ListPath>,
-    swap_button: button::State,
-    minimum_physics_pick_list: pick_list::State<AssettoCorsaPhysicsLevel>,
-    current_engine_weight_input: text_input::State,
     unpack_physics_data: bool,
     status_message: String
 }
@@ -67,12 +62,6 @@ impl EngineSwapTab {
             current_new_spec_name: "".to_string(),
             current_engine_weight: None,
             current_minimum_physics: Default::default(),
-            car_pick_list: Default::default(),
-            new_spec_name: Default::default(),
-            mod_pick_list: Default::default(),
-            swap_button: Default::default(),
-            minimum_physics_pick_list: Default::default(),
-            current_engine_weight_input: Default::default(),
             unpack_physics_data: false,
             status_message: "".to_string()
         }
@@ -198,7 +187,7 @@ impl Tab for EngineSwapTab {
         TabLabel::Text(self.title())
     }
 
-    fn content<'a, 'b>(&'a mut self,
+    fn content<'a, 'b>(&'a self,
                        app_data: &'b ApplicationData ) -> Element<'_, Self::Message>
     where 'b: 'a
     {
@@ -212,8 +201,7 @@ impl Tab for EngineSwapTab {
             .align_items(Alignment::Center)
             //.padding(10)
             .push(Text::new("Assetto Corsa car"))
-            .push(PickList::new(
-                &mut self.car_pick_list,
+            .push(pick_list(
                 &app_data.assetto_corsa_data.available_cars,
                 current_car,
                 EngineSwapMessage::CarSelected,
@@ -228,7 +216,6 @@ impl Tab for EngineSwapTab {
             .align_items(Alignment::Center)
             .push(Text::new("BeamNG mod"))
             .push(PickList::new(
-                &mut self.mod_pick_list,
                 &app_data.beam_ng_data.available_mods,
                 current_mod,
                 EngineSwapMessage::ModSelected
@@ -243,7 +230,6 @@ impl Tab for EngineSwapTab {
             //.align_items(Align::Center)
             .push(Text::new("Existing engine weight in Kgs (Optional)"))
             .push(TextInput::new(
-                &mut self.current_engine_weight_input,
                 "",
                 current_weight_value,
                 EngineSwapMessage::OldEngineWeightEntered,
@@ -261,7 +247,6 @@ impl Tab for EngineSwapTab {
             s => { s }
         };
         let input = TextInput::new(
-            &mut self.new_spec_name,
             placeholder,
             &self.current_new_spec_name,
             EngineSwapMessage::NameEntered,
@@ -276,18 +261,17 @@ impl Tab for EngineSwapTab {
             .push(select_container.width(Length::FillPortion(1)))
             .push(car_name_container.width(Length::FillPortion(1)));
 
-        let swap_button = Button::new(&mut self.swap_button, Text::new("Swap"))
+        let swap_button = Button::new(Text::new("Swap"))
             .width(Length::Units(60))
             .on_press(EngineSwapMessage::SwapButtonPressed);
         let physics_pick_list = PickList::new(
-            &mut self.minimum_physics_pick_list,
             &self.available_physics,
             Some(self.current_minimum_physics),
             EngineSwapMessage::PhysicsLevelSelected
         );
-        let unpack_checkbox = Checkbox::new(
+        let unpack_checkbox = checkbox(
+            "Unpack physics data".to_string(),
             self.unpack_physics_data,
-            "Unpack physics data",
             EngineSwapMessage::UnpackToggled
         );
 

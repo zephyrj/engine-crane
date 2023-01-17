@@ -42,15 +42,15 @@
 
 use super::{Message, Tab};
 use std::path::{PathBuf};
-use iced::{Container, Element, pick_list, Text};
+use iced::{Element};
+use iced::widget::{Container, pick_list, Text};
 use iced_aw::{TabLabel};
 use crate::ui::{ApplicationData, ListPath};
 
 
 pub struct EditTab {
     status_message: String,
-    current_car: Option<PathBuf>,
-    car_pick_list: pick_list::State<ListPath>
+    current_car: Option<PathBuf>
 }
 
 #[derive(Debug, Clone)]
@@ -62,8 +62,7 @@ impl EditTab {
     pub(crate) fn new() -> Self {
         EditTab {
             status_message: String::new(),
-            current_car: None,
-            car_pick_list: Default::default()
+            current_car: None
         }
     }
 
@@ -89,7 +88,7 @@ impl Tab for EditTab {
     }
 
     fn content<'a, 'b>(
-        &'a mut self,
+        &'a self,
         app_data: &'b ApplicationData
     ) -> Element<'_, Self::Message>
     where 'b: 'a
