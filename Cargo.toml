@@ -33,6 +33,8 @@ itertools = "0.10"
 sha2 = "0.10"
 rfd = "0.10"
 config = { version="0.13.1", features = ["toml"] }
+fraction = "0.13.0"
+rand = "0.8.5"
 
 
 [dependencies.rusqlite]

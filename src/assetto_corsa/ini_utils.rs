@@ -123,7 +123,7 @@ pub fn get_value<T: std::str::FromStr>(ini: &Ini,
     }
 }
 
-pub fn get_mandatory_property<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> std::result::Result<T, MissingMandatoryProperty> {
+pub fn get_mandatory_property<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> Result<T, MissingMandatoryProperty> {
     let res: T = match get_value(ini_data, section_name, key) {
         Some(val) => val,
         None => { return Err(MissingMandatoryProperty::new(section_name, key)); }
@@ -487,6 +487,15 @@ impl Ini {
         } else {
             Some(section.get_property_mut(property_key).unwrap().set_value(property_value))
         }
+    }
+    
+    pub fn get_section_names_starting_with(&self, key_prefix: &str) -> Vec<&str>{
+        self.sections.keys().filter_map(|key| {
+            if key.starts_with(key_prefix) {
+                return Some(&key[..])
+            }
+            None
+        }).collect()
     }
 
     pub fn contains_section(&self, name: &str) -> bool {
