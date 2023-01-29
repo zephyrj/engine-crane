@@ -122,6 +122,18 @@ impl<K,V> LutProperty<K, V>
         &self.lut
     }
 
+    pub fn get_mut_type(&mut self) -> &mut LutType<K, V> {
+        &mut self.lut
+    }
+
+    pub fn num_entries(&self) -> usize {
+        match &self.lut {
+            LutType::PathOnly(_) => 0,
+            LutType::File(lut_file) => lut_file.num_entries(),
+            LutType::Inline(inline_lut) => inline_lut.num_entries()
+        }
+    }
+
 }
 
 impl <K,V> CarDataUpdater for LutProperty<K, V>

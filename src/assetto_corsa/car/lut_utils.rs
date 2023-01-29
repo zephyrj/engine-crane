@@ -86,6 +86,10 @@ impl<K, V> LutFile<K, V>
     pub fn to_vec(&self) -> Vec<(K,V)> {
         self.data.clone()
     }
+
+    pub fn num_entries(&self) -> usize {
+        self.data.len()
+    }
 }
 
 #[derive(Debug)]
@@ -124,6 +128,10 @@ impl<K, V> InlineLut<K, V>
 
     pub fn to_vec(&self) -> Vec<(K,V)> {
         self.data.clone()
+    }
+
+    pub fn num_entries(&self) -> usize {
+        self.data.len()
     }
 }
 
@@ -169,7 +177,7 @@ impl<K, V> LutType<K, V>
                 Ok(LutType::Inline(InlineLut::from_property_value(property_value)?))
             }
             false => {
-                let data = match data_source.get_file_data(&property_value) {
+                let data = match data_source.get_original_file_data(&property_value) {
                     Ok(data_option) => {
                         match data_option {
                             None => Err(format!("Failed to load {} from data source. No such file", property_value)),
@@ -248,7 +256,7 @@ pub fn load_lut_from_property_value<K, V>(property_value: String, data_source: &
             load_lut_from_reader::<K, V, _>(data_slice.as_bytes(), b'=', Terminator::Any(b'|'))
         }
         false => {
-            let file_data = match data_source.get_file_data(&property_value) {
+            let file_data = match data_source.get_original_file_data(&property_value) {
                 Ok(data_option) => match data_option {
                     None => Err(format!("Failed to load {} from data source. No such file", property_value)),
                     Some(data) => Ok(data)
