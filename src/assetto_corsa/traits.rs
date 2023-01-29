@@ -74,7 +74,7 @@ pub enum DataInterfaceError {
 }
 
 pub trait _DataInterfaceI {
-    fn get_file_data(&self, filename: &str) -> DataInterfaceResult<Option<Vec<u8>>>;
+    fn get_original_file_data(&self, filename: &str) -> DataInterfaceResult<Option<Vec<u8>>>;
     fn contains_file(&self, filename: &str) -> bool;
     fn update_file_data(&mut self, filename: &str, data: Vec<u8>);
     fn remove_file(&mut self, filename: &str);

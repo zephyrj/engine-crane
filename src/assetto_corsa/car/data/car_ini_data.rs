@@ -37,7 +37,7 @@ impl<'a> CarIniData<'a> {
     const FILENAME: &'static str = "car.ini";
 
     pub fn from_car(car: &'a mut Car) -> Result<CarIniData<'a>> {
-        let car_ini_data = match car.data_interface.get_file_data(CarIniData::FILENAME) {
+        let car_ini_data = match car.data_interface.get_original_file_data(CarIniData::FILENAME) {
             Ok(data_option) => match data_option {
                 None => Err(Error::new(ErrorKind::InvalidCar,
                                        format!("missing {} data", CarIniData::FILENAME))),

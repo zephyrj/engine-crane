@@ -36,7 +36,7 @@ impl<'a> DigitalInstruments<'a> {
     pub const INI_FILENAME: &'static str = "digital_instruments.ini";
 
     pub fn from_car(car: &'a mut Car) -> Result<Option<DigitalInstruments<'a>>> {
-        match car.data_interface.get_file_data(DigitalInstruments::INI_FILENAME)? {
+        match car.data_interface.get_original_file_data(DigitalInstruments::INI_FILENAME)? {
             None => Ok(None),
             Some(file_data) => {
                 Ok(Some(DigitalInstruments {

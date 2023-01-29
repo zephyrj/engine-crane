@@ -30,7 +30,7 @@ pub use data_interface::DataFolderInterface;
 
 use std::fmt::Debug;
 use std::fs::File;
-use std::io;
+use std::{fs, io};
 use std::io::{BufRead, BufReader, LineWriter, Write};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
@@ -285,13 +285,24 @@ pub struct Car {
 }
 
 impl Car {
+    pub fn new(root_path: PathBuf) -> Result<Car> {
+        if !root_path.exists() {
+            fs::create_dir(&root_path)?;
+        }
+        let data_dir_path = root_path.join("data");
+        Ok(Car{
+            root_path,
+            data_interface: Box::new(DataFolderInterface::new(data_dir_path)?)
+        })
+    }
+
     pub fn load_from_path(car_folder_path: &Path) -> Result<Car> {
         let data_dir_path = car_folder_path.join("data");
         let data_file_path = car_folder_path.join("data.acd");
         Ok(Car{
             root_path: car_folder_path.to_path_buf(),
             data_interface: match data_dir_path.is_dir() {
-                true => Box::new(DataFolderInterface::new(&data_dir_path)),
+                true => Box::new(DataFolderInterface::from(&data_dir_path)?),
                 false => Box::new(AcdDataInterface::new(&data_file_path)?),
             }
         })
@@ -385,7 +396,7 @@ mod tests {
                             Ok(ini_data) => {
                                 if let Some(name) = ini_data.screen_name() {
                                     write!(pass_file, "{} at {} passed\n", name, path.display()).unwrap();
-                                    if let Some(header_data) = car.data_interface.get_file_data("_header").unwrap() {
+                                    if let Some(header_data) = car.data_interface.get_original_file_data("_header").unwrap() {
                                         write!(pass_file, "Contained header {:02X?}\n", header_data).unwrap();
                                     }
                                     pass_file.flush();

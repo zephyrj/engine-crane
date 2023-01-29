@@ -51,7 +51,7 @@ impl<'a> Setup<'a> {
     pub const INI_FILENAME: &'static str = INI_FILENAME;
 
     pub fn from_car(car: &'a mut Car) -> Result<Option<Setup<'a>>> {
-        match car.data_interface.get_file_data(Setup::INI_FILENAME)? {
+        match car.data_interface.get_original_file_data(Setup::INI_FILENAME)? {
             None => Ok(None),
             Some(file_data) => {
                 Ok(Some(Setup {

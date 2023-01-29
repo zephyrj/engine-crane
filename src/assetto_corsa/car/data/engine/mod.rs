@@ -65,7 +65,7 @@ impl<'a> Engine<'a> {
     // }
 
     pub fn from_car(car: & mut Car) -> Result<Engine> {
-        let file_data = match car.data_interface.get_file_data(Engine::INI_FILENAME) {
+        let file_data = match car.data_interface.get_original_file_data(Engine::INI_FILENAME) {
             Ok(data_option) => {
                 match data_option {
                     None => Err(Error::new(ErrorKind::InvalidCar, format!("missing {} data", Engine::INI_FILENAME))),

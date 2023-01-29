@@ -64,7 +64,7 @@ impl<'a> TurboControllerFile<'a> {
     }
 
     pub fn from_car(car: & mut Car, turbo_index: usize) -> Result<Option<TurboControllerFile>> {
-        match car.data_interface.get_file_data(&TurboControllerFile::get_controller_ini_filename(turbo_index)) {
+        match car.data_interface.get_original_file_data(&TurboControllerFile::get_controller_ini_filename(turbo_index)) {
             Ok(data_option) => {
                 match data_option {
                     None => Ok(None),

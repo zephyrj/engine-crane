@@ -22,12 +22,12 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
-use std::io;
+use std::{fs, io};
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use crate::assetto_corsa::car::acd_utils::AcdArchive;
 use crate::assetto_corsa::traits::{_DataInterfaceI, DataInterface, DataInterfaceResult};
-use crate::assetto_corsa::error::Result;
+use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 
 #[derive(Debug)]
 pub struct DataFolderInterface {
@@ -36,11 +36,25 @@ pub struct DataFolderInterface {
 }
 
 impl DataFolderInterface {
-    pub(crate) fn new(path: &Path) -> Self {
-        DataFolderInterface {
+    pub(crate) fn new(data_folder_path: PathBuf) -> Result<Self> {
+        if !data_folder_path.exists() {
+            fs::create_dir(&data_folder_path)?;
+        }
+        Ok(DataFolderInterface {
+            data_folder_path,
+            outstanding_data_updates: HashMap::new()
+        })
+    }
+
+    pub(crate) fn from(path: &Path) -> Result<Self> {
+        if !path.is_dir() {
+            return Err(Error::new(ErrorKind::IOError,
+                                  format!("Directory {} doesn't exist", path.display())));
+        }
+        Ok(DataFolderInterface {
             data_folder_path: path.to_path_buf(),
             outstanding_data_updates: HashMap::new()
-        }
+        })
     }
 
     fn construct_file_path(&self, filename: &str) -> PathBuf {
@@ -49,7 +63,7 @@ impl DataFolderInterface {
 }
 
 impl _DataInterfaceI for DataFolderInterface {
-    fn get_file_data(&self, filename: &str) -> DataInterfaceResult<Option<Vec<u8>>> {
+    fn get_original_file_data(&self, filename: &str) -> DataInterfaceResult<Option<Vec<u8>>> {
         let file_path = (&self.data_folder_path).join(Path::new(filename));
         let f = match File::open(file_path) {
             Ok(file) => Ok(file),
@@ -115,7 +129,7 @@ impl AcdDataInterface {
 }
 
 impl _DataInterfaceI for AcdDataInterface {
-    fn get_file_data(&self, filename: &str) -> DataInterfaceResult<Option<Vec<u8>>>  {
+    fn get_original_file_data(&self, filename: &str) -> DataInterfaceResult<Option<Vec<u8>>>  {
         Ok(self.acd_archive.get_file_data(filename))
     }
 
