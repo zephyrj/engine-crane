@@ -20,7 +20,9 @@
  */
 
 use std::cmp::{min, Ordering};
+use std::collections::HashMap;
 use fraction::Bounded;
+use rand::Rng;
 use crate::assetto_corsa::car::data::setup::gears::GearConfig::{GearSets, PerGear};
 use crate::assetto_corsa::car::data::setup::HelpData;
 use crate::assetto_corsa::car::lut_utils::LutType;
@@ -78,6 +80,10 @@ impl GearData {
             };
         }
     }
+
+    pub fn set_gear_config(&mut self, new_gear_config: Option<GearConfig>) -> Option<GearConfig> {
+        std::mem::replace(&mut self.gear_config, new_gear_config)
+    }
 }
 
 #[derive(Debug)]
@@ -87,6 +93,29 @@ pub enum GearConfig {
 }
 
 impl GearConfig {
+    pub fn new_gearset_config(gearset_ratios: &HashMap<String, Vec<f64>>) -> GearConfig {
+        let mut gearsets: Vec<GearSet> = Vec::new();
+        let mut num_gears = 0;
+        for (name, gearset_vec) in gearset_ratios {
+            if num_gears == 0 {
+                num_gears = gearset_vec.len();
+            }
+
+            if gearset_vec.len() >= num_gears {
+                gearsets.push(GearSet::new(name.clone(), gearset_vec[0..num_gears].to_vec()));
+
+            } else {
+                let mut fixed_ratios = Vec::with_capacity(num_gears);
+                fixed_ratios.fill(1.0);
+                for (idx, g) in gearset_vec.iter().enumerate() {
+                    fixed_ratios[idx] = *g;
+                }
+                gearsets.push(GearSet::new(name.clone(), fixed_ratios));
+            }
+        }
+        return GearSets(gearsets)
+    }
+
     pub fn load_from_car_data(parent_data: &dyn CarDataFile) -> Result<Option<GearConfig>> {
         let ini_data = parent_data.ini_data();
         let found_gears = SingleGear::load_all_from_car_data(parent_data)?;
@@ -298,6 +327,10 @@ pub struct GearSet {
 impl GearSet {
     const SECTION_PREFIX: &'static str = "GEAR_SET_";
 
+    pub fn new(name: String, ratios: Vec<f64>) -> GearSet {
+        return GearSet { name, ratios }
+    }
+
     pub fn load_all_from_car_data(parent_data: &dyn CarDataFile) -> Result<Vec<GearSet>> {
         let mut gearset_vet = Vec::new();
         let ini_data = parent_data.ini_data();
@@ -367,11 +400,12 @@ fn sort_by_numeric_index(mut var: Vec<&str>) -> Vec<&str> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::path::{Path, PathBuf};
     use rand::thread_rng;
     use rand::seq::SliceRandom;
     use tracing_subscriber::fmt::format;
-    use crate::assetto_corsa::{Car, car};
+    use crate::assetto_corsa::{Car, car, ini_utils};
     use crate::assetto_corsa::car::data::setup::gears::{GearConfig, GearData, GearSet, SingleGear, sort_by_numeric_index};
     use crate::assetto_corsa::car::data::setup::Setup;
     use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
@@ -601,5 +635,39 @@ mod tests {
         assert!(!car_setup_data.ini_data.contains_section("GEARS"));
         let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
         validate_gears(&gear_data);
+    }
+
+    #[test]
+    fn update_no_gears_to_gearset() {
+        let orig_ratios = vec![2.615, 1.938, 1.526, 1.286, 1.136, 1.043];
+        let updated_ratios = vec![2.615, 1.800, 1.450, 1.200, 1.043, 0.950];
+        {
+            let mut car = setup_tmp_car_as("no-customizable-gears");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            assert!(!car_setup_data.ini_data.contains_section("GEARS"));
+            let mut gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+            let mut gearset_map = HashMap::new();
+            gearset_map.insert("original".to_string(), orig_ratios.clone());
+            gearset_map.insert("updated".to_string(), updated_ratios.clone());
+            gear_data.set_gear_config(Some(GearConfig::new_gearset_config(&gearset_map)));
+            gear_data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        assert!(car_setup_data.ini_data.contains_section("GEARS"));
+        assert_eq!(ini_utils::get_value::<i32>(&car_setup_data.ini_data, "GEARS", "USE_GEARSET").expect("Couldn't get gearset in use parameter"), 1);
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        match gear_data.gear_config.as_ref().expect("GearConfig was None") {
+            GearConfig::GearSets(sets) => {
+                assert_eq!(sets.len(), 2);
+                assert_eq!(sets[0].name, "original");
+                assert_eq!(sets[0].ratios, orig_ratios);
+                assert_eq!(sets[1].name, "updated");
+                assert_eq!(sets[1].ratios, updated_ratios);
+            }
+            GearConfig::PerGear(_) => { assert!(false) }
+        }
     }
 }
