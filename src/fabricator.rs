@@ -402,6 +402,9 @@ impl AcEngineParameterCalculatorV1 {
         if version_num < 2209220000 {
             info!("Using v1 coast calculation for version {}", version_num);
             return self.coast_data_v1();
+        } else if version_num >= 2301100000 {
+            info!("Using v3 coast calculation for version {}", version_num);
+            return self.coast_data_v3();
         }
         info!("Using v2 coast calculation for version {}", version_num);
         return self.coast_data_v2();
@@ -438,6 +441,27 @@ impl AcEngineParameterCalculatorV1 {
         // however friction and engineBrakeTorque are the same in the output jbeam files which
         // would result in too high a value. Add only engineBrakeTorque for now
         let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + static_friction;
+        Some(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
+                                                    friction_torque.round() as i32,
+                                                    0.0))
+    }
+
+    pub fn coast_data_v3(&self) -> Option<engine::CoastCurve> {
+        //   The following data is available from the engine.jbeam exported file
+        //   The dynamic friction torque on the engine in Nm/s.
+        //   This is a friction torque which increases proportional to engine AV (rad/s).
+        //   AV = (2pi * RPM) / 60
+        //   friction torque = (AV * dynamicFriction) + engineBrakeTorque + staticFriction
+        //
+        //   #### NOTE ####
+        //   I'm assuming that all of the sources of friction are being taken into account in the BeamNG parameters used above
+        //   this may not be correct.
+        let eng_map = self.engine_jbeam_data.get(&self.get_engine_jbeam_key())?.as_object()?.get("mainEngine")?.as_object()?;
+        let dynamic_friction = eng_map.get("dynamicFriction")?.as_f64().unwrap();
+        let static_friction = eng_map.get("friction")?.as_f64().unwrap();
+        let engine_brake_torque = eng_map.get("engineBrakeTorque")?.as_f64().unwrap();
+        let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm * 2_f64 * std::f64::consts::PI) / 60_f64;
+        let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + engine_brake_torque + static_friction;
         Some(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
                                                     friction_torque.round() as i32,
                                                     0.0))
