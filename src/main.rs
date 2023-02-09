@@ -32,16 +32,31 @@ use std::path::PathBuf;
 use tracing_subscriber;
 use tracing_appender;
 use tracing::{info, warn, error};
+use tracing::dispatcher::SetGlobalDefaultError;
 
 // -> Result<(), iced::Error>
 fn main() -> Result<(), iced::Error> {
-    let file_appender = tracing_appender::rolling::never(env::current_dir().unwrap(), "engine_crane.log");
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(file_appender)
-        .with_ansi(false)
-        .compact()
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+    match env::current_dir() {
+        Ok(current_dir) => {
+            let file_appender = tracing_appender::rolling::never(current_dir, "engine_crane.log");
+            let subscriber = tracing_subscriber::fmt()
+                .with_writer(file_appender)
+                .with_ansi(false)
+                .compact()
+                .finish();
+            match tracing::subscriber::set_global_default(subscriber) {
+                Ok(_) => {
+                    info!("Logging initialised");
+                }
+                Err(e) => {
+                    eprintln!("Failed to init logging. {}", e.to_string());
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to init logging. Couldn't determine current dir {}", e.to_string());
+        }
+    }
 
     if let Some(legacy_db_path) = automation::sandbox::get_db_path() {
         info!("Automation sandbox.db for game version < 4.2 found at {}", PathBuf::from(legacy_db_path).display())
