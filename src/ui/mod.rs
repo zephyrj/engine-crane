@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2022 zephyrj
+ * 2023 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -23,6 +23,7 @@ mod swap;
 mod edit;
 mod settings;
 
+use std::ffi::OsStr;
 use std::fs;
 use swap::{EngineSwapMessage, EngineSwapTab};
 use edit::{EditMessage, EditTab};
@@ -157,7 +158,11 @@ impl ListPath {
 
 impl std::fmt::Display for ListPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.full_path.file_name().unwrap().to_string_lossy())
+        let out = match &self.full_path.file_name() {
+            None => { "".to_string() }
+            Some(filename) => { filename.to_string_lossy().into_owned() }
+        };
+        write!(f, "{}", out)
     }
 }
 
@@ -181,6 +186,9 @@ impl AssettoCorsaData {
     pub fn property_update(&mut self, settings: &GlobalSettings) {
         if let Some(path) = &settings.ac_install_path() {
             self.refresh_available_cars(path);
+        } else {
+            info!("Update to GlobalSettings contains no AC install path");
+            self.available_cars.clear();
         }
     }
 
@@ -228,6 +236,9 @@ impl BeamNGData {
     pub fn property_update(&mut self, settings: &GlobalSettings) {
         if let Some(path) = &settings.beamng_mod_path() {
             self.refresh_available_mods(path);
+        } else {
+            info!("Update to GlobalSettings contains no BeamNG data path");
+            self.available_mods.clear();
         }
     }
 
@@ -260,6 +271,15 @@ impl ApplicationData {
             error!("Failed to load settings. {}", e.to_string());
             GlobalSettings::default()
         });
+        match settings.ac_install_path() {
+            None => { info!("Assetto Corsa path not set") }
+            Some(path) => { info!("Assetto Corsa path set to {}", path.display()) }
+        }
+        match settings.beamng_mod_path() {
+            None => { info!("BeamNG mod path not set") }
+            Some(path) => { info!("BeamNG mod path set to {}", path.display()) }
+        }
+
         let assetto_corsa_data = AssettoCorsaData::from_settings(&settings);
         let beam_ng_data = BeamNGData::from_settings(&settings);
         ApplicationData {
@@ -365,9 +385,13 @@ impl Sandbox for UIMain {
     type Message = Message;
 
     fn new() -> Self {
+        span!(Level::INFO, "Creating UIMain");
         let app_data = ApplicationData::new();
+        info!("Initialised settings successfully");
         let settings_tab = SettingsTab::new();
+        info!("Created settings tab");
         let engine_swap_tab = EngineSwapTab::new();
+        info!("Created engine-swap tab");
         UIMain {
             app_data,
             active_tab: 0,
@@ -394,8 +418,8 @@ impl Sandbox for UIMain {
                         None => PathBuf::from("/")
                     })
                     .pick_folder();
-                if install_path.is_some() {
-                    self.app_data.update_ac_install_path(install_path.unwrap());
+                if let Some(path) = install_path {
+                    self.app_data.update_ac_install_path(path);
                     self.notify_app_data_update();
                 }
             }
@@ -406,8 +430,8 @@ impl Sandbox for UIMain {
                         None => PathBuf::from("/")
                     })
                     .pick_folder();
-                if mod_path.is_some() {
-                    self.app_data.update_beamng_mod_path(mod_path.unwrap());
+                if let Some(path) = mod_path {
+                    self.app_data.update_beamng_mod_path(path);
                     self.notify_app_data_update();
                 }
             }

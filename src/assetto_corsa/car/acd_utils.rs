@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2022 zephyrj
+ * 2023 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -372,8 +372,26 @@ mod tests {
 
     #[test]
     fn extract_acd() {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/ks_ferrari_f2004/data.acd");
+        //
+        // /home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/ks_ferrari_f2004/data.acd
+        let path = Path::new("/home/josykes/Downloads/car/URD_Radical_SR3_XXR_V1_4/assettocorsa/content/cars/urd_radical_sr3xxr_2023/data.acd");
         AcdArchive::load_from_acd_file(path).unwrap().unpack().unwrap();
+    }
+
+    #[test]
+    fn extract_all_acd_in_folder() {
+        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/");
+        if let Ok(res) = std::fs::read_dir(path) {
+            res.for_each(|p| {
+                let mut x = p.unwrap().path();
+                if x.is_dir() {
+                    x.push("data.acd");
+                    if x.is_file() {
+                        AcdArchive::load_from_acd_file(&x).unwrap().unpack().unwrap();
+                    }
+                }
+            })
+        }
     }
 
     #[test]

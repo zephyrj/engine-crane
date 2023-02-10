@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2022 zephyrj
+ * 2023 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -36,7 +36,10 @@ pub const STEAM_GAME_ID: i64 = 284160;
 
 #[cfg(target_os = "windows")]
 pub fn get_default_mod_path() -> PathBuf {
-    let mut mod_path_buf: PathBuf = BaseDirs::new().unwrap().cache_dir().to_path_buf();
+    let mut mod_path_buf : PathBuf = match BaseDirs::new() {
+        None => { PathBuf::from("C:\\Users\\steamuser\\AppData\\Local") }
+        Some(basedirs) => { basedirs.cache_dir().to_path_buf() }
+    };
     mod_path_buf.push(STEAM_GAME_NAME);
     let beamng_installed = steam::get_game_install_path(STEAM_GAME_NAME).is_dir();
     match beamng_installed {

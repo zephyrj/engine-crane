@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2022 zephyrj
+ * 2023 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -120,8 +120,7 @@ impl EngineSwapTab {
                     }
                 };
 
-                let mod_path = self.current_mod.as_ref().unwrap();
-                {
+                if let Some(mod_path) = self.current_mod.as_ref() {
                     let span = span!(Level::INFO, "Updating car physics");
                     let _enter = span.enter();
                     let current_engine_weight =
@@ -146,6 +145,11 @@ impl EngineSwapTab {
                         Ok(_) => { self.status_message = format!("Created {} successfully", new_car_path.display()) }
                         Err(err_str) => { self.status_message = err_str }
                     }
+                } else {
+                    let err_str = "Swap failed: Couldn't get ref to current mod";
+                    error!(err_str);
+                    self.status_message = format!("{}", err_str);
+                    return;
                 }
 
             }
