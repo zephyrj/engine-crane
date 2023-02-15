@@ -118,6 +118,14 @@ impl<K,V> LutProperty<K, V>
         }
     }
 
+    pub fn clone_values(&self) -> Vec<V> {
+        match &self.lut {
+            LutType::File(lut_file) => { lut_file.clone_values() }
+            LutType::Inline(inline_lut) => { inline_lut.clone_values() }
+            LutType::PathOnly(_) => { Vec::new() }
+        }
+    }
+
     pub fn get_type(&self) -> &LutType<K, V> {
         &self.lut
     }
