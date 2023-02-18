@@ -827,4 +827,28 @@ mod tests {
             GearConfig::PerGear(_) => { assert!(false) }
         }
     }
+
+    #[test]
+    fn update_final_drive() {
+        let final_ratios = vec![("4.500".to_owned(), 4.500), ("4.300".to_owned(), 4.300), ("4.000".to_owned(), 4.000)];
+        {
+            let mut car = setup_tmp_car_as("only-final-drive");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+            let final_gear = SingleGear::new_final_drive(final_ratios.clone());
+            gear_data.set_final_drive(Some(final_gear));
+            gear_data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        assert!(gear_data.gear_config.is_none());
+        let final_drive = gear_data.final_drive.as_ref().unwrap();
+        assert_eq!(final_drive.ratios_lut.num_entries(), 3);
+        for (actual, expected) in final_drive.ratios_lut.to_vec().iter().zip(final_ratios) {
+            assert_eq!(actual.0, expected.0);
+            assert_eq!(actual.1, expected.1);
+        }
+    }
 }
