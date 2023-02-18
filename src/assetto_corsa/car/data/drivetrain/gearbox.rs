@@ -53,6 +53,10 @@ impl Gearbox {
     fn create_gear_key(gear_num: i32) -> String {
         format!("GEAR_{}", gear_num)
     }
+
+    pub fn clone_gear_ratios(&self) -> Vec<f64> {
+        self.gear_ratios.clone()
+    }
 }
 
 impl MandatoryDataSection for Gearbox {
