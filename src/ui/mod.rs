@@ -31,7 +31,7 @@ use settings::{SettingsMessage, SettingsTab};
 
 use std::path::{Path, PathBuf};
 use config::{Config, ConfigError};
-use iced::{Element, Length, Sandbox, Error, Settings, Background, Color};
+use iced::{Element, Length, Sandbox, Error, Settings, Background, Color, Padding};
 use iced::widget::{Column, Text, Container};
 use iced_aw::{TabLabel, Tabs};
 use iced::alignment::{Horizontal, Vertical};
@@ -444,10 +444,10 @@ impl Sandbox for UIMain {
                 self.engine_swap_tab.tab_label(),
                 self.engine_swap_tab.view(&self.app_data)
             )
-            // .push(
-            //     self.edit_tab.tab_label(),
-            //     self.edit_tab.view(&self.app_data)
-            // )
+            .push(
+                self.edit_tab.tab_label(),
+                self.edit_tab.view(&self.app_data)
+            )
             .push(
                 self.settings_tab.tab_label(),
                 self.settings_tab.view(&self.app_data)
@@ -482,7 +482,7 @@ trait Tab {
             .height(Length::Fill)
             .align_x(Horizontal::Center)
             .align_y(Vertical::Center)
-            .padding(TAB_PADDING)
+            .padding(Padding::from([TAB_PADDING*2, TAB_PADDING, TAB_PADDING, TAB_PADDING]))
             .into()
     }
 
