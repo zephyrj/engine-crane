@@ -22,6 +22,7 @@
 use std::cmp::{min, Ordering};
 use std::collections::HashMap;
 use fraction::Bounded;
+use itertools::Itertools;
 use crate::assetto_corsa::car::data::setup::gears::GearConfig::{GearSets, PerGear};
 use crate::assetto_corsa::car::data::setup::HelpData;
 use crate::assetto_corsa::car::lut_utils::{LutFile, LutType};
@@ -326,6 +327,11 @@ impl SingleGear {
         Ok(())
     }
 
+    pub fn get_index(&self) -> std::result::Result<usize, std::num::ParseIntError> {
+        let split = self.gear_id.split_terminator('_').collect_vec();
+        split[1].parse::<usize>()
+    }
+
     pub fn create_gear_key(gear_index: usize) -> String {
         format!("GEAR_{}", gear_index)
     }
@@ -428,6 +434,10 @@ impl GearSet {
 
     pub fn num_gears(&self) -> usize {
         self.ratios.len()
+    }
+
+    pub fn ratios(&self) -> &Vec<f64> {
+        &self.ratios
     }
 }
 
