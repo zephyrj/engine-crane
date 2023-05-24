@@ -175,9 +175,17 @@ pub enum FinalDriveChoice {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GearConfigIdentifier {
+    Fixed(usize),
+    GearSet(usize, usize),
+    CustomizedGears(usize)
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum GearUpdateType {
-    FixedGearUpdate(usize, String),
-    CustomizedGearUpdate
+    Add(String),
+    Remove(GearConfigIdentifier),
+    Update(GearConfigIdentifier, String)
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -304,7 +312,9 @@ fn create_gear_ratio_column(row_vals: Vec<(String, String)>) -> Column<'static, 
         let t = text_input(
             placeholder,
             new_ratio,
-            move |new_value| { EditMessage::GearUpdate(GearUpdateType::FixedGearUpdate(gear_idx, new_value))}
+            move |new_value| {
+                EditMessage::GearUpdate(GearUpdateType::Update(GearConfigIdentifier::Fixed(gear_idx), new_value))
+            }
         ).width(Length::Units(84));
         gear_row = gear_row.push(l).push(t);
         gear_list = gear_list.push(gear_row);
@@ -333,12 +343,22 @@ impl GearConfiguration for FixedGears {
         GearConfigChoice::Fixed
     }
 
+    // TODO return a Result so errors can be passed somewhere for viewing
     fn handle_update(&mut self, update_type: GearUpdateType) {
         match update_type {
-            GearUpdateType::FixedGearUpdate(gear_idx, ratio) => {
-                self.updated_drivetrain_data.insert(gear_idx, ratio);
-            }
-            GearUpdateType::CustomizedGearUpdate => {}
+            GearUpdateType::Update(gear_idx, ratio) => {
+                match gear_idx {
+                    GearConfigIdentifier::Fixed(gear_idx) => {
+                        if ratio.is_empty() {
+                            self.updated_drivetrain_data.remove(&gear_idx);
+                        }
+                        self.updated_drivetrain_data.insert(gear_idx, ratio);
+                    },
+                    _ => {}
+                }
+            },
+            GearUpdateType::Add(_) => {},
+            GearUpdateType::Remove(_) => {}
         }
     }
 
@@ -348,7 +368,6 @@ impl GearConfiguration for FixedGears {
     ) -> Column<'b, EditMessage>
         where 'b: 'a
     {
-
         let mut displayed_ratios = Vec::new();
         for (gear_idx, ratio) in self.current_drivetrain_data.iter().enumerate() {
             let current_val = match self.updated_drivetrain_data.contains_key(&gear_idx) {
@@ -428,8 +447,8 @@ impl GearConfiguration for CustomizableGears {
             col = col.push(text(gear_idx));
             let name_width = (ratio_set.max_name_length * 12).to_u16().unwrap_or(u16::MAX);
             for ratio_entry in ratio_set.entries() {
-                let name_label = TextInput::new("",&ratio_entry.name, |e|{ EditMessage::GearUpdate(GearUpdateType::CustomizedGearUpdate) }).width(Length::Units(name_width));
-                let ratio_input = TextInput::new("",&ratio_entry.ratio.to_string(), |e|{ EditMessage::GearUpdate(GearUpdateType::CustomizedGearUpdate) }).width(Length::Units(84));
+                let name_label = TextInput::new("",&ratio_entry.name, |e|{ EditMessage::GearUpdate(GearUpdateType::Remove(GearConfigIdentifier::Fixed(0))) }).width(Length::Units(name_width));
+                let ratio_input = TextInput::new("",&ratio_entry.ratio.to_string(), |e|{ EditMessage::GearUpdate(GearUpdateType::Remove(GearConfigIdentifier::Fixed(0))) }).width(Length::Units(84));
                 let mut r = Row::new().spacing(5).width(Length::Shrink);
                 r = r.push(name_label);
                 r = r.push(ratio_input);
