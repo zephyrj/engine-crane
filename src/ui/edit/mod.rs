@@ -30,7 +30,7 @@ use iced_aw::{TabLabel};
 use tracing::{error};
 
 use crate::ui::{ApplicationData, ListPath};
-use crate::ui::edit::gears::{gear_configuration_builder, GearConfigChoice, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::{gear_configuration_builder, GearConfigChoice, GearUpdateType, GearConfiguration};
 
 
 pub struct EditTab {
@@ -89,9 +89,9 @@ impl EditTab {
             EditMessage::GearConfigSelected(choice) => {
                 // TODO convert between types
             }
-            EditMessage::GearUpdate(updateType) => {
+            EditMessage::GearUpdate(update_type) => {
                 if let Some(config) = &mut self.gear_configuration {
-                    config.handle_update(updateType);
+                    config.handle_update(update_type);
                 }
             }
         }
