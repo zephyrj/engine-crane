@@ -63,7 +63,9 @@ pub enum GearConfigIdentifier {
 pub enum GearUpdateType {
     AddGear(),
     RemoveGear(),
-    UpdateRatio(GearConfigIdentifier, String)
+    AddRatio(GearConfigIdentifier),
+    UpdateRatio(GearConfigIdentifier, String),
+    RemoveRatio(GearConfigIdentifier)
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]

@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use fraction::ToPrimitive;
 use iced::{Alignment, Length, Padding, Theme};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{button, Column, Row, text, Text, text_input, TextInput};
+use iced::widget::{button, Column, Row, scrollable, text, Text, text_input, TextInput};
+use iced::widget::scrollable::Properties;
 
 use tracing::{error, warn};
 use crate::assetto_corsa::Car;
@@ -220,6 +221,7 @@ impl GearConfiguration for FixedGears {
             GearUpdateType::RemoveGear() => {
                 self.updated_drivetrain_data.pop_last();
             }
+            _ => {}
         }
     }
 
@@ -258,8 +260,6 @@ pub struct GearSets {
 }
 
 impl GearSets {
-    // TODO - make this gear config specific
-    // TODO - For Fixed and GearSet we only want an add/delete at the highest gear ratio index
     fn create_gear_ratio_column(gearset_idx: usize, row_vals: Vec<(String, String)>) -> Column<'static, EditMessage>
     {
         let mut gear_list = Column::new().width(Length::Shrink).spacing(5).padding(Padding::from([0, 10]));
@@ -291,7 +291,37 @@ impl GearConfiguration for GearSets {
     }
 
     fn handle_update(&mut self, update_type: GearUpdateType) {
-        todo!()
+        match update_type {
+            GearUpdateType::UpdateRatio(gear_idx, ratio) => {
+                match gear_idx {
+                    GearConfigIdentifier::GearSet(set_idx, gear_idx) => {
+                        if let Some(gear_set) = self.updated_drivetrain_data.get_mut(&set_idx) {
+                            if ratio.is_empty() {
+                                gear_set.insert(gear_idx, None);
+                            } else {
+                                gear_set.insert(gear_idx, Some(ratio));
+                            }
+                        }
+                    },
+                    _ => {}
+                }
+            },
+            GearUpdateType::AddGear() => {
+                for gear_set in self.updated_drivetrain_data.values_mut() {
+                    let gear_idx: usize = match gear_set.last_key_value() {
+                        None => { 0 }
+                        Some((max_gear_idx, _)) => { max_gear_idx+1 }
+                    };
+                    gear_set.insert(gear_idx, None);
+                }
+            },
+            GearUpdateType::RemoveGear() => {
+                for gear_set in self.updated_drivetrain_data.values_mut() {
+                    gear_set.pop_last();
+                }
+            }
+            _ => {}
+        }
     }
 
     fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
@@ -397,20 +427,28 @@ impl GearConfiguration for CustomizableGears {
     {
         let mut gearset_roe = Row::new().spacing(5).padding(Padding::from([0, 10])).width(Length::Shrink);
         for (gear_idx, ratio_set) in &self.new_setup_data {
-            let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5).padding(Padding::from([0, 10]));
+            let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5).padding(Padding::from([0, 10, 12, 10]));
             col = col.push(text(gear_idx));
-            let name_width = (ratio_set.max_name_length * 12).to_u16().unwrap_or(u16::MAX);
+            let name_width = (ratio_set.max_name_length * 10).to_u16().unwrap_or(u16::MAX);
             for ratio_entry in ratio_set.entries() {
-                let name_label = TextInput::new("",&ratio_entry.name, |e|{ EditMessage::GearUpdate(GearUpdateType::RemoveGear()) }).width(Length::Units(name_width));
-                let ratio_input = TextInput::new("",&ratio_entry.ratio.to_string(), |e|{ EditMessage::GearUpdate(GearUpdateType::RemoveGear()) }).width(Length::Units(84));
+                let mut name_label = TextInput::new("", &ratio_entry.name, |e|{ EditMessage::GearUpdate(GearUpdateType::RemoveGear()) }).width(Length::Units(name_width));
+                name_label = name_label.size(14);
+                let mut ratio_input = TextInput::new("",&ratio_entry.ratio.to_string(), |e|{ EditMessage::GearUpdate(GearUpdateType::RemoveGear()) }).width(Length::Units(56));
+                ratio_input = ratio_input.size(14);
                 let mut r = Row::new().spacing(5).width(Length::Shrink);
                 r = r.push(name_label);
                 r = r.push(ratio_input);
                 col = col.push(r);
             }
+            let add_ratio_button = iced::widget::button(
+                text("Add Ratio").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
+            )   .width(Length::Units(75))
+                .height(Length::Units(25))
+                .on_press(EditMessage::GearUpdate(GearUpdateType::AddRatio(GearConfigIdentifier::CustomizedGears(0))));
+            col = col.push(add_ratio_button);
             gearset_roe = gearset_roe.push(col);
         }
-        layout.push(gearset_roe)
+        layout.push(scrollable(gearset_roe).horizontal_scroll(Properties::default()))
     }
 }
 
