@@ -19,4 +19,4 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub(crate) const DELETE_IMAGE: &[u8] = include_bytes!("resources/delete.jpg");
+pub(crate) const DELETE_IMAGE: &[u8] = include_bytes!("resources/delete.png");
