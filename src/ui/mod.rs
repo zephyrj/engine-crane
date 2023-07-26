@@ -22,6 +22,7 @@
 mod swap;
 mod edit;
 mod settings;
+mod image_data;
 
 use std::ffi::OsStr;
 use std::fs;

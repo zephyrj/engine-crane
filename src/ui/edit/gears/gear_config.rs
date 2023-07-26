@@ -1,10 +1,34 @@
+/*
+ * Copyright (c):
+ * 2023 zephyrj
+ * zephyrj@protonmail.com
+ *
+ * This file is part of engine-crane.
+ *
+ * engine-crane is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * engine-crane is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 use std::collections::{HashMap, BTreeMap, HashSet, BTreeSet};
 use std::path::PathBuf;
 use fraction::ToPrimitive;
-use iced::{Alignment, Length, Padding, Theme};
+use iced::{Alignment, ContentFit, Length, Padding, Theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, Column, Row, scrollable, text, Text, text_input, TextInput};
 use iced::widget::scrollable::Properties;
+use iced::widget::Image;
+use iced::widget::image::Handle;
+use crate::ui::image_data::DELETE_IMAGE;
 
 use tracing::{error, warn};
 use crate::assetto_corsa::Car;
@@ -435,9 +459,10 @@ impl GearConfiguration for CustomizableGears {
                 name_label = name_label.size(14);
                 let mut ratio_input = TextInput::new("",&ratio_entry.ratio.to_string(), |e|{ EditMessage::GearUpdate(GearUpdateType::RemoveGear()) }).width(Length::Units(56));
                 ratio_input = ratio_input.size(14);
-                let mut r = Row::new().spacing(5).width(Length::Shrink);
+                let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
                 r = r.push(name_label);
                 r = r.push(ratio_input);
+                r = r.push(iced::widget::button(Image::new(Handle::from_memory(DELETE_IMAGE)).content_fit(ContentFit::Fill)).height(Length::Units(15)).width(Length::Units(15)).padding(1));
                 col = col.push(r);
             }
             let add_ratio_button = iced::widget::button(
@@ -467,3 +492,4 @@ impl button::StyleSheet for DeleteButtonStyle {
     }
     // other methods in Stylesheet have a default impl
 }
+
