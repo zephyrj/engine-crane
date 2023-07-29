@@ -19,16 +19,18 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::cmp::max;
 use std::collections::{HashMap, BTreeMap, HashSet, BTreeSet};
 use std::path::PathBuf;
 use fraction::ToPrimitive;
-use iced::{Alignment, ContentFit, Length, Padding, Theme};
+use iced::{Alignment, Application, ContentFit, Length, Padding, Theme};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{button, Column, Row, scrollable, text, Text, text_input, TextInput};
+use iced::theme::Button;
+use iced::widget::{button, Column, Container, Row, scrollable, Svg, text, Text, text_input, TextInput};
 use iced::widget::scrollable::Properties;
 use iced::widget::Image;
-use iced::widget::image::Handle;
-use crate::ui::image_data::DELETE_IMAGE;
+use iced::widget::svg::Handle;
+use crate::ui::image_data::{ADD_SVG, DELETE_SVG};
 
 use tracing::{error, warn};
 use crate::assetto_corsa::Car;
@@ -38,7 +40,7 @@ use crate::assetto_corsa::car::data::setup::Setup;
 use crate::assetto_corsa::car::data::setup::gears::{GearSet, GearConfig, GearData, SingleGear};
 use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
 use crate::ui::edit::EditMessage;
-use crate::ui::edit::gears::{GearConfigChoice, GearConfigIdentifier, GearLabel, GearUpdateType, RatioEntry, RatioSet};
+use crate::ui::edit::gears::{GearConfigChoice, GearIdentifier, GearLabel, GearUpdateType, RatioEntry, RatioSet};
 
 
 pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearConfiguration>, String> {
@@ -140,9 +142,10 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
                     current_setup_data = gears;
                     for gear in &current_setup_data {
                         let gear_vec = gear.ratios_lut.to_vec();
-                        let mut count_vec: RatioSet = gear_vec.iter().map(|pair| RatioEntry::new(pair.0.clone(), pair.1)).collect();
+                        let mut ratio_set = RatioSet::new();
+                        gear_vec.iter().for_each(|pair| { ratio_set.insert(pair.0.clone(), pair.1); });
                         new_setup_data.insert(gear.get_index().map_err(|e| { e.to_string()})?.into(),
-                                              count_vec);
+                                              ratio_set);
                     }
                 }
                 _ => {
@@ -153,7 +156,8 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
             Ok(Box::new(CustomizableGears {
                 current_drivetrain_data: drivetrain_data,
                 current_setup_data,
-                new_setup_data
+                new_setup_data,
+                new_ratio_data: None
             }))
         }
     }
@@ -190,7 +194,7 @@ impl FixedGears {
                 placeholder,
                 new_ratio,
                 move |new_value| {
-                    EditMessage::GearUpdate(GearUpdateType::UpdateRatio(GearConfigIdentifier::Fixed(gear_idx), new_value))
+                    EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::Fixed(gear_idx), new_value))
                 }
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
@@ -223,9 +227,9 @@ impl GearConfiguration for FixedGears {
     // TODO return a Result so errors can be passed somewhere for viewing
     fn handle_update(&mut self, update_type: GearUpdateType) {
         match update_type {
-            GearUpdateType::UpdateRatio(gear_idx, ratio) => {
+            GearUpdateType::UpdateRatioValue(gear_idx, ratio) => {
                 match gear_idx {
-                    GearConfigIdentifier::Fixed(gear_idx) => {
+                    GearIdentifier::Fixed(gear_idx) => {
                         if ratio.is_empty() {
                             self.updated_drivetrain_data.insert(gear_idx, None);
                         } else {
@@ -298,7 +302,7 @@ impl GearSets {
                 placeholder,
                 new_ratio,
                 move |new_value| {
-                    EditMessage::GearUpdate(GearUpdateType::UpdateRatio(GearConfigIdentifier::GearSet(gearset_idx, gear_idx), new_value))
+                    EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::GearSet(gearset_idx, gear_idx), new_value))
                 }
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
@@ -316,9 +320,9 @@ impl GearConfiguration for GearSets {
 
     fn handle_update(&mut self, update_type: GearUpdateType) {
         match update_type {
-            GearUpdateType::UpdateRatio(gear_idx, ratio) => {
+            GearUpdateType::UpdateRatioValue(gear_idx, ratio) => {
                 match gear_idx {
-                    GearConfigIdentifier::GearSet(set_idx, gear_idx) => {
+                    GearIdentifier::GearSet(set_idx, gear_idx) => {
                         if let Some(gear_set) = self.updated_drivetrain_data.get_mut(&set_idx) {
                             if ratio.is_empty() {
                                 gear_set.insert(gear_idx, None);
@@ -395,7 +399,8 @@ impl GearConfiguration for GearSets {
 pub struct CustomizableGears {
     current_drivetrain_data: Vec<f64>,
     current_setup_data: Vec<SingleGear>,
-    new_setup_data: BTreeMap<GearLabel, RatioSet>
+    new_setup_data: BTreeMap<GearLabel, RatioSet>,
+    new_ratio_data: Option<(GearLabel, String, String)>
 }
 
 impl CustomizableGears {
@@ -405,22 +410,39 @@ impl CustomizableGears {
         col = col.push(text(gear_idx));
         let name_width = (ratio_set.max_name_length * 10).to_u16().unwrap_or(u16::MAX);
         for ratio_entry in ratio_set.entries() {
-            let mut name_label = TextInput::new("", &ratio_entry.name, |e|{ EditMessage::GearUpdate(GearUpdateType::RemoveGear()) }).width(Length::Units(name_width));
+            let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
             name_label = name_label.size(14);
-            let mut ratio_input = TextInput::new("",&ratio_entry.ratio.to_string(), |e|{ EditMessage::GearUpdate(GearUpdateType::RemoveGear()) }).width(Length::Units(56));
+            let ratio_string = ratio_entry.ratio.to_string();
+            let mut ratio_input = Text::new(ratio_string).width(Length::Units(56));
             ratio_input = ratio_input.size(14);
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
             r = r.push(name_label);
             r = r.push(ratio_input);
-            r = r.push(iced::widget::button(Image::new(Handle::from_memory(DELETE_IMAGE)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0));
+            r = r.push(iced::widget::button(Svg::new(Handle::from_memory(DELETE_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0));
             col = col.push(r);
         }
-        let add_ratio_button = iced::widget::button(
+        col
+    }
+
+    fn add_gear_ratio_button(label: GearLabel) -> iced::widget::Button<'static, EditMessage> {
+        iced::widget::button(
             text("Add Ratio").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::AddRatio(GearConfigIdentifier::CustomizedGears(0))));
-        col.push(add_ratio_button)
+            .on_press(EditMessage::GearUpdate(GearUpdateType::AddRatio(GearIdentifier::CustomizedGears(label, 0))))
+    }
+
+    fn add_gear_ratio_entry_row(current_name: String, current_ratio: String, name_max_width: u16) -> Row<'static, EditMessage> {
+        let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
+        r = r.push(Text::new(current_name).width(Length::Units(name_max_width)).size(14));
+        r = r.push(Text::new(current_ratio).width(Length::Units(56)).size(14));
+        let mut confirm = iced::widget::button(Svg::new(Handle::from_memory(ADD_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0);
+        confirm = confirm.on_press(EditMessage::GearUpdate(GearUpdateType::ConfirmNewRatio()));
+        r = r.push(confirm);
+        let mut discard = iced::widget::button(Svg::new(Handle::from_memory(DELETE_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0);
+        discard = discard.on_press(EditMessage::GearUpdate(GearUpdateType::DiscardNewRatio()));
+        r = r.push(discard);
+        r
     }
 }
 
@@ -430,7 +452,23 @@ impl GearConfiguration for CustomizableGears {
     }
 
     fn handle_update(&mut self, update_type: GearUpdateType) {
-        todo!()
+        match update_type {
+            GearUpdateType::AddRatio(gear_idx) => {
+                match gear_idx {
+                    GearIdentifier::CustomizedGears(gear_idx, ratio_idx) => {
+                        self.new_ratio_data = Some((gear_idx, String::new(), String::new()));
+                    },
+                    _ => {}
+                }
+            },
+            GearUpdateType::ConfirmNewRatio() => {
+                self.new_ratio_data = None;
+            },
+            GearUpdateType::DiscardNewRatio() => {
+                self.new_ratio_data = None;
+            },
+            _ => {}
+        }
     }
 
     fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
@@ -438,9 +476,21 @@ impl GearConfiguration for CustomizableGears {
     {
         let mut gearset_roe = Row::new().spacing(5).padding(Padding::from([0, 10])).width(Length::Shrink);
         for (gear_idx, ratio_set) in &self.new_setup_data {
-            gearset_roe = gearset_roe.push(Self::create_gear_ratio_column(gear_idx, ratio_set));
+            let mut gear_col = Self::create_gear_ratio_column(gear_idx, ratio_set);
+            if let Some((adding_gear_label, ratio_name, ratio)) = &self.new_ratio_data {
+                if adding_gear_label == gear_idx {
+                    let max_len = max(ratio_set.max_name_length, ratio_name.len());
+                    let name_width = (max_len * 10).to_u16().unwrap_or(100);
+                    gear_col = gear_col.push(Self::add_gear_ratio_entry_row(ratio_name.clone(), ratio.clone(), name_width))
+                } else {
+                    gear_col = gear_col.push(Self::add_gear_ratio_button(gear_idx.clone()));
+                }
+            } else {
+                gear_col = gear_col.push(Self::add_gear_ratio_button(gear_idx.clone()));
+            }
+            gearset_roe = gearset_roe.push(gear_col);
         }
-        let s = scrollable(gearset_roe).horizontal_scroll(Properties::default()).height(Length::FillPortion(6));
+        let mut s = scrollable(gearset_roe).horizontal_scroll(Properties::default()).height(Length::FillPortion(6));
         layout = layout.push(s);
         let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5);
         let add_gear_button = iced::widget::button(
@@ -453,7 +503,8 @@ impl GearConfiguration for CustomizableGears {
             text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::RemoveGear()));
+            .on_press(EditMessage::GearUpdate(GearUpdateType::RemoveGear()))
+            .style(Button::Destructive);
         add_remove_row = add_remove_row.push(delete_gear_button);
         add_remove_row = add_remove_row.height(Length::FillPortion(1));
         layout.push(add_remove_row)
@@ -476,3 +527,18 @@ impl button::StyleSheet for DeleteButtonStyle {
     // other methods in Stylesheet have a default impl
 }
 
+// #[derive(Clone, Copy, Debug)]
+// pub struct GearStyle;
+//
+// impl scrollable::StyleSheet for GearStyle {
+//     type Style = Theme;
+//
+//     fn active(&self, _style: &Self::Style) -> scrollable::Appearance {
+//         button::Appearance {
+//             background: Some(iced::Background::Color(iced::Color::from_rgb(0.89,0.15,0.21))),
+//             text_color: iced::Color::BLACK,
+//             ..Default::default()
+//         }
+//     }
+//     // other methods in Stylesheet have a default impl
+// }

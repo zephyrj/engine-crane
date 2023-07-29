@@ -20,11 +20,14 @@
  */
 
 pub mod gear_config;
+
 pub use gear_config::{gear_configuration_builder, GearConfiguration};
 
 use std::cmp::{max, Ordering};
-use std::collections::{BTreeSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
+use iced::widget::TextInput;
+use itertools::Itertools;
 
 use crate::assetto_corsa::car::data::setup::gears::SingleGear;
 
@@ -53,23 +56,26 @@ pub enum FinalDriveChoice {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GearConfigIdentifier {
+pub enum GearIdentifier {
     Fixed(usize),
     GearSet(usize, usize),
-    CustomizedGears(usize)
+    CustomizedGears(GearLabel, usize)
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum GearUpdateType {
     AddGear(),
     RemoveGear(),
-    AddRatio(GearConfigIdentifier),
-    UpdateRatio(GearConfigIdentifier, String),
-    RemoveRatio(GearConfigIdentifier)
+    AddRatio(GearIdentifier),
+    UpdateRatioName(GearIdentifier, String),
+    UpdateRatioValue(GearIdentifier, String),
+    RemoveRatio(GearIdentifier),
+    ConfirmNewRatio(),
+    DiscardNewRatio()
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct GearLabel {
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GearLabel {
     idx: usize
 }
 
@@ -92,13 +98,14 @@ impl From<usize> for GearLabel {
 }
 
 struct RatioEntry {
+    pub idx: usize,
     pub name: String,
     pub ratio: f64
 }
 
 impl RatioEntry {
-    pub fn new(name: String, ratio: f64) -> RatioEntry {
-        RatioEntry {name, ratio}
+    fn new(idx: usize, name: String, ratio: f64) -> RatioEntry {
+        RatioEntry {idx, name, ratio}
     }
 
     pub fn total_cmp(&self, other: &RatioEntry) -> Ordering {
@@ -127,15 +134,17 @@ impl Ord for RatioEntry {
 }
 
 struct RatioSet {
-    entries: BTreeSet<RatioEntry>,
-    max_name_length: usize
+    entries: BTreeMap<usize, RatioEntry>,
+    max_name_length: usize,
+    next_idx: usize
 }
 
 impl RatioSet {
     pub fn new() -> RatioSet {
         RatioSet {
-            entries: BTreeSet::new(),
-            max_name_length: 0
+            entries: BTreeMap::new(),
+            max_name_length: 0,
+            next_idx: 0
         }
     }
 
@@ -143,40 +152,57 @@ impl RatioSet {
         self.max_name_length
     }
 
-    pub fn entries(&self) -> &BTreeSet<RatioEntry> {
-        &self.entries
+    pub fn entries(&self) -> Vec<&RatioEntry> {
+        let mut v = Vec::from_iter(self.entries.values());
+        v.sort();
+        v
     }
 
-    pub fn mut_entries(&mut self) -> &mut BTreeSet<RatioEntry> {
-        &mut self.entries
+    pub fn mut_entries(&mut self) -> Vec<&mut RatioEntry> {
+        let mut v = Vec::from_iter(self.entries.values_mut());
+        v.sort();
+        v
     }
 
-    pub fn insert(&mut self, new_entry: RatioEntry) -> bool {
-        self.max_name_length = max(self.max_name_length , new_entry.name.len());
-        self.entries.insert(new_entry)
+    pub fn insert(&mut self, ratio_name: String, ratio: f64) -> usize {
+        self.max_name_length = max(self.max_name_length , ratio_name.len());
+        let idx = self.next_idx;
+        self.next_idx += 1;
+        self.entries.insert(idx, RatioEntry::new(idx, ratio_name, ratio));
+        idx
     }
 
-    pub fn remove(&mut self, entry: RatioEntry) -> bool {
-        if self.entries.remove(&entry) {
-            if entry.name.len() == self.max_name_length {
-                self.max_name_length = 0;
-                for entry in &self.entries {
-                    self.max_name_length = max(self.max_name_length, entry.name.len());
+    pub fn update_ratio_name(&mut self, idx: usize, new_name: String) {
+        match self.entries.get_mut(&idx) {
+            None => {}
+            Some(entry) => { entry.name = new_name }
+        }
+    }
+
+    pub fn update_ratio_value(&mut self, idx: usize, new_value: f64) {
+        match self.entries.get_mut(&idx) {
+            None => {}
+            Some(entry) => { entry.ratio = new_value }
+        }
+    }
+
+    pub fn remove(&mut self, idx: usize) -> bool {
+        return match self.entries.remove(&idx) {
+            None => { false }
+            Some(removed) => {
+                if removed.name.len() == self.max_name_length {
+                    self.max_name_length = 0;
+                    for entry in self.entries.values() {
+                        self.max_name_length = max(self.max_name_length, entry.name.len());
+                    }
                 }
+                true
             }
-            return true;
         }
-        return false;
     }
-}
 
-impl FromIterator<RatioEntry> for RatioSet {
-    fn from_iter<T: IntoIterator<Item=RatioEntry>>(iter: T) -> Self {
-        let mut s = RatioSet::new();
-        for entry in iter {
-            s.insert(entry);
-        }
-        s
+    pub fn remove_entry(&mut self, entry: &RatioEntry) -> bool {
+        self.remove(entry.idx)
     }
 }
 
