@@ -24,14 +24,11 @@ use std::collections::{HashMap, BTreeMap, HashSet, BTreeSet};
 use std::num::ParseFloatError;
 use std::path::PathBuf;
 use fraction::ToPrimitive;
-use iced::{Alignment, Application, ContentFit, Length, Padding, Theme};
+use iced::{Alignment, Length, Padding, Theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::theme::Button;
-use iced::widget::{button, Column, Container, Row, scrollable, Svg, text, Text, text_input, TextInput};
+use iced::widget::{button, Column, Container, Row, scrollable, text, Text, text_input};
 use iced::widget::scrollable::Properties;
-use iced::widget::Image;
-use iced::widget::svg::Handle;
-use crate::ui::image_data::{ADD_SVG, DELETE_SVG};
 
 use tracing::{error, warn};
 use crate::assetto_corsa::Car;
@@ -40,8 +37,9 @@ use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::setup::Setup;
 use crate::assetto_corsa::car::data::setup::gears::{GearSet, GearConfig, GearData, SingleGear};
 use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
+use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
 use crate::ui::edit::EditMessage;
-use crate::ui::edit::gears::{GearConfigChoice, GearIdentifier, GearLabel, GearUpdateType, RatioEntry, RatioSet};
+use crate::ui::edit::gears::{GearConfigChoice, GearIdentifier, GearLabel, GearUpdateType, RatioSet};
 
 
 pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearConfiguration>, String> {
@@ -419,9 +417,7 @@ impl CustomizableGears {
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
             r = r.push(name_label);
             r = r.push(ratio_input);
-            let mut remove_ratio_button = iced::widget::button(Svg::new(Handle::from_memory(DELETE_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0);
-            remove_ratio_button = remove_ratio_button.on_press(EditMessage::GearUpdate(GearUpdateType::RemoveRatio(GearIdentifier::CustomizedGears(gear_idx.clone(), ratio_entry.idx))));
-            r = r.push(remove_ratio_button);
+            r = r.push(create_delete_button(EditMessage::GearUpdate(GearUpdateType::RemoveRatio(GearIdentifier::CustomizedGears(gear_idx.clone(), ratio_entry.idx)))).height(Length::Units(20)).width(Length::Units(20)));
             col = col.push(r);
         }
         col
@@ -441,14 +437,14 @@ impl CustomizableGears {
         let (label, name, ratio) = new_ratio_data;
         r = r.push(text_input("", &name, move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioName(GearIdentifier::CustomizedGears(label.clone(), 0), new_val))}).width(Length::Units(name_max_width)).size(14));
         r = r.push(text_input("", &ratio, move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::CustomizedGears(label.clone(), 0), new_val))}).width(Length::Units(56)).size(14));
-        let mut confirm = iced::widget::button(Svg::new(Handle::from_memory(ADD_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0);
+        let mut confirm;
         if !ratio.is_empty() {
-            confirm = confirm.on_press(EditMessage::GearUpdate(GearUpdateType::ConfirmNewRatio()));
+            confirm = create_add_button(EditMessage::GearUpdate(GearUpdateType::ConfirmNewRatio()));
+        } else {
+            confirm = create_disabled_add_button().height(Length::Units(20)).width(Length::Units(20));
         }
-        r = r.push(confirm);
-        let mut discard = iced::widget::button(Svg::new(Handle::from_memory(DELETE_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0);
-        discard = discard.on_press(EditMessage::GearUpdate(GearUpdateType::DiscardNewRatio()));
-        r = r.push(discard);
+        r = r.push(confirm.height(Length::Units(20)).width(Length::Units(20)));
+        r = r.push(create_delete_button(EditMessage::GearUpdate(GearUpdateType::DiscardNewRatio())).height(Length::Units(20)).width(Length::Units(20)));
         r
     }
 }
@@ -497,7 +493,11 @@ impl GearConfiguration for CustomizableGears {
                         Some(ratio_set) => {
                             match ratio.parse::<f64>() {
                                 Ok(ratio_f) => {
-                                    ratio_set.insert(name.clone(), ratio_f);
+                                    let gear_name = match name.is_empty() {
+                                        true => ratio.clone(),
+                                        false => name.clone()
+                                    };
+                                    ratio_set.insert(gear_name, ratio_f);
                                 }
                                 Err(_) => {}
                             }
@@ -545,7 +545,7 @@ impl GearConfiguration for CustomizableGears {
         }
         let s = scrollable(gearset_roe).horizontal_scroll(Properties::default()).height(Length::FillPortion(6));
         layout = layout.push(s);
-        let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5);
+        let mut add_remove_row = Row::new().height(Length::Shrink).width(Length::Shrink).spacing(5);
         let add_gear_button = iced::widget::button(
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
@@ -559,8 +559,7 @@ impl GearConfiguration for CustomizableGears {
             .on_press(EditMessage::GearUpdate(GearUpdateType::RemoveGear()))
             .style(Button::Destructive);
         add_remove_row = add_remove_row.push(delete_gear_button);
-        add_remove_row = add_remove_row.height(Length::FillPortion(1));
-        layout.push(add_remove_row)
+        layout.push(Container::new(add_remove_row).height(Length::FillPortion(1)).align_y(Vertical::Top).padding(0))
     }
 }
 

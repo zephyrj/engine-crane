@@ -23,6 +23,7 @@ mod swap;
 mod edit;
 mod settings;
 mod image_data;
+mod button;
 
 use std::ffi::OsStr;
 use std::fs;
@@ -479,10 +480,8 @@ trait Tab {
             .push(self.content(app_data));
 
         Container::new(column)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Center)
+            .align_x(Horizontal::Left)
+            .align_y(Vertical::Top)
             .padding(Padding::from([TAB_PADDING*2, TAB_PADDING, TAB_PADDING, TAB_PADDING]))
             .into()
     }

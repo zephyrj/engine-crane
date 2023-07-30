@@ -19,5 +19,5 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub(crate) const ADD_SVG: &[u8] = include_bytes!("resources/plus-square.svg");
-pub(crate) const DELETE_SVG: &[u8] = include_bytes!("resources/x-square.svg");
+pub(crate) const ADD_SVG: &[u8] = include_bytes!("resources/plus-lg.svg");
+pub(crate) const DELETE_SVG: &[u8] = include_bytes!("resources/x-lg.svg");

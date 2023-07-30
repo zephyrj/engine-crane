@@ -25,6 +25,7 @@ use super::{Message, Tab};
 use std::path::{PathBuf};
 
 use iced::{Alignment, Element, Length, Padding};
+use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule};
 use iced_aw::{TabLabel};
 use tracing::{error};
@@ -151,8 +152,10 @@ impl Tab for EditTab {
             layout = gear_config.add_editable_gear_list(layout);
         }
         let content : Element<'_, EditMessage> = Container::new(layout)
-            .width(Length::Fill)
-            .height(Length::Fill)
+            //.width(Length::Fill)
+            .align_x(Horizontal::Left)
+            //.height(Length::Fill)
+            .align_y(Vertical::Top)
             .padding(20)
             .into();
         content.map(Message::Edit)
