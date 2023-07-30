@@ -21,6 +21,7 @@
 
 use std::cmp::max;
 use std::collections::{HashMap, BTreeMap, HashSet, BTreeSet};
+use std::num::ParseFloatError;
 use std::path::PathBuf;
 use fraction::ToPrimitive;
 use iced::{Alignment, Application, ContentFit, Length, Padding, Theme};
@@ -418,7 +419,9 @@ impl CustomizableGears {
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
             r = r.push(name_label);
             r = r.push(ratio_input);
-            r = r.push(iced::widget::button(Svg::new(Handle::from_memory(DELETE_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0));
+            let mut remove_ratio_button = iced::widget::button(Svg::new(Handle::from_memory(DELETE_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0);
+            remove_ratio_button = remove_ratio_button.on_press(EditMessage::GearUpdate(GearUpdateType::RemoveRatio(GearIdentifier::CustomizedGears(gear_idx.clone(), ratio_entry.idx))));
+            r = r.push(remove_ratio_button);
             col = col.push(r);
         }
         col
@@ -432,12 +435,16 @@ impl CustomizableGears {
             .on_press(EditMessage::GearUpdate(GearUpdateType::AddRatio(GearIdentifier::CustomizedGears(label, 0))))
     }
 
-    fn add_gear_ratio_entry_row(current_name: String, current_ratio: String, name_max_width: u16) -> Row<'static, EditMessage> {
+    fn add_gear_ratio_entry_row(new_ratio_data: (GearLabel, String, String), name_max_width: u16) -> Row<'static, EditMessage>
+    {
         let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
-        r = r.push(Text::new(current_name).width(Length::Units(name_max_width)).size(14));
-        r = r.push(Text::new(current_ratio).width(Length::Units(56)).size(14));
+        let (label, name, ratio) = new_ratio_data;
+        r = r.push(text_input("", &name, move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioName(GearIdentifier::CustomizedGears(label.clone(), 0), new_val))}).width(Length::Units(name_max_width)).size(14));
+        r = r.push(text_input("", &ratio, move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::CustomizedGears(label.clone(), 0), new_val))}).width(Length::Units(56)).size(14));
         let mut confirm = iced::widget::button(Svg::new(Handle::from_memory(ADD_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0);
-        confirm = confirm.on_press(EditMessage::GearUpdate(GearUpdateType::ConfirmNewRatio()));
+        if !ratio.is_empty() {
+            confirm = confirm.on_press(EditMessage::GearUpdate(GearUpdateType::ConfirmNewRatio()));
+        }
         r = r.push(confirm);
         let mut discard = iced::widget::button(Svg::new(Handle::from_memory(DELETE_SVG)).content_fit(ContentFit::Fill)).height(Length::Units(20)).width(Length::Units(20)).padding(0);
         discard = discard.on_press(EditMessage::GearUpdate(GearUpdateType::DiscardNewRatio()));
@@ -461,11 +468,57 @@ impl GearConfiguration for CustomizableGears {
                     _ => {}
                 }
             },
+            GearUpdateType::UpdateRatioName(gear_idx, new_val) => {
+                match gear_idx {
+                    GearIdentifier::CustomizedGears(_, _) => {
+                        if let Some((_, name, _)) = &mut self.new_ratio_data {
+                            *name = new_val;
+                        }
+                    },
+                    _ => {}
+                }
+            },
+            GearUpdateType::UpdateRatioValue(gear_idx, new_val) => {
+                match gear_idx {
+                    GearIdentifier::CustomizedGears(_, _) => {
+                        if let Some((_, _, ratio)) = &mut self.new_ratio_data {
+                            if new_val.is_empty() || new_val.parse::<f64>().is_ok() {
+                                *ratio = new_val;
+                            }
+                        }
+                    },
+                    _ => {}
+                }
+            },
             GearUpdateType::ConfirmNewRatio() => {
-                self.new_ratio_data = None;
+                if let Some((label , name, ratio)) = &self.new_ratio_data {
+                    match self.new_setup_data.get_mut(label) {
+                        None => {}
+                        Some(ratio_set) => {
+                            match ratio.parse::<f64>() {
+                                Ok(ratio_f) => {
+                                    ratio_set.insert(name.clone(), ratio_f);
+                                }
+                                Err(_) => {}
+                            }
+                        }
+                    }
+                    self.new_ratio_data = None;
+                }
+
             },
             GearUpdateType::DiscardNewRatio() => {
                 self.new_ratio_data = None;
+            },
+            GearUpdateType::RemoveRatio(gear_idx) => {
+                match gear_idx {
+                    GearIdentifier::CustomizedGears(label, ratio_idx) => {
+                        if let Some(ratio_set) = self.new_setup_data.get_mut(&label) {
+                            ratio_set.remove(ratio_idx);
+                        }
+                    },
+                    _ => {}
+                }
             },
             _ => {}
         }
@@ -481,7 +534,7 @@ impl GearConfiguration for CustomizableGears {
                 if adding_gear_label == gear_idx {
                     let max_len = max(ratio_set.max_name_length, ratio_name.len());
                     let name_width = (max_len * 10).to_u16().unwrap_or(100);
-                    gear_col = gear_col.push(Self::add_gear_ratio_entry_row(ratio_name.clone(), ratio.clone(), name_width))
+                    gear_col = gear_col.push(Self::add_gear_ratio_entry_row((adding_gear_label.clone(), ratio_name.clone(), ratio.clone()), name_width))
                 } else {
                     gear_col = gear_col.push(Self::add_gear_ratio_button(gear_idx.clone()));
                 }
@@ -490,7 +543,7 @@ impl GearConfiguration for CustomizableGears {
             }
             gearset_roe = gearset_roe.push(gear_col);
         }
-        let mut s = scrollable(gearset_roe).horizontal_scroll(Properties::default()).height(Length::FillPortion(6));
+        let s = scrollable(gearset_roe).horizontal_scroll(Properties::default()).height(Length::FillPortion(6));
         layout = layout.push(s);
         let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5);
         let add_gear_button = iced::widget::button(

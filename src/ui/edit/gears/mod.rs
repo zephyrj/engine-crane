@@ -74,7 +74,7 @@ pub enum GearUpdateType {
     DiscardNewRatio()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GearLabel {
     idx: usize
 }
