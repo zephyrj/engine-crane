@@ -20,8 +20,7 @@
  */
 
 use std::cmp::max;
-use std::collections::{HashMap, BTreeMap, HashSet, BTreeSet};
-use std::num::ParseFloatError;
+use std::collections::{BTreeMap};
 use std::path::PathBuf;
 use fraction::ToPrimitive;
 use iced::{Alignment, Length, Padding, Theme};
@@ -161,7 +160,6 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
         }
     }
 }
-
 
 pub trait GearConfiguration {
     fn get_config_type(&self) -> GearConfigChoice;
@@ -518,6 +516,22 @@ impl GearConfiguration for CustomizableGears {
                         }
                     },
                     _ => {}
+                }
+            },
+            GearUpdateType::AddGear() => {
+                let next_idx: usize;
+                if let Some((l, _)) = self.new_setup_data.last_key_value() {
+                    next_idx = l.idx + 1;
+                } else {
+                    next_idx = 1;
+                }
+                if next_idx <= 10 {
+                    self.new_setup_data.insert(GearLabel{idx: next_idx}, RatioSet::new());
+                }
+            },
+            GearUpdateType::RemoveGear() => {
+                if !self.new_setup_data.is_empty() {
+                    self.new_setup_data.pop_last();
                 }
             },
             _ => {}
