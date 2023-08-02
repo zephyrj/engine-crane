@@ -2,7 +2,7 @@
 A tool to put engines created in [Automation](https://store.steampowered.com/app/293760/Automation__The_Car_Company_Tycoon_Game/) into [Assetto Corsa](https://store.steampowered.com/app/244210/Assetto_Corsa/).
 
 #### Code quality 
-Don't copy it; initially created to learn the Rust Programming language. The current working practice can be best be summarised as "please just work". This will be improved over time
+Initially created to learn the Rust Programming language; I wouldn't recommend trying to learn from this code. The current working practice can be best be summarised as "please just work". This will be improved over time
 
 ----
 
