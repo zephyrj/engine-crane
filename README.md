@@ -7,7 +7,7 @@ Initially created to learn the Rust Programming language; I wouldn't recommend t
 ----
 
 ### How to use
-A guide on how to install and use it can be found at: https://sykology.dev/
+A guide on how to install and use it can be found on YouTube [here](https://youtu.be/8fMQCYiAgVU)
 
 ----
 
