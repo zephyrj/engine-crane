@@ -19,7 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::{BTreeMap};
 use std::path::PathBuf;
 use fraction::ToPrimitive;
@@ -51,11 +51,13 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
         }
     };
     let drivetrain_data: Vec<f64>;
+    let current_final_drive: f64;
     match Drivetrain::from_car(&mut car) {
         Ok(drivetrain) => {
             match extract_mandatory_section::<data::drivetrain::Gearbox>(&drivetrain) {
                 Ok(gearbox) => {
-                    drivetrain_data = gearbox.clone_gear_ratios();
+                    drivetrain_data = gearbox.gear_ratios().iter().map(|ratio| *ratio).collect();
+                    current_final_drive = gearbox.final_gear_ratio;
                 }
                 Err(err) => {
                     return Err(format!("Failed to load Gearbox data from {}. {}", ac_car_path.display(), err.to_string()));
@@ -66,30 +68,33 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
             return Err(format!("Failed to load drivetrain from {}. {}", ac_car_path.display(), err.to_string()));
         }
     };
-
-    let setup_data = match Setup::from_car(&mut car) {
-        Ok(opt) => {
-            match opt {
-                Some(setup_data) => {
-                    match GearData::load_from_parent(&setup_data) {
-                        Ok(gear_data) => {
-                            Some(gear_data)
-                        }
-                        Err(err) => {
-                            return Err(format!("Failed to load gear data from {}. {}", ac_car_path.display(), err.to_string()));
+    let gear_setup_data: Option<GearData>;
+    {
+        let setup = Setup::from_car(&mut car);
+        gear_setup_data = match setup {
+            Ok(opt) => {
+                match opt {
+                    Some(setup_data) => {
+                        match GearData::load_from_parent(&setup_data) {
+                            Ok(gear_data) => {
+                                Some(gear_data)
+                            }
+                            Err(err) => {
+                                return Err(format!("Failed to load gear data from {}. {}", ac_car_path.display(), err.to_string()));
+                            }
                         }
                     }
+                    None => None
                 }
-                None => None
             }
-        }
-        Err(err) => {
-            warn!("Failed to load {}.{}", ac_car_path.display(), err.to_string());
-            None
-        }
-    };
+            Err(err) => {
+                warn!("Failed to load {}.{}", ac_car_path.display(), err.to_string());
+                None
+            }
+        };
+    }
 
-    let config_type = match &setup_data {
+    let gear_config_type = match &gear_setup_data {
         None => GearConfigChoice::Fixed,
         Some(gear_data) => {
             match &gear_data.gear_config {
@@ -103,17 +108,19 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
             }
         }
     };
-    return match config_type {
+    let final_drive_data = FinalDrive::from_gear_data(current_final_drive, &gear_setup_data);
+    return match gear_config_type {
         GearConfigChoice::Fixed => {
             let updated_drivetrain_data = drivetrain_data.iter().enumerate().map(|(idx, _)| (idx, None)).collect();
             Ok(Box::new(FixedGears {
                 current_drivetrain_data: drivetrain_data,
-                updated_drivetrain_data
+                updated_drivetrain_data,
+                final_drive_data
             }))
         }
         GearConfigChoice::GearSets => {
             let current_setup_data;
-            match setup_data.unwrap().gear_config.unwrap() {
+            match gear_setup_data.unwrap().gear_config.unwrap() {
                 GearConfig::GearSets(sets) => {
                     current_setup_data = sets
                 }
@@ -135,7 +142,7 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
         GearConfigChoice::PerGearConfig => {
             let mut current_setup_data = Vec::new();
             let mut new_setup_data= BTreeMap::new();
-            match setup_data.unwrap().gear_config.unwrap() {
+            match gear_setup_data.unwrap().gear_config.unwrap() {
                 GearConfig::PerGear(gears) => {
                     current_setup_data = gears;
                     for gear in &current_setup_data {
@@ -161,6 +168,13 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
     }
 }
 
+fn is_valid_ratio(val: &str) -> bool {
+    if val.is_empty() || val.parse::<f64>().is_ok() {
+        return true;
+    }
+    false
+}
+
 pub trait GearConfiguration {
     fn get_config_type(&self) -> GearConfigChoice;
     fn handle_update(&mut self, update_type: GearUpdateType);
@@ -171,9 +185,89 @@ pub trait GearConfiguration {
     }
 }
 
+pub struct FinalDrive {
+    current_final_drive: f64,
+    setup_data: Option<SingleGear>,
+    new_setup_data: RatioSet,
+    new_ratio_data: Option<(String, String)>
+}
+
+impl FinalDrive {
+    pub fn from_gear_data(final_drive: f64, gear_setup_data: &Option<GearData>) -> FinalDrive {
+        let current_final_drive = final_drive;
+        let setup_data = match gear_setup_data {
+            None => None,
+            Some(data) => data.final_drive.clone()
+        };
+        let mut new_setup_data = RatioSet::new();
+        match &setup_data {
+            None => {
+                new_setup_data.insert(String::from("DEFAULT"), current_final_drive);
+            }
+            Some(gear_data) => {
+                gear_data.ratios_lut.to_vec().into_iter().for_each(|pair| {
+                    new_setup_data.insert(pair.0, pair.1);
+                });
+            }
+        };
+        FinalDrive { current_final_drive, setup_data, new_setup_data, new_ratio_data: None }
+    }
+
+    pub fn create_final_drive_column(&self) -> Column<'static, EditMessage> {
+        let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5);
+        col = col.push(text("Final Drive"));
+        let name_width = (self.new_setup_data.max_name_length * 10).to_u16().unwrap_or(u16::MAX);
+        for ratio_entry in self.new_setup_data.entries() {
+            let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
+            name_label = name_label.size(14);
+            let ratio_string = ratio_entry.ratio.to_string();
+            let mut ratio_input = Text::new(ratio_string).width(Length::Units(56));
+            ratio_input = ratio_input.size(14);
+            let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
+            r = r.push(name_label);
+            r = r.push(ratio_input);
+            r = r.push(create_delete_button(EditMessage::GearUpdate(GearUpdateType::RemoveRatio(GearIdentifier::FinalDrive(ratio_entry.idx)))).height(Length::Units(20)).width(Length::Units(20)));
+            col = col.push(r);
+        }
+        if let Some(_) = &self.new_ratio_data {
+            col = col.push(self.add_gear_ratio_entry_row());
+        } else {
+            col = col.push(self.add_gear_ratio_button());
+        }
+        col
+    }
+
+    fn add_gear_ratio_button(&self) -> iced::widget::Button<'static, EditMessage> {
+        iced::widget::button(
+            text("Add Ratio").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
+        )   .width(Length::Units(75))
+            .height(Length::Units(25))
+            .on_press(EditMessage::GearUpdate(GearUpdateType::AddRatio(GearIdentifier::FinalDrive(0))))
+    }
+
+    fn add_gear_ratio_entry_row(&self) -> Row<'static, EditMessage>
+    {
+        let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
+        let (name, ratio) = self.new_ratio_data.as_ref().unwrap();
+        let name_max_width = (max(self.new_setup_data.max_name_len(), name.len()) * 10).to_u16().unwrap_or(u16::MAX);
+        r = r.push(text_input("", &name.clone(), move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioName(GearIdentifier::FinalDrive(0), new_val))}).width(Length::Units(name_max_width)).size(14));
+        r = r.push(text_input("", &ratio.clone(), move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::FinalDrive(0), new_val))}).width(Length::Units(56)).size(14));
+        let mut confirm;
+        if !ratio.is_empty() {
+            confirm = create_add_button(EditMessage::GearUpdate(GearUpdateType::ConfirmNewRatio()));
+        } else {
+            confirm = create_disabled_add_button().height(Length::Units(20)).width(Length::Units(20));
+        }
+        r = r.push(confirm.height(Length::Units(20)).width(Length::Units(20)));
+        r = r.push(create_delete_button(EditMessage::GearUpdate(GearUpdateType::DiscardNewRatio())).height(Length::Units(20)).width(Length::Units(20)));
+        r
+    }
+}
+
 pub struct FixedGears {
     current_drivetrain_data: Vec<f64>,
-    updated_drivetrain_data: BTreeMap<usize, Option<String>>
+    updated_drivetrain_data: BTreeMap<usize, Option<String>>,
+    final_drive_data: FinalDrive
 }
 
 impl FixedGears {
@@ -186,7 +280,7 @@ impl FixedGears {
                 .width(Length::Shrink)
                 .align_items(Alignment::Center)
                 .spacing(5);
-            let l = Text::new(format!("Gear {}", gear_idx+1)).vertical_alignment(Vertical::Bottom);
+            let l = Text::new(format!("Gear {}:", gear_idx+1)).vertical_alignment(Vertical::Bottom).width(Length::Units(100));
             let t = text_input(
                 placeholder,
                 new_ratio,
@@ -198,20 +292,6 @@ impl FixedGears {
             gear_list = gear_list.push(gear_row);
             max_gear_idx = gear_idx;
         }
-        let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5);
-        let add_gear_button = iced::widget::button(
-            text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
-        )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::AddGear()));
-        add_remove_row = add_remove_row.push(add_gear_button);
-        let delete_gear_button = iced::widget::button(
-            text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
-        )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::RemoveGear()));
-        add_remove_row = add_remove_row.push(delete_gear_button);
-        gear_list = gear_list.push(add_remove_row);
         gear_list
     }
 }
@@ -229,7 +309,7 @@ impl GearConfiguration for FixedGears {
                     GearIdentifier::Fixed(gear_idx) => {
                         if ratio.is_empty() {
                             self.updated_drivetrain_data.insert(gear_idx, None);
-                        } else {
+                        } else if is_valid_ratio(&ratio) {
                             self.updated_drivetrain_data.insert(gear_idx, Some(ratio));
                         }
                     },
@@ -245,6 +325,13 @@ impl GearConfiguration for FixedGears {
             },
             GearUpdateType::RemoveGear() => {
                 self.updated_drivetrain_data.pop_last();
+            },
+            GearUpdateType::UpdateFinalDrive(ratio) => {
+                if ratio.is_empty() {
+                    self.final_drive_data. = None;
+                } else if is_valid_ratio(&ratio) {
+                    self.updated_final_drive = Some(ratio);
+                }
             }
             _ => {}
         }
@@ -274,7 +361,24 @@ impl GearConfiguration for FixedGears {
 
             displayed_ratios.push((placeholder, current_val.to_string()));
         }
-        layout.push(Self::create_gear_ratio_column(displayed_ratios))
+        let mut holder = Row::new().width(Length::Shrink).spacing(10).align_items(Alignment::Start);
+        holder = holder.push(Self::create_gear_ratio_column(displayed_ratios));
+        holder = holder.push( self.final_drive_data.create_final_drive_column());
+        layout = layout.push(holder);
+        let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5).padding(Padding::from([10, 0])).align_items(Alignment::Center);
+        let add_gear_button = iced::widget::button(
+            text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
+        )   .width(Length::Units(75))
+            .height(Length::Units(25))
+            .on_press(EditMessage::GearUpdate(GearUpdateType::AddGear()));
+        add_remove_row = add_remove_row.push(add_gear_button);
+        let delete_gear_button = iced::widget::button(
+            text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
+        )   .width(Length::Units(75))
+            .height(Length::Units(25))
+            .on_press(EditMessage::GearUpdate(GearUpdateType::RemoveGear()));
+        add_remove_row = add_remove_row.push(delete_gear_button);
+        layout.push(add_remove_row)
     }
 }
 
@@ -323,7 +427,7 @@ impl GearConfiguration for GearSets {
                         if let Some(gear_set) = self.updated_drivetrain_data.get_mut(&set_idx) {
                             if ratio.is_empty() {
                                 gear_set.insert(gear_idx, None);
-                            } else {
+                            } else if is_valid_ratio(&ratio) {
                                 gear_set.insert(gear_idx, Some(ratio));
                             }
                         }
@@ -476,7 +580,7 @@ impl GearConfiguration for CustomizableGears {
                 match gear_idx {
                     GearIdentifier::CustomizedGears(_, _) => {
                         if let Some((_, _, ratio)) = &mut self.new_ratio_data {
-                            if new_val.is_empty() || new_val.parse::<f64>().is_ok() {
+                            if is_valid_ratio(&new_val) {
                                 *ratio = new_val;
                             }
                         }

@@ -59,7 +59,8 @@ pub enum FinalDriveChoice {
 pub enum GearIdentifier {
     Fixed(usize),
     GearSet(usize, usize),
-    CustomizedGears(GearLabel, usize)
+    CustomizedGears(GearLabel, usize),
+    FinalDrive(usize)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -69,6 +70,7 @@ pub enum GearUpdateType {
     AddRatio(GearIdentifier),
     UpdateRatioName(GearIdentifier, String),
     UpdateRatioValue(GearIdentifier, String),
+    UpdateFinalDrive(String),
     RemoveRatio(GearIdentifier),
     ConfirmNewRatio(),
     DiscardNewRatio()

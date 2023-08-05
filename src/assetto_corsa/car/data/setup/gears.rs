@@ -184,7 +184,7 @@ impl GearConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SingleGear {
     pub gear_id: String,
     pub ratios_lut: LutProperty<String, f64>,

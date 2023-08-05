@@ -31,7 +31,7 @@ use tracing::error;
 use crate::assetto_corsa::traits::DataInterface;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LutFile<K, V>
     where
         K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
@@ -96,7 +96,7 @@ impl<K, V> LutFile<K, V>
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InlineLut<K, V>
     where
         K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
@@ -157,7 +157,7 @@ impl<K, V> Display for InlineLut<K, V>
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LutType<K, V>
     where
         K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,

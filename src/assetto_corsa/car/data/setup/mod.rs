@@ -7,7 +7,7 @@ use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
 
 pub mod gears;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum HelpData {
     Empty,
     Id(String),

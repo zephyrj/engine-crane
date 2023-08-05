@@ -54,8 +54,12 @@ impl Gearbox {
         format!("GEAR_{}", gear_num)
     }
 
-    pub fn clone_gear_ratios(&self) -> Vec<f64> {
-        self.gear_ratios.clone()
+    pub fn gear_ratios(&self) -> &Vec<f64> {
+        &self.gear_ratios
+    }
+
+    pub fn final_drive(&self) -> f64 {
+        self.final_gear_ratio
     }
 }
 

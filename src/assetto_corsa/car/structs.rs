@@ -28,7 +28,7 @@ use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::car::lut_utils::LutType;
 use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, DataInterface};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LutProperty<K, V>
     where
         K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
