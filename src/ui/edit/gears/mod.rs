@@ -77,7 +77,8 @@ pub enum FinalDriveUpdate {
     UpdateFinalRatioName(String),
     UpdateFinalRatioVal(String),
     ConfirmNewFinalRatio(),
-    DiscardNewFinalRatio()
+    DiscardNewFinalRatio(),
+    DefaultSelected(usize)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,7 +92,8 @@ pub enum FixedGearUpdate {
 pub enum GearsetUpdate {
     AddGear(),
     RemoveGear(),
-    UpdateRatio(usize, usize, String)
+    UpdateRatio(GearsetLabel, usize, String),
+    DefaultGearsetSelected(GearsetLabel)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -99,6 +101,7 @@ pub enum CustomizedGearUpdate {
     AddGear(),
     RemoveGear(),
     AddRatio(GearLabel),
+    DefaultRatioSelected(GearLabel, usize),
     RemoveRatio(GearLabel, usize),
     UpdateRatioName(String),
     UpdateRatioValue(String),
@@ -126,6 +129,28 @@ impl From<GearLabel> for usize {
 impl From<usize> for GearLabel {
     fn from(value: usize) -> Self {
         GearLabel { idx: value }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GearsetLabel {
+    idx: usize,
+    name: String
+}
+
+impl GearsetLabel {
+    pub fn new(idx: usize, name: String) -> GearsetLabel {
+        GearsetLabel { idx, name }
+    }
+
+    pub fn idx(&self) -> usize {
+        self.idx
+    }
+}
+
+impl Display for GearsetLabel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
     }
 }
 
@@ -168,7 +193,8 @@ impl Ord for RatioEntry {
 struct RatioSet {
     entries: BTreeMap<usize, RatioEntry>,
     max_name_length: usize,
-    next_idx: usize
+    next_idx: usize,
+    default_idx: Option<usize>
 }
 
 impl RatioSet {
@@ -176,7 +202,8 @@ impl RatioSet {
         RatioSet {
             entries: BTreeMap::new(),
             max_name_length: 0,
-            next_idx: 0
+            next_idx: 0,
+            default_idx: None
         }
     }
 
@@ -204,24 +231,15 @@ impl RatioSet {
         idx
     }
 
-    pub fn update_ratio_name(&mut self, idx: usize, new_name: String) {
-        match self.entries.get_mut(&idx) {
-            None => {}
-            Some(entry) => { entry.name = new_name }
-        }
-    }
-
-    pub fn update_ratio_value(&mut self, idx: usize, new_value: f64) {
-        match self.entries.get_mut(&idx) {
-            None => {}
-            Some(entry) => { entry.ratio = new_value }
-        }
-    }
-
     pub fn remove(&mut self, idx: usize) -> bool {
         return match self.entries.remove(&idx) {
             None => { false }
             Some(removed) => {
+                if let Some(default_idx) = self.default_idx {
+                    if idx == default_idx {
+                        self.default_idx = None;
+                    }
+                }
                 if removed.name.len() == self.max_name_length {
                     self.max_name_length = 0;
                     for entry in self.entries.values() {
@@ -236,5 +254,33 @@ impl RatioSet {
     pub fn remove_entry(&mut self, entry: &RatioEntry) -> bool {
         self.remove(entry.idx)
     }
+
+    pub fn update_ratio_name(&mut self, idx: usize, new_name: String) {
+        match self.entries.get_mut(&idx) {
+            None => {}
+            Some(entry) => { entry.name = new_name }
+        }
+    }
+
+    pub fn update_ratio_value(&mut self, idx: usize, new_value: f64) {
+        match self.entries.get_mut(&idx) {
+            None => {}
+            Some(entry) => { entry.ratio = new_value }
+        }
+    }
+
+    pub fn default(&self) -> Option<usize> {
+        self.default_idx
+    }
+
+    pub fn set_default(&mut self, idx: usize) -> Result<(), String> {
+        if !self.entries.contains_key(&idx) {
+            return Err(format!("Index {} doesn't exist", idx));
+        }
+        self.default_idx = Some(idx);
+        Ok(())
+    }
+
+
 }
 

@@ -26,8 +26,9 @@ use fraction::ToPrimitive;
 use iced::{Alignment, Length, Padding, Theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::theme::Button;
-use iced::widget::{button, Column, Container, Row, scrollable, text, Text, text_input};
+use iced::widget::{button, Column, Container, Radio, Row, scrollable, text, Text, text_input};
 use iced::widget::scrollable::Properties;
+use iced_native::widget::container;
 
 use tracing::{error, warn};
 use crate::assetto_corsa::Car;
@@ -36,13 +37,15 @@ use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::setup::Setup;
 use crate::assetto_corsa::car::data::setup::gears::{GearSet, GearConfig, GearData, SingleGear};
 use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
+use crate::automation::car::AttributeValue::True;
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::{GearUpdate};
-use crate::ui::edit::gears::{CustomizedGearUpdate, FinalDriveUpdate, FixedGearUpdate, GearConfigChoice, GearLabel, GearsetUpdate, GearUpdateType, RatioSet};
-use crate::ui::edit::gears::CustomizedGearUpdate::{ConfirmNewRatio, DiscardNewRatio, UpdateRatioName, UpdateRatioValue};
+use crate::ui::edit::gears::{CustomizedGearUpdate, FinalDriveUpdate, FixedGearUpdate, GearConfigChoice, GearLabel, GearsetLabel, GearsetUpdate, GearUpdateType, RatioSet};
+use crate::ui::edit::gears::CustomizedGearUpdate::{ConfirmNewRatio, DefaultRatioSelected, DiscardNewRatio, UpdateRatioName, UpdateRatioValue};
 use crate::ui::edit::gears::FinalDriveUpdate::{AddRatioPressed, ConfirmNewFinalRatio, DiscardNewFinalRatio, RemoveRatioPressed, UpdateFinalRatioName, UpdateFinalRatioVal};
 use crate::ui::edit::gears::FixedGearUpdate::{UpdateRatio};
+use crate::ui::edit::gears::GearsetUpdate::DefaultGearsetSelected;
 use crate::ui::edit::gears::GearUpdateType::{Fixed, Gearset, CustomizedGear};
 
 
@@ -134,15 +137,38 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
                 }
             }
             //updated_drivetrain_data: BTreeMap<String, BTreeMap<usize, Option<String>>>
-            let updated_drivetrain_data = current_setup_data.iter().enumerate().map(|(idx, gear_set)| {
-                let ratio_map: BTreeMap<usize, Option<String>> = gear_set.ratios().iter().enumerate().map(|(idx, _)| (idx, None)).collect();
-                (idx, ratio_map)
-            }).collect();
+            let mut default_gearset = None;
+            let updated_drivetrain_data = current_setup_data.iter().enumerate().map(
+                |(gearset_idx, gear_set)| {
+                    let mut is_default = true;
+                    let mut ratio_map: BTreeMap<usize, Option<String>> = BTreeMap::new();
+                    gear_set.ratios().iter().enumerate().for_each(
+                        |(gear_idx, ratio)| {
+                            if is_default {
+                                if let Some(drivetrain_ratio) = drivetrain_data.get(gear_idx) {
+                                    if *drivetrain_ratio != *ratio {
+                                        is_default = false;
+                                    }
+                                } else {
+                                    is_default = false;
+                                }
+                            }
+                            ratio_map.insert(gear_idx, None);
+                        }
+                    );
+                    let label = GearsetLabel::new(gearset_idx, gear_set.name().to_string());
+                    if is_default {
+                        default_gearset = Some(label.clone());
+                    }
+                    (label, ratio_map)
+                }
+            ).collect();
             Ok(Box::new(GearSets {
                 current_drivetrain_data: drivetrain_data,
                 current_setup_data,
                 updated_drivetrain_data,
-                final_drive_data
+                final_drive_data,
+                default_gearset
             }))
         }
         GearConfigChoice::PerGearConfig => {
@@ -151,10 +177,18 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
             match gear_setup_data.unwrap().gear_config.unwrap() {
                 GearConfig::PerGear(gears) => {
                     current_setup_data = gears;
-                    for gear in &current_setup_data {
+                    for (idx, gear) in current_setup_data.iter().enumerate() {
                         let gear_vec = gear.ratios_lut.to_vec();
                         let mut ratio_set = RatioSet::new();
-                        gear_vec.iter().for_each(|pair| { ratio_set.insert(pair.0.clone(), pair.1); });
+                        let default_opt = drivetrain_data.get(idx);
+                        gear_vec.iter().for_each(|pair| {
+                            let ratio_idx = ratio_set.insert(pair.0.clone(), pair.1);
+                            if let Some(default_ratio) = default_opt {
+                                if pair.1 == *default_ratio {
+                                    let _ = ratio_set.set_default(ratio_idx);
+                                }
+                            }
+                        });
                         new_setup_data.insert(gear.get_index().map_err(|e| { e.to_string()})?.into(),
                                               ratio_set);
                     }
@@ -214,7 +248,10 @@ impl FinalDrive {
             }
             Some(gear_data) => {
                 gear_data.ratios_lut.to_vec().into_iter().for_each(|pair| {
-                    new_setup_data.insert(pair.0, pair.1);
+                    let idx = new_setup_data.insert(pair.0, pair.1);
+                    if pair.1 == current_final_drive {
+                        let _ = new_setup_data.set_default(idx);
+                    }
                 });
             }
         };
@@ -259,6 +296,9 @@ impl FinalDrive {
             DiscardNewFinalRatio() => {
                 self.new_ratio_data = None;
             }
+            FinalDriveUpdate::DefaultSelected(idx) => {
+                let _ = self.new_setup_data.set_default(idx);
+            }
         }
     }
 
@@ -266,6 +306,7 @@ impl FinalDrive {
         let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5);
         col = col.push(text("Final Drive"));
         let name_width = (self.new_setup_data.max_name_length * 10).to_u16().unwrap_or(u16::MAX);
+        let default_idx = self.new_setup_data.default();
         for ratio_entry in self.new_setup_data.entries() {
             let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
             name_label = name_label.size(14);
@@ -275,7 +316,15 @@ impl FinalDrive {
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
             r = r.push(name_label);
             r = r.push(ratio_input);
-            r = r.push(create_delete_button(EditMessage::FinalDriveUpdate(RemoveRatioPressed(ratio_entry.idx))).height(Length::Units(20)).width(Length::Units(20)));
+            r = r.push(
+                Radio::new(
+                    ratio_entry.idx,
+                    "",
+                    default_idx,
+                    move |idx| { EditMessage::FinalDriveUpdate(FinalDriveUpdate::DefaultSelected(idx)) }
+                ).size(10)
+            );
+            r = r.push(create_delete_button(EditMessage::FinalDriveUpdate(RemoveRatioPressed(ratio_entry.idx))).height(Length::Units(15)).width(Length::Units(15)));
             col = col.push(r);
         }
         if let Some(_) = &self.new_ratio_data {
@@ -428,32 +477,44 @@ impl GearConfiguration for FixedGears {
 pub struct GearSets {
     current_drivetrain_data: Vec<f64>,
     current_setup_data: Vec<GearSet>,
-    updated_drivetrain_data: BTreeMap<usize, BTreeMap<usize, Option<String>>>,
-    final_drive_data: FinalDrive
+    updated_drivetrain_data: BTreeMap<GearsetLabel, BTreeMap<usize, Option<String>>>,
+    final_drive_data: FinalDrive,
+    default_gearset: Option<GearsetLabel>
 }
 
 impl GearSets {
-    fn create_gear_ratio_column(gearset_idx: usize, row_vals: Vec<(String, String)>) -> Column<'static, EditMessage>
+    fn create_gear_ratio_column(&self, gearset_label: GearsetLabel, row_vals: Vec<(String, String)>) -> Column<'static, EditMessage>
     {
-        let mut gear_list = Column::new().width(Length::Shrink).spacing(5).padding(Padding::from([0, 10]));
-        let mut max_gear_idx = 0;
+        let mut gear_list = Column::new().width(Length::Shrink).spacing(5).padding(Padding::from([0, 10])).align_items(Alignment::Center);
         for (gear_idx, (placeholder, new_ratio)) in row_vals.iter().enumerate() {
             let mut gear_row = Row::new()
                 .width(Length::Shrink)
                 .align_items(Alignment::Center)
                 .spacing(5);
             let l = Text::new(format!("Gear {}", gear_idx+1)).vertical_alignment(Vertical::Bottom);
+            let label = gearset_label.clone();
             let t = text_input(
                 placeholder,
                 new_ratio,
                 move |new_value| {
-                    GearUpdate(Gearset(GearsetUpdate::UpdateRatio(gearset_idx, gear_idx, new_value)))
+                    GearUpdate(Gearset(GearsetUpdate::UpdateRatio(label.clone(), gear_idx, new_value)))
                 }
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
             gear_list = gear_list.push(gear_row);
-            max_gear_idx = gear_idx;
         }
+        let selected = match &self.default_gearset {
+            None => None,
+            Some(label) => Some(label.idx())
+        };
+        gear_list = gear_list.push(
+            Radio::new(
+                gearset_label.idx(),
+                "Default",
+                selected,
+                move |_| { GearUpdate(Gearset(DefaultGearsetSelected(gearset_label.clone()))) }
+            ).size(10).text_size(14).spacing(5)
+        );
         gear_list
     }
 }
@@ -489,6 +550,9 @@ impl GearConfiguration for GearSets {
                         }
                     }
                 }
+                GearsetUpdate::DefaultGearsetSelected(label) => {
+                    self.default_gearset = Some(label);
+                }
             }}
             _ => {}
         }
@@ -502,14 +566,14 @@ impl GearConfiguration for GearSets {
         where 'b: 'a
     {
         let mut gearset_row = Row::new().width(Length::Shrink).spacing(5).padding(Padding::from([0, 10]));
-        for (set_idx, gearset_map) in self.updated_drivetrain_data.iter() {
+        for (gearset_label, gearset_map) in self.updated_drivetrain_data.iter() {
             let mut col = Column::new().align_items(Alignment::Center).spacing(5).padding(Padding::from([0, 10]));
             let mut displayed_ratios = Vec::new();
             for (gear_idx, ratio) in gearset_map.iter() {
                 let mut placeholder = String::new();
                 let displayed_ratio = match ratio {
                     None => {
-                        if let Some(current_set) = self.current_setup_data.get(*set_idx) {
+                        if let Some(current_set) = self.current_setup_data.get(gearset_label.idx()) {
                             if let Some(current_ratio) = current_set.ratios().get(*gear_idx) {
                                 placeholder = current_ratio.to_string();
                             }
@@ -520,8 +584,8 @@ impl GearConfiguration for GearSets {
                 };
                 displayed_ratios.push((placeholder, displayed_ratio));
             }
-            col = col.push(text(format!("GEARSET_{}", set_idx)));
-            col = col.push(Self::create_gear_ratio_column(*set_idx, displayed_ratios));
+            col = col.push(text(format!("{}", gearset_label)));
+            col = col.push(self.create_gear_ratio_column(gearset_label.clone(), displayed_ratios));
             gearset_row = gearset_row.push(col);
         }
         gearset_row = gearset_row.push( self.final_drive_data.create_final_drive_column());
@@ -556,6 +620,7 @@ impl CustomizableGears {
     {
         let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5).padding(Padding::from([0, 10, 12, 10]));
         col = col.push(text(gear_idx));
+        let default_idx = ratio_set.default();
         let name_width = (ratio_set.max_name_length * 10).to_u16().unwrap_or(u16::MAX);
         for ratio_entry in ratio_set.entries() {
             let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
@@ -566,11 +631,21 @@ impl CustomizableGears {
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
             r = r.push(name_label);
             r = r.push(ratio_input);
-            r = r.push(create_delete_button(
-                GearUpdate(CustomizedGear(CustomizedGearUpdate::RemoveRatio(gear_idx.clone(), ratio_entry.idx))))
-                .height(Length::Units(20))
-                .width(Length::Units(20)))
-            ;
+            r = r.push(
+                Radio::new(
+                    ratio_entry.idx,
+                    "",
+                    default_idx,
+                    move |idx| { GearUpdate(CustomizedGear(DefaultRatioSelected(gear_idx.clone(), idx))) }
+                ).size(10)
+            );
+            r = r.push(
+                create_delete_button(
+                    GearUpdate(CustomizedGear(CustomizedGearUpdate::RemoveRatio(gear_idx.clone(), ratio_entry.idx)))
+                )
+                    .height(Length::Units(15))
+                    .width(Length::Units(15))
+            );
             col = col.push(r);
         }
         col
@@ -637,6 +712,11 @@ impl GearConfiguration for CustomizableGears {
                     }
                     if next_idx <= 10 {
                         self.new_setup_data.insert(GearLabel{idx: next_idx}, RatioSet::new());
+                    }
+                }
+                CustomizedGearUpdate::DefaultRatioSelected(gear, ratio_idx) => {
+                    if let Some(ratio_set) = self.new_setup_data.get_mut(&gear) {
+                        let _ = ratio_set.set_default(ratio_idx);
                     }
                 }
                 CustomizedGearUpdate::RemoveGear() => {
