@@ -221,12 +221,42 @@ impl FinalDrive {
 
     pub fn handle_update(&mut self, update: FinalDriveUpdate) {
         match update {
-            AddRatioPressed() => {}
-            RemoveRatioPressed(_) => {}
-            UpdateFinalRatioName(_) => {}
-            UpdateFinalRatioVal(_) => {}
-            ConfirmNewFinalRatio() => {}
-            DiscardNewFinalRatio() => {}
+            AddRatioPressed() => {
+                self.new_ratio_data = Some((String::new(), String::new()));
+            }
+            RemoveRatioPressed(idx) => {
+                self.new_setup_data.remove(idx);
+            }
+            UpdateFinalRatioName(new_val) => {
+                if let Some((name,_)) = &mut self.new_ratio_data {
+                    *name = new_val;
+                }
+            }
+            UpdateFinalRatioVal(new_val) => {
+                if let Some((_, ratio)) = &mut self.new_ratio_data {
+                    if is_valid_ratio(&new_val) {
+                        *ratio = new_val;
+                    }
+                }
+            }
+            ConfirmNewFinalRatio() => {
+                if let Some((name, ratio)) = &self.new_ratio_data {
+                    match ratio.parse::<f64>() {
+                        Ok(ratio_f) => {
+                            let gear_name = match name.is_empty() {
+                                true => ratio.clone(),
+                                false => name.clone()
+                            };
+                            self.new_setup_data.insert(gear_name, ratio_f);
+                        }
+                        Err(_) => {}
+                    }
+                    self.new_ratio_data = None;
+                }
+            }
+            DiscardNewFinalRatio() => {
+                self.new_ratio_data = None;
+            }
         }
     }
 
