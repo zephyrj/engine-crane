@@ -65,15 +65,45 @@ pub enum GearIdentifier {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum GearUpdateType {
+    Fixed(FixedGearUpdate),
+    Gearset(GearsetUpdate),
+    CustomizedGear(CustomizedGearUpdate)
+}
+
+#[derive(Debug, Clone)]
+pub enum FinalDriveUpdate {
+    AddRatioPressed(),
+    RemoveRatioPressed(usize),
+    UpdateFinalRatioName(String),
+    UpdateFinalRatioVal(String),
+    ConfirmNewFinalRatio(),
+    DiscardNewFinalRatio()
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FixedGearUpdate {
     AddGear(),
     RemoveGear(),
-    AddRatio(GearIdentifier),
-    UpdateRatioName(GearIdentifier, String),
-    UpdateRatioValue(GearIdentifier, String),
-    UpdateFinalDrive(String),
-    RemoveRatio(GearIdentifier),
+    UpdateRatio(usize, String)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum GearsetUpdate {
+    AddGear(),
+    RemoveGear(),
+    UpdateRatio(usize, usize, String)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CustomizedGearUpdate {
+    AddGear(),
+    RemoveGear(),
+    AddRatio(GearLabel),
+    RemoveRatio(GearLabel, usize),
+    UpdateRatioName(String),
+    UpdateRatioValue(String),
     ConfirmNewRatio(),
-    DiscardNewRatio()
+    DiscardNewRatio(),
 }
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

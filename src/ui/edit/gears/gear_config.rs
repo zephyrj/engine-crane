@@ -19,7 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::cmp::{max, min};
+use std::cmp::{max};
 use std::collections::{BTreeMap};
 use std::path::PathBuf;
 use fraction::ToPrimitive;
@@ -38,7 +38,12 @@ use crate::assetto_corsa::car::data::setup::gears::{GearSet, GearConfig, GearDat
 use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
 use crate::ui::edit::EditMessage;
-use crate::ui::edit::gears::{GearConfigChoice, GearIdentifier, GearLabel, GearUpdateType, RatioSet};
+use crate::ui::edit::EditMessage::{GearUpdate};
+use crate::ui::edit::gears::{CustomizedGearUpdate, FinalDriveUpdate, FixedGearUpdate, GearConfigChoice, GearLabel, GearsetUpdate, GearUpdateType, RatioSet};
+use crate::ui::edit::gears::CustomizedGearUpdate::{ConfirmNewRatio, DiscardNewRatio, UpdateRatioName, UpdateRatioValue};
+use crate::ui::edit::gears::FinalDriveUpdate::{AddRatioPressed, ConfirmNewFinalRatio, DiscardNewFinalRatio, RemoveRatioPressed, UpdateFinalRatioName, UpdateFinalRatioVal};
+use crate::ui::edit::gears::FixedGearUpdate::{UpdateRatio};
+use crate::ui::edit::gears::GearUpdateType::{Fixed, Gearset, CustomizedGear};
 
 
 pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearConfiguration>, String> {
@@ -177,7 +182,8 @@ fn is_valid_ratio(val: &str) -> bool {
 
 pub trait GearConfiguration {
     fn get_config_type(&self) -> GearConfigChoice;
-    fn handle_update(&mut self, update_type: GearUpdateType);
+    fn handle_gear_update(&mut self, update_type: GearUpdateType);
+    fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate);
     fn add_editable_gear_list<'a, 'b>(&'a self, layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
         where 'b: 'a
     {
@@ -213,6 +219,17 @@ impl FinalDrive {
         FinalDrive { current_final_drive, setup_data, new_setup_data, new_ratio_data: None }
     }
 
+    pub fn handle_update(&mut self, update: FinalDriveUpdate) {
+        match update {
+            AddRatioPressed() => {}
+            RemoveRatioPressed(_) => {}
+            UpdateFinalRatioName(_) => {}
+            UpdateFinalRatioVal(_) => {}
+            ConfirmNewFinalRatio() => {}
+            DiscardNewFinalRatio() => {}
+        }
+    }
+
     pub fn create_final_drive_column(&self) -> Column<'static, EditMessage> {
         let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5);
         col = col.push(text("Final Drive"));
@@ -226,7 +243,7 @@ impl FinalDrive {
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
             r = r.push(name_label);
             r = r.push(ratio_input);
-            r = r.push(create_delete_button(EditMessage::GearUpdate(GearUpdateType::RemoveRatio(GearIdentifier::FinalDrive(ratio_entry.idx)))).height(Length::Units(20)).width(Length::Units(20)));
+            r = r.push(create_delete_button(EditMessage::FinalDriveUpdate(RemoveRatioPressed(ratio_entry.idx))).height(Length::Units(20)).width(Length::Units(20)));
             col = col.push(r);
         }
         if let Some(_) = &self.new_ratio_data {
@@ -242,7 +259,7 @@ impl FinalDrive {
             text("Add Ratio").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::AddRatio(GearIdentifier::FinalDrive(0))))
+            .on_press(EditMessage::FinalDriveUpdate(AddRatioPressed()))
     }
 
     fn add_gear_ratio_entry_row(&self) -> Row<'static, EditMessage>
@@ -250,16 +267,16 @@ impl FinalDrive {
         let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
         let (name, ratio) = self.new_ratio_data.as_ref().unwrap();
         let name_max_width = (max(self.new_setup_data.max_name_len(), name.len()) * 10).to_u16().unwrap_or(u16::MAX);
-        r = r.push(text_input("", &name.clone(), move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioName(GearIdentifier::FinalDrive(0), new_val))}).width(Length::Units(name_max_width)).size(14));
-        r = r.push(text_input("", &ratio.clone(), move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::FinalDrive(0), new_val))}).width(Length::Units(56)).size(14));
+        r = r.push(text_input("", &name.clone(), move |new_val| { EditMessage::FinalDriveUpdate(UpdateFinalRatioName(new_val))}).width(Length::Units(name_max_width)).size(14));
+        r = r.push(text_input("", &ratio.clone(), move |new_val| { EditMessage::FinalDriveUpdate(UpdateFinalRatioVal(new_val))}).width(Length::Units(56)).size(14));
         let mut confirm;
         if !ratio.is_empty() {
-            confirm = create_add_button(EditMessage::GearUpdate(GearUpdateType::ConfirmNewRatio()));
+            confirm = create_add_button(EditMessage::FinalDriveUpdate(ConfirmNewFinalRatio()));
         } else {
             confirm = create_disabled_add_button().height(Length::Units(20)).width(Length::Units(20));
         }
         r = r.push(confirm.height(Length::Units(20)).width(Length::Units(20)));
-        r = r.push(create_delete_button(EditMessage::GearUpdate(GearUpdateType::DiscardNewRatio())).height(Length::Units(20)).width(Length::Units(20)));
+        r = r.push(create_delete_button(EditMessage::FinalDriveUpdate(DiscardNewFinalRatio())).height(Length::Units(20)).width(Length::Units(20)));
         r
     }
 }
@@ -280,12 +297,12 @@ impl FixedGears {
                 .width(Length::Shrink)
                 .align_items(Alignment::Center)
                 .spacing(5);
-            let l = Text::new(format!("Gear {}:", gear_idx+1)).vertical_alignment(Vertical::Bottom).width(Length::Units(100));
+            let l = Text::new(format!("Gear {}:", gear_idx+1)).vertical_alignment(Vertical::Bottom);
             let t = text_input(
                 placeholder,
                 new_ratio,
                 move |new_value| {
-                    EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::Fixed(gear_idx), new_value))
+                    GearUpdate(Fixed(UpdateRatio(gear_idx, new_value)))
                 }
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
@@ -302,39 +319,33 @@ impl GearConfiguration for FixedGears {
     }
 
     // TODO return a Result so errors can be passed somewhere for viewing
-    fn handle_update(&mut self, update_type: GearUpdateType) {
+    fn handle_gear_update(&mut self, update_type: GearUpdateType) {
         match update_type {
-            GearUpdateType::UpdateRatioValue(gear_idx, ratio) => {
-                match gear_idx {
-                    GearIdentifier::Fixed(gear_idx) => {
-                        if ratio.is_empty() {
-                            self.updated_drivetrain_data.insert(gear_idx, None);
-                        } else if is_valid_ratio(&ratio) {
-                            self.updated_drivetrain_data.insert(gear_idx, Some(ratio));
-                        }
-                    },
-                    _ => {}
+            Fixed(update) => { match update {
+                FixedGearUpdate::AddGear() => {
+                    let gear_idx: usize = match self.updated_drivetrain_data.last_key_value() {
+                        None => { 0 }
+                        Some((max_gear_idx, _)) => { max_gear_idx+1 }
+                    };
+                    self.updated_drivetrain_data.insert(gear_idx, None);
                 }
-            },
-            GearUpdateType::AddGear() => {
-                let gear_idx: usize = match self.updated_drivetrain_data.last_key_value() {
-                    None => { 0 }
-                    Some((max_gear_idx, _)) => { max_gear_idx+1 }
-                };
-                self.updated_drivetrain_data.insert(gear_idx, None);
-            },
-            GearUpdateType::RemoveGear() => {
-                self.updated_drivetrain_data.pop_last();
-            },
-            GearUpdateType::UpdateFinalDrive(ratio) => {
-                if ratio.is_empty() {
-                    self.final_drive_data. = None;
-                } else if is_valid_ratio(&ratio) {
-                    self.updated_final_drive = Some(ratio);
+                FixedGearUpdate::RemoveGear() => {
+                    self.updated_drivetrain_data.pop_last();
                 }
-            }
+                UpdateRatio(gear_idx, ratio) => {
+                    if ratio.is_empty() {
+                        self.updated_drivetrain_data.insert(gear_idx, None);
+                    } else if is_valid_ratio(&ratio) {
+                        self.updated_drivetrain_data.insert(gear_idx, Some(ratio));
+                    }
+                }
+            }}
             _ => {}
         }
+    }
+
+    fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
+        self.final_drive_data.handle_update(update_type)
     }
 
     fn add_editable_gear_list<'a, 'b>(
@@ -370,13 +381,13 @@ impl GearConfiguration for FixedGears {
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::AddGear()));
+            .on_press(GearUpdate(Fixed(FixedGearUpdate::AddGear())));
         add_remove_row = add_remove_row.push(add_gear_button);
         let delete_gear_button = iced::widget::button(
             text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::RemoveGear()));
+            .on_press(GearUpdate(Fixed(FixedGearUpdate::RemoveGear())));
         add_remove_row = add_remove_row.push(delete_gear_button);
         layout.push(add_remove_row)
     }
@@ -403,7 +414,7 @@ impl GearSets {
                 placeholder,
                 new_ratio,
                 move |new_value| {
-                    EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::GearSet(gearset_idx, gear_idx), new_value))
+                    GearUpdate(Gearset(GearsetUpdate::UpdateRatio(gearset_idx, gear_idx, new_value)))
                 }
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
@@ -419,38 +430,38 @@ impl GearConfiguration for GearSets {
         GearConfigChoice::GearSets
     }
 
-    fn handle_update(&mut self, update_type: GearUpdateType) {
+    fn handle_gear_update(&mut self, update_type: GearUpdateType) {
         match update_type {
-            GearUpdateType::UpdateRatioValue(gear_idx, ratio) => {
-                match gear_idx {
-                    GearIdentifier::GearSet(set_idx, gear_idx) => {
-                        if let Some(gear_set) = self.updated_drivetrain_data.get_mut(&set_idx) {
-                            if ratio.is_empty() {
-                                gear_set.insert(gear_idx, None);
-                            } else if is_valid_ratio(&ratio) {
-                                gear_set.insert(gear_idx, Some(ratio));
-                            }
+            Gearset(update) => { match update {
+                GearsetUpdate::AddGear() => {
+                    for gear_set in self.updated_drivetrain_data.values_mut() {
+                        let gear_idx: usize = match gear_set.last_key_value() {
+                            None => { 0 }
+                            Some((max_gear_idx, _)) => { max_gear_idx+1 }
+                        };
+                        gear_set.insert(gear_idx, None);
+                    }
+                }
+                GearsetUpdate::RemoveGear() => {
+                    for gear_set in self.updated_drivetrain_data.values_mut() {
+                        gear_set.pop_last();
+                    }
+                }
+                GearsetUpdate::UpdateRatio(set_idx, gear_idx, ratio) => {
+                    if let Some(gear_set) = self.updated_drivetrain_data.get_mut(&set_idx) {
+                        if ratio.is_empty() {
+                            gear_set.insert(gear_idx, None);
+                        } else if is_valid_ratio(&ratio) {
+                            gear_set.insert(gear_idx, Some(ratio));
                         }
-                    },
-                    _ => {}
+                    }
                 }
-            },
-            GearUpdateType::AddGear() => {
-                for gear_set in self.updated_drivetrain_data.values_mut() {
-                    let gear_idx: usize = match gear_set.last_key_value() {
-                        None => { 0 }
-                        Some((max_gear_idx, _)) => { max_gear_idx+1 }
-                    };
-                    gear_set.insert(gear_idx, None);
-                }
-            },
-            GearUpdateType::RemoveGear() => {
-                for gear_set in self.updated_drivetrain_data.values_mut() {
-                    gear_set.pop_last();
-                }
-            }
+            }}
             _ => {}
         }
+    }
+
+    fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
     }
 
     fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
@@ -485,13 +496,13 @@ impl GearConfiguration for GearSets {
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::AddGear()));
+            .on_press(GearUpdate(Gearset(GearsetUpdate::AddGear())));
         add_remove_row = add_remove_row.push(add_ratio_button);
         let delete_button = iced::widget::button(
             text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::RemoveGear()));
+            .on_press(GearUpdate(Gearset(GearsetUpdate::RemoveGear())));
         add_remove_row = add_remove_row.push(delete_button);
         layout.push(add_remove_row)
     }
@@ -519,7 +530,11 @@ impl CustomizableGears {
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
             r = r.push(name_label);
             r = r.push(ratio_input);
-            r = r.push(create_delete_button(EditMessage::GearUpdate(GearUpdateType::RemoveRatio(GearIdentifier::CustomizedGears(gear_idx.clone(), ratio_entry.idx)))).height(Length::Units(20)).width(Length::Units(20)));
+            r = r.push(create_delete_button(
+                GearUpdate(GearUpdateType::CustomizedGear(CustomizedGearUpdate::RemoveRatio(gear_idx.clone(), ratio_entry.idx))))
+                .height(Length::Units(20))
+                .width(Length::Units(20)))
+            ;
             col = col.push(r);
         }
         col
@@ -530,23 +545,41 @@ impl CustomizableGears {
             text("Add Ratio").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::AddRatio(GearIdentifier::CustomizedGears(label, 0))))
+            .on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::AddRatio(label))))
     }
 
     fn add_gear_ratio_entry_row(new_ratio_data: (GearLabel, String, String), name_max_width: u16) -> Row<'static, EditMessage>
     {
         let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
         let (label, name, ratio) = new_ratio_data;
-        r = r.push(text_input("", &name, move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioName(GearIdentifier::CustomizedGears(label.clone(), 0), new_val))}).width(Length::Units(name_max_width)).size(14));
-        r = r.push(text_input("", &ratio, move |new_val| { EditMessage::GearUpdate(GearUpdateType::UpdateRatioValue(GearIdentifier::CustomizedGears(label.clone(), 0), new_val))}).width(Length::Units(56)).size(14));
+        r = r.push(text_input(
+            "",
+            &name,
+            move |new_val| {
+                GearUpdate(CustomizedGear(UpdateRatioName(new_val)))})
+            .width(Length::Units(name_max_width))
+            .size(14)
+        );
+        r = r.push(text_input(
+            "",
+            &ratio,
+            move |new_val| {
+                GearUpdate(CustomizedGear(UpdateRatioValue(new_val)))})
+            .width(Length::Units(56))
+            .size(14)
+        );
         let mut confirm;
         if !ratio.is_empty() {
-            confirm = create_add_button(EditMessage::GearUpdate(GearUpdateType::ConfirmNewRatio()));
+            confirm = create_add_button(GearUpdate(CustomizedGear(ConfirmNewRatio())));
         } else {
             confirm = create_disabled_add_button().height(Length::Units(20)).width(Length::Units(20));
         }
         r = r.push(confirm.height(Length::Units(20)).width(Length::Units(20)));
-        r = r.push(create_delete_button(EditMessage::GearUpdate(GearUpdateType::DiscardNewRatio())).height(Length::Units(20)).width(Length::Units(20)));
+        r = r.push(
+            create_delete_button(GearUpdate(CustomizedGear(DiscardNewRatio())))
+            .height(Length::Units(20))
+            .width(Length::Units(20))
+        );
         r
     }
 }
@@ -556,90 +589,75 @@ impl GearConfiguration for CustomizableGears {
         GearConfigChoice::PerGearConfig
     }
 
-    fn handle_update(&mut self, update_type: GearUpdateType) {
+    fn handle_gear_update(&mut self, update_type: GearUpdateType) {
         match update_type {
-            GearUpdateType::AddRatio(gear_idx) => {
-                match gear_idx {
-                    GearIdentifier::CustomizedGears(gear_idx, ratio_idx) => {
-                        self.new_ratio_data = Some((gear_idx, String::new(), String::new()));
-                    },
-                    _ => {}
+            CustomizedGear(update) => { match update {
+                CustomizedGearUpdate::AddGear() => {
+                    let next_idx: usize;
+                    if let Some((l, _)) = self.new_setup_data.last_key_value() {
+                        next_idx = l.idx + 1;
+                    } else {
+                        next_idx = 1;
+                    }
+                    if next_idx <= 10 {
+                        self.new_setup_data.insert(GearLabel{idx: next_idx}, RatioSet::new());
+                    }
                 }
-            },
-            GearUpdateType::UpdateRatioName(gear_idx, new_val) => {
-                match gear_idx {
-                    GearIdentifier::CustomizedGears(_, _) => {
-                        if let Some((_, name, _)) = &mut self.new_ratio_data {
-                            *name = new_val;
-                        }
-                    },
-                    _ => {}
+                CustomizedGearUpdate::RemoveGear() => {
+                    if !self.new_setup_data.is_empty() {
+                        self.new_setup_data.pop_last();
+                    }
                 }
-            },
-            GearUpdateType::UpdateRatioValue(gear_idx, new_val) => {
-                match gear_idx {
-                    GearIdentifier::CustomizedGears(_, _) => {
-                        if let Some((_, _, ratio)) = &mut self.new_ratio_data {
-                            if is_valid_ratio(&new_val) {
-                                *ratio = new_val;
-                            }
-                        }
-                    },
-                    _ => {}
+                CustomizedGearUpdate::AddRatio(gear_idx) => {
+                    self.new_ratio_data = Some((gear_idx, String::new(), String::new()));
                 }
-            },
-            GearUpdateType::ConfirmNewRatio() => {
-                if let Some((label , name, ratio)) = &self.new_ratio_data {
-                    match self.new_setup_data.get_mut(label) {
-                        None => {}
-                        Some(ratio_set) => {
-                            match ratio.parse::<f64>() {
-                                Ok(ratio_f) => {
-                                    let gear_name = match name.is_empty() {
-                                        true => ratio.clone(),
-                                        false => name.clone()
-                                    };
-                                    ratio_set.insert(gear_name, ratio_f);
-                                }
-                                Err(_) => {}
-                            }
+                CustomizedGearUpdate::RemoveRatio(label, ratio_idx) => {
+                    if let Some(ratio_set) = self.new_setup_data.get_mut(&label) {
+                        ratio_set.remove(ratio_idx);
+                    }
+                }
+                UpdateRatioName(new_val) => {
+                    if let Some((_, name, _)) = &mut self.new_ratio_data {
+                        *name = new_val;
+                    }
+                }
+                UpdateRatioValue(new_val) => {
+                    if let Some((_, _, ratio)) = &mut self.new_ratio_data {
+                        if is_valid_ratio(&new_val) {
+                            *ratio = new_val;
                         }
                     }
+                }
+                ConfirmNewRatio() => {
+                    if let Some((label , name, ratio)) = &self.new_ratio_data {
+                        match self.new_setup_data.get_mut(label) {
+                            None => {}
+                            Some(ratio_set) => {
+                                match ratio.parse::<f64>() {
+                                    Ok(ratio_f) => {
+                                        let gear_name = match name.is_empty() {
+                                            true => ratio.clone(),
+                                            false => name.clone()
+                                        };
+                                        ratio_set.insert(gear_name, ratio_f);
+                                    }
+                                    Err(_) => {}
+                                }
+                            }
+                        }
+                        self.new_ratio_data = None;
+                    }
+                }
+                DiscardNewRatio() => {
                     self.new_ratio_data = None;
                 }
-
-            },
-            GearUpdateType::DiscardNewRatio() => {
-                self.new_ratio_data = None;
-            },
-            GearUpdateType::RemoveRatio(gear_idx) => {
-                match gear_idx {
-                    GearIdentifier::CustomizedGears(label, ratio_idx) => {
-                        if let Some(ratio_set) = self.new_setup_data.get_mut(&label) {
-                            ratio_set.remove(ratio_idx);
-                        }
-                    },
-                    _ => {}
-                }
-            },
-            GearUpdateType::AddGear() => {
-                let next_idx: usize;
-                if let Some((l, _)) = self.new_setup_data.last_key_value() {
-                    next_idx = l.idx + 1;
-                } else {
-                    next_idx = 1;
-                }
-                if next_idx <= 10 {
-                    self.new_setup_data.insert(GearLabel{idx: next_idx}, RatioSet::new());
-                }
-            },
-            GearUpdateType::RemoveGear() => {
-                if !self.new_setup_data.is_empty() {
-                    self.new_setup_data.pop_last();
-                }
-            },
+            }}
             _ => {}
         }
+    }
+
+    fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
+
     }
 
     fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
@@ -668,13 +686,13 @@ impl GearConfiguration for CustomizableGears {
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::AddGear()));
+            .on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::AddGear())));
         add_remove_row = add_remove_row.push(add_gear_button);
         let delete_gear_button = iced::widget::button(
             text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(EditMessage::GearUpdate(GearUpdateType::RemoveGear()))
+            .on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::RemoveGear())))
             .style(Button::Destructive);
         add_remove_row = add_remove_row.push(delete_gear_button);
         layout.push(Container::new(add_remove_row).height(Length::FillPortion(1)).align_y(Vertical::Top).padding(0))

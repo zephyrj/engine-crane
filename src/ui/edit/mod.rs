@@ -31,7 +31,7 @@ use iced_aw::{TabLabel};
 use tracing::{error};
 
 use crate::ui::{ApplicationData, ListPath};
-use crate::ui::edit::gears::{gear_configuration_builder, GearConfigChoice, GearUpdateType, GearConfiguration};
+use crate::ui::edit::gears::{gear_configuration_builder, GearConfigChoice, GearUpdateType, GearConfiguration, FinalDriveUpdate};
 
 
 pub struct EditTab {
@@ -44,7 +44,8 @@ pub struct EditTab {
 pub enum EditMessage {
     CarSelected(ListPath),
     GearConfigSelected(GearConfigChoice),
-    GearUpdate(GearUpdateType)
+    GearUpdate(GearUpdateType),
+    FinalDriveUpdate(FinalDriveUpdate)
 }
 
 impl EditTab {
@@ -92,7 +93,12 @@ impl EditTab {
             }
             EditMessage::GearUpdate(update_type) => {
                 if let Some(config) = &mut self.gear_configuration {
-                    config.handle_update(update_type);
+                    config.handle_gear_update(update_type);
+                }
+            }
+            EditMessage::FinalDriveUpdate(update_type) => {
+                if let Some(config) = &mut self.gear_configuration {
+                    config.handle_final_drive_update(update_type);
                 }
             }
         }
