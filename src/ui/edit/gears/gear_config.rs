@@ -168,7 +168,8 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
                 current_drivetrain_data: drivetrain_data,
                 current_setup_data,
                 new_setup_data,
-                new_ratio_data: None
+                new_ratio_data: None,
+                final_drive_data
             }))
         }
     }
@@ -546,7 +547,8 @@ pub struct CustomizableGears {
     current_drivetrain_data: Vec<f64>,
     current_setup_data: Vec<SingleGear>,
     new_setup_data: BTreeMap<GearLabel, RatioSet>,
-    new_ratio_data: Option<(GearLabel, String, String)>
+    new_ratio_data: Option<(GearLabel, String, String)>,
+    final_drive_data: FinalDrive
 }
 
 impl CustomizableGears {
@@ -565,7 +567,7 @@ impl CustomizableGears {
             r = r.push(name_label);
             r = r.push(ratio_input);
             r = r.push(create_delete_button(
-                GearUpdate(GearUpdateType::CustomizedGear(CustomizedGearUpdate::RemoveRatio(gear_idx.clone(), ratio_entry.idx))))
+                GearUpdate(CustomizedGear(CustomizedGearUpdate::RemoveRatio(gear_idx.clone(), ratio_entry.idx))))
                 .height(Length::Units(20))
                 .width(Length::Units(20)))
             ;
@@ -691,7 +693,7 @@ impl GearConfiguration for CustomizableGears {
     }
 
     fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
-
+        self.final_drive_data.handle_update(update_type)
     }
 
     fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
@@ -713,6 +715,7 @@ impl GearConfiguration for CustomizableGears {
             }
             gearset_roe = gearset_roe.push(gear_col);
         }
+        gearset_roe = gearset_roe.push(self.final_drive_data.create_final_drive_column());
         let s = scrollable(gearset_roe).horizontal_scroll(Properties::default()).height(Length::FillPortion(6));
         layout = layout.push(s);
         let mut add_remove_row = Row::new().height(Length::Shrink).width(Length::Shrink).spacing(5);
