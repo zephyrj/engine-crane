@@ -141,7 +141,8 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<Box<dyn GearC
             Ok(Box::new(GearSets {
                 current_drivetrain_data: drivetrain_data,
                 current_setup_data,
-                updated_drivetrain_data
+                updated_drivetrain_data,
+                final_drive_data
             }))
         }
         GearConfigChoice::PerGearConfig => {
@@ -426,7 +427,8 @@ impl GearConfiguration for FixedGears {
 pub struct GearSets {
     current_drivetrain_data: Vec<f64>,
     current_setup_data: Vec<GearSet>,
-    updated_drivetrain_data: BTreeMap<usize, BTreeMap<usize, Option<String>>>
+    updated_drivetrain_data: BTreeMap<usize, BTreeMap<usize, Option<String>>>,
+    final_drive_data: FinalDrive
 }
 
 impl GearSets {
@@ -492,6 +494,7 @@ impl GearConfiguration for GearSets {
     }
 
     fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
+        self.final_drive_data.handle_update(update_type)
     }
 
     fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
@@ -520,6 +523,7 @@ impl GearConfiguration for GearSets {
             col = col.push(Self::create_gear_ratio_column(*set_idx, displayed_ratios));
             gearset_row = gearset_row.push(col);
         }
+        gearset_row = gearset_row.push( self.final_drive_data.create_final_drive_column());
         layout = layout.push(gearset_row);
         let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5);
         let add_ratio_button = iced::widget::button(
