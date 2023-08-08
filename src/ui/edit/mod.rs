@@ -31,7 +31,7 @@ use iced_aw::{TabLabel};
 use tracing::{error};
 
 use crate::ui::{ApplicationData, ListPath};
-use crate::ui::edit::gears::{gear_configuration_builder, GearConfigChoice, GearUpdateType, GearConfiguration, FinalDriveUpdate};
+use crate::ui::edit::gears::{gear_configuration_builder, GearConfiguration, FinalDriveUpdate, GearConfigChoice, GearUpdateType};
 
 
 pub struct EditTab {
