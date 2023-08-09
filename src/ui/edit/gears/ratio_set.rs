@@ -1,6 +1,7 @@
 use std::cmp::{max, Ordering};
 use std::collections::BTreeMap;
 
+#[derive(Debug, Default)]
 pub(crate) struct RatioEntry {
     pub idx: usize,
     pub name: String,
@@ -37,6 +38,7 @@ impl Ord for RatioEntry {
     }
 }
 
+#[derive(Debug, Default)]
 pub(crate) struct RatioSet {
     entries: BTreeMap<usize, RatioEntry>,
     max_name_length: usize,
@@ -116,8 +118,15 @@ impl RatioSet {
         }
     }
 
-    pub fn default(&self) -> Option<usize> {
+    pub fn default_idx(&self) -> Option<usize> {
         self.default_idx
+    }
+
+    pub fn default_ratio(&self) -> Option<&RatioEntry> {
+        match self.default_idx {
+            None => None,
+            Some(idx) => self.entries.get(&idx)
+        }
     }
 
     pub fn set_default(&mut self, idx: usize) -> Result<(), String> {

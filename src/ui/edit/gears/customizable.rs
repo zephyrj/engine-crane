@@ -29,14 +29,15 @@ use iced::theme::Button;
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{scrollable, text, text_input};
 use iced_native::widget::scrollable::Properties;
-use crate::assetto_corsa::car::data::setup::gears::SingleGear;
+use crate::assetto_corsa::car::data::setup::gears::{GearConfig, SingleGear};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
-use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigChoice, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearConfiguration, GearUpdateType};
 use crate::ui::edit::gears::final_drive::FinalDrive;
+use crate::ui::edit::gears::fixed::FixedGears;
 use crate::ui::edit::gears::GearUpdateType::CustomizedGear;
-use crate::ui::edit::gears::ratio_set::RatioSet;
+use crate::ui::edit::gears::ratio_set::{RatioEntry, RatioSet};
 
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,22 +54,64 @@ pub enum CustomizedGearUpdate {
 }
 
 pub struct CustomizableGears {
-    current_drivetrain_data: Vec<f64>,
-    current_setup_data: Vec<SingleGear>,
+    original_drivetrain_data: Vec<f64>,
+    original_setup_data: Option<GearConfig>,
     new_setup_data: BTreeMap<GearLabel, RatioSet>,
     new_ratio_data: Option<(GearLabel, String, String)>,
     final_drive_data: FinalDrive
 }
 
+impl From<FixedGears> for CustomizableGears {
+    fn from(mut fixed_gears: FixedGears) -> Self {
+        let original_drivetrain_data = fixed_gears.extract_original_drivetrain_data();
+        let original_setup_data = fixed_gears.extract_original_setup_data();
+        let mut new_setup_data =
+            Self::load_from_setup_data(&original_drivetrain_data, &original_setup_data);
+        if new_setup_data.is_empty() {
+            for (idx, ratio) in original_drivetrain_data.iter().enumerate() {
+                let mut ratio_set = RatioSet::new();
+                let ratio_idx = ratio_set.insert(ratio.to_string(), *ratio);
+                let _ = ratio_set.set_default(ratio_idx);
+                new_setup_data.insert((idx+1).into(), ratio_set);
+            }
+        }
+        CustomizableGears {
+            original_drivetrain_data,
+            original_setup_data,
+            new_setup_data,
+            new_ratio_data: None,
+            final_drive_data: fixed_gears.extract_final_drive_data()
+        }
+    }
+}
+
 impl CustomizableGears {
-    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>, drivetrain_setup_data: Vec<SingleGear>, final_drive_data: FinalDrive) -> CustomizableGears {
+    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>, drivetrain_setup_data: Option<GearConfig>, final_drive_data: FinalDrive) -> CustomizableGears {
+        let new_setup_data = Self::load_from_setup_data(&drivetrain_data, &drivetrain_setup_data);
+        CustomizableGears {
+            original_drivetrain_data: drivetrain_data,
+            original_setup_data: drivetrain_setup_data,
+            new_setup_data,
+            new_ratio_data: None,
+            final_drive_data
+        }
+    }
+
+    fn load_from_setup_data(drivetrain_data: &Vec<f64>, drivetrain_setup_data: &Option<GearConfig>) -> BTreeMap<GearLabel, RatioSet> {
+        let current_setup_data =  match &drivetrain_setup_data {
+            None => Vec::new(),
+            Some(gear_config) => { match gear_config {
+                GearConfig::GearSets(_) => Vec::new(),
+                GearConfig::PerGear(gear_vec) => gear_vec.clone()
+            }}
+        };
         let mut new_setup_data= BTreeMap::new();
-        for (idx, gear) in drivetrain_setup_data.iter().enumerate() {
+        for (idx, gear) in current_setup_data.into_iter().enumerate() {
             let gear_vec = gear.ratios_lut.to_vec();
             let mut ratio_set = RatioSet::new();
             let default_opt = drivetrain_data.get(idx);
-            gear_vec.iter().for_each(|pair| {
-                let ratio_idx = ratio_set.insert(pair.0.clone(), pair.1);
+            gear_vec.into_iter().for_each(|pair| {
+                let ratio_idx = ratio_set.insert(pair.0, pair.1);
                 if let Some(default_ratio) = default_opt {
                     if pair.1 == *default_ratio {
                         let _ = ratio_set.set_default(ratio_idx);
@@ -78,20 +121,14 @@ impl CustomizableGears {
             new_setup_data.insert(gear.get_index().unwrap_or(idx).into(),
                                   ratio_set);
         }
-        CustomizableGears {
-            current_drivetrain_data: drivetrain_data,
-            current_setup_data: drivetrain_setup_data,
-            new_setup_data,
-            new_ratio_data: None,
-            final_drive_data
-        }
+        new_setup_data
     }
 
     fn create_gear_ratio_column(gear_idx: &GearLabel, ratio_set: &RatioSet ) -> Column<'static, EditMessage>
     {
         let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5).padding(Padding::from([0, 10, 12, 10]));
         col = col.push(text(gear_idx));
-        let default_idx = ratio_set.default();
+        let default_idx = ratio_set.default_idx();
         let name_width = (ratio_set.max_name_len() * 10).to_u16().unwrap_or(u16::MAX);
         for ratio_entry in ratio_set.entries() {
             let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
@@ -164,11 +201,32 @@ impl CustomizableGears {
         );
         r
     }
+
+    pub(crate) fn get_default_gear_ratios(&self) -> Vec<Option<f64>> {
+        self.new_setup_data.values().map(|ratio_set|{
+            match ratio_set.default_ratio() {
+                None => None,
+                Some(ratio_entry) => Some(ratio_entry.ratio)
+            }
+        }).collect()
+    }
+
+    pub(crate) fn extract_original_drivetrain_data(&mut self) -> Vec<f64> {
+        std::mem::take(&mut self.original_drivetrain_data)
+    }
+
+    pub(crate) fn extract_original_setup_data(&mut self) -> Option<GearConfig> {
+        std::mem::take(&mut self.original_setup_data)
+    }
+
+    pub(crate) fn extract_final_drive_data(&mut self) -> FinalDrive {
+        std::mem::take(&mut self.final_drive_data)
+    }
 }
 
 impl GearConfiguration for CustomizableGears {
-    fn get_config_type(&self) -> GearConfigChoice {
-        GearConfigChoice::PerGearConfig
+    fn get_config_type(&self) -> GearConfigType {
+        GearConfigType::PerGearConfig
     }
 
     fn handle_gear_update(&mut self, update_type: GearUpdateType) {

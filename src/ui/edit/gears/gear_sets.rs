@@ -29,7 +29,7 @@ use crate::assetto_corsa::car::data::setup::gears::GearSet;
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::FinalDrive;
-use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigChoice, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearConfiguration, GearUpdateType};
 use crate::ui::edit::gears::GearsetUpdate::DefaultGearsetSelected;
 use crate::ui::edit::gears::GearUpdateType::Gearset;
 
@@ -123,8 +123,8 @@ impl GearSets {
 }
 
 impl GearConfiguration for GearSets {
-    fn get_config_type(&self) -> GearConfigChoice {
-        GearConfigChoice::GearSets
+    fn get_config_type(&self) -> GearConfigType {
+        GearConfigType::GearSets
     }
 
     fn handle_gear_update(&mut self, update_type: GearUpdateType) {

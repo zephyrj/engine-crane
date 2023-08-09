@@ -31,19 +31,19 @@ use iced_aw::{TabLabel};
 use tracing::{error};
 
 use crate::ui::{ApplicationData, ListPath};
-use crate::ui::edit::gears::{gear_configuration_builder, GearConfiguration, FinalDriveUpdate, GearConfigChoice, GearUpdateType};
+use crate::ui::edit::gears::{gear_configuration_builder, convert_gear_configuration, FinalDriveUpdate, GearConfig, GearConfigType, GearUpdateType, GearConfiguration};
 
 
 pub struct EditTab {
     status_message: String,
     current_car_path: Option<PathBuf>,
-    gear_configuration: Option<Box<dyn GearConfiguration>>
+    gear_configuration: Option<GearConfig>
 }
 
 #[derive(Debug, Clone)]
 pub enum EditMessage {
     CarSelected(ListPath),
-    GearConfigSelected(GearConfigChoice),
+    GearConfigSelected(GearConfigType),
     GearUpdate(GearUpdateType),
     FinalDriveUpdate(FinalDriveUpdate)
 }
@@ -60,11 +60,11 @@ impl EditTab {
     fn add_gearbox_config_selector_row<'a, 'b>(
         &'a self,
         layout: Column<'b, EditMessage>,
-        selected_option: GearConfigChoice
+        selected_option: GearConfigType
     ) -> Column<'b, EditMessage>
         where 'b: 'a
     {
-        let gear_config_row = [GearConfigChoice::Fixed, GearConfigChoice::GearSets, GearConfigChoice::PerGearConfig]
+        let gear_config_row = [GearConfigType::Fixed, GearConfigType::GearSets, GearConfigType::PerGearConfig]
             .iter().fold(
             Row::new().padding(Padding::from([0, 10])).spacing(20).align_items(Alignment::End),
             |row, config_choice| {
@@ -89,7 +89,38 @@ impl EditTab {
                 }
             }
             EditMessage::GearConfigSelected(choice) => {
-                // TODO convert between types
+                if choice == GearConfigType::GearSets {
+                    return;
+                }
+
+                let current_config_type =
+                    if let Some(config) = &self.gear_configuration {
+                        Some(config.get_config_type())
+                    } else {
+                        None
+                    };
+
+                match current_config_type {
+                    None => { return; }
+                    Some(config_type) => {
+                        if config_type == choice {
+                            return;
+                        }
+                    }
+                }
+
+                self.gear_configuration = Some(
+                    match convert_gear_configuration(
+                        std::mem::take(&mut self.gear_configuration).unwrap(),
+                        choice
+                    ) {
+                        Ok(new_config) => new_config,
+                        Err((old_config, error)) => {
+                            self.status_message = error;
+                            old_config
+                        }
+                    }
+                )
             }
             EditMessage::GearUpdate(update_type) => {
                 if let Some(config) = &mut self.gear_configuration {

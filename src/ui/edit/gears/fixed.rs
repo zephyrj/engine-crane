@@ -28,7 +28,8 @@ use crate::assetto_corsa::car::data::setup::gears::GearConfig;
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::{FinalDrive, FinalDriveUpdate};
-use crate::ui::edit::gears::{GearConfigChoice, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::{GearConfigType, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::customizable::CustomizableGears;
 use crate::ui::edit::gears::GearUpdateType::Fixed;
 
 
@@ -40,18 +41,38 @@ pub enum FixedGearUpdate {
 }
 
 pub struct FixedGears {
-    current_drivetrain_data: Vec<f64>,
-    current_setup_data: Option<GearConfig>,
+    original_drivetrain_data: Vec<f64>,
+    original_setup_data: Option<GearConfig>,
     updated_drivetrain_data: BTreeMap<usize, Option<String>>,
     final_drive_data: FinalDrive
 }
 
+impl From<CustomizableGears> for FixedGears {
+    fn from(mut value: CustomizableGears) -> Self {
+        let original_drivetrain_data = value.extract_original_drivetrain_data();
+        let default_ratios = value.get_default_gear_ratios();
+        let updated_drivetrain_data =
+            default_ratios.into_iter().enumerate().map(|(idx, default)| {
+                match default {
+                    None => (idx, None),
+                    Some(ratio) => (idx, Some(ratio.to_string()))
+                }
+            }).collect();
+        FixedGears {
+            original_drivetrain_data,
+            original_setup_data: value.extract_original_setup_data(),
+            updated_drivetrain_data,
+            final_drive_data: value.extract_final_drive_data()
+        }
+    }
+}
+
 impl FixedGears {
-    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>, final_drive_data: FinalDrive) -> FixedGears {
+    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>, drivetrain_setup_data: Option<GearConfig>, final_drive_data: FinalDrive) -> FixedGears {
         let updated_drivetrain_data = drivetrain_data.iter().enumerate().map(|(idx, _)| (idx, None)).collect();
         FixedGears {
-            current_drivetrain_data: drivetrain_data,
-            current_setup_data: None,
+            original_drivetrain_data: drivetrain_data,
+            original_setup_data: drivetrain_setup_data,
             updated_drivetrain_data,
             final_drive_data
         }
@@ -80,11 +101,42 @@ impl FixedGears {
         }
         gear_list
     }
+
+    pub fn get_updated_gear_values(&self) -> Vec<f64> {
+        let mut displayed_ratios = Vec::new();
+        for (gear_idx, ratio) in self.updated_drivetrain_data.iter() {
+            let current_val = match ratio {
+                None => {
+                    match self.original_drivetrain_data.get(*gear_idx) {
+                        None => 0f64,
+                        Some(ratio) => *ratio
+                    }
+                }
+                Some(ratio) => {
+                    ratio.parse::<f64>().unwrap_or(0f64)
+                }
+            };
+            displayed_ratios.push(current_val);
+        }
+        displayed_ratios
+    }
+
+    pub(crate) fn extract_original_drivetrain_data(&mut self) -> Vec<f64> {
+        std::mem::take(&mut self.original_drivetrain_data)
+    }
+
+    pub(crate) fn extract_original_setup_data(&mut self) -> Option<GearConfig> {
+        std::mem::take(&mut self.original_setup_data)
+    }
+
+    pub(crate) fn extract_final_drive_data(&mut self) -> FinalDrive {
+        std::mem::take(&mut self.final_drive_data)
+    }
 }
 
 impl GearConfiguration for FixedGears {
-    fn get_config_type(&self) -> GearConfigChoice {
-        GearConfigChoice::Fixed
+    fn get_config_type(&self) -> GearConfigType {
+        GearConfigType::Fixed
     }
 
     // TODO return a Result so errors can be passed somewhere for viewing
@@ -134,7 +186,7 @@ impl GearConfiguration for FixedGears {
                 }
             };
 
-            let placeholder = match self.current_drivetrain_data.get(*gear_idx) {
+            let placeholder = match self.original_drivetrain_data.get(*gear_idx) {
                 None => { "".to_string() }
                 Some(ratio) => { ratio.to_string() }
             };
