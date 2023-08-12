@@ -415,6 +415,7 @@ impl GearConfiguration for GearSets {
         layout_row = layout_row.push(
             Column::new()
                 .height(Length::Shrink)
+                .padding(Padding::from([0,5]))
                 .push(self.final_drive_data.create_final_drive_column())
         );
         layout = layout.push(layout_row);

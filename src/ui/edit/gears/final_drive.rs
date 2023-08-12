@@ -116,7 +116,11 @@ impl FinalDrive {
     }
 
     pub fn create_final_drive_column(&self) -> Column<'static, EditMessage> {
-        let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5);
+        let mut col =
+            Column::new()
+                .align_items(Alignment::Center)
+                .width(Length::Shrink)
+                .spacing(5);
         col = col.push(text("Final Drive"));
         let name_width = (self.new_setup_data.max_name_len() * 10).to_u16().unwrap_or(u16::MAX);
         let default_idx = self.new_setup_data.default_idx();
