@@ -89,8 +89,13 @@ impl From<CustomizableGears> for FixedGears {
 }
 
 impl FixedGears {
-    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>, drivetrain_setup_data: Option<GearConfig>, final_drive_data: FinalDrive) -> FixedGears {
-        let updated_drivetrain_data = drivetrain_data.iter().enumerate().map(|(idx, _)| (idx, None)).collect();
+    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>,
+                                 drivetrain_setup_data: Option<GearConfig>,
+                                 final_drive_data: FinalDrive)
+        -> FixedGears
+    {
+        let updated_drivetrain_data =
+            drivetrain_data.iter().enumerate().map(|(idx, _)| (idx, None)).collect();
         FixedGears {
             original_drivetrain_data: drivetrain_data,
             original_setup_data: drivetrain_setup_data,

@@ -23,9 +23,13 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use iced::{Alignment, Length, Padding};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Column, Radio, Row, Text};
-use iced_native::widget::{text, text_input};
-use crate::assetto_corsa::car::data::setup::gears::GearSet;
+use iced::widget::{Column, Container, Radio, Row, Text};
+use iced_native::Widget;
+use iced_native::widget::{text, text_input, vertical_rule};
+
+use crate::assetto_corsa::car::data::setup;
+use crate::ui::button::{create_add_button, create_delete_button};
+
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::FinalDrive;
@@ -39,16 +43,254 @@ use crate::ui::edit::gears::GearUpdateType::Gearset;
 pub enum GearsetUpdate {
     AddGear(),
     RemoveGear(),
+    AddGearset(),
+    RemoveGearset(GearsetLabel),
     UpdateRatio(GearsetLabel, usize, String),
     DefaultGearsetSelected(GearsetLabel)
 }
 
+pub struct GearSetContainer {
+    next_idx: usize,
+    num_gears: usize,
+    default: Option<GearsetLabel>,
+    entries: BTreeMap<GearsetLabel, BTreeMap<usize, Option<String>>>,
+    original_values: BTreeMap<GearsetLabel, BTreeMap<usize, String>>
+}
+
+impl GearSetContainer {
+    fn from_setup_data(drivetrain_data: &Vec<f64>,
+                       drivetrain_setup_data: &Option<setup::gears::GearConfig>) -> Self
+    {
+        let mut num_gears: usize = drivetrain_data.len();
+        let mut default = None;
+        let mut original_values = BTreeMap::new();
+        let mut entries = BTreeMap::new();
+        match drivetrain_setup_data {
+            None => {},
+            Some(gear_config) => match gear_config {
+                setup::gears::GearConfig::GearSets(gear_sets) => {
+                    if !gear_sets.is_empty() {
+                        num_gears = gear_sets[0].num_gears()
+                    }
+                    for (set_idx, set) in gear_sets.iter().enumerate() {
+                        let label = GearsetLabel::new(set_idx, set.name().to_string());
+                        let mut original_val_map = BTreeMap::new();
+                        let mut ratio_map: BTreeMap<usize, Option<String>> = BTreeMap::new();
+                        let mut is_default_set = true;
+                        for (gear_idx, gear_ratio) in set.ratios().iter().enumerate() {
+                            if gear_idx >= num_gears {
+                                break;
+                            }
+                            if is_default_set {
+                                if let Some(drivetrain_ratio) = drivetrain_data.get(gear_idx) {
+                                    if *drivetrain_ratio != *gear_ratio {
+                                        is_default_set = false;
+                                    }
+                                } else {
+                                    is_default_set = false;
+                                }
+                            }
+                            original_val_map.insert(gear_idx, gear_ratio.to_string());
+                            ratio_map.insert(gear_idx, None);
+                        }
+                        original_values.insert(label.clone(), original_val_map);
+                        if is_default_set {
+                            default = Some(label.clone());
+                        }
+                        entries.insert(label, ratio_map);
+                    }
+                }
+                _ => {}
+            }
+        };
+        let next_idx = match entries.last_key_value() {
+            None => 0,
+            Some((label, _)) => label.idx + 1
+        };
+        GearSetContainer {
+            next_idx, num_gears, default, entries, original_values
+        }
+    }
+
+    fn num_gearsets(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.entries.len() == 0
+    }
+
+    fn default_gearset(&self) -> &Option<GearsetLabel> {
+        &self.default
+    }
+
+    fn set_default_gearset(&mut self, label: &GearsetLabel) {
+        if self.entries.contains_key(label) {
+            self.default = Some(label.clone())
+        }
+    }
+
+    fn default_ratios(&self) -> Vec<Option<String>> {
+        let mut no_default = Vec::new();
+        for _ in 0..self.num_gears {
+            no_default.push(None);
+        }
+        if self.entries.is_empty() {
+            return no_default;
+        }
+        let default_label = match &self.default {
+            None => match self.entries.first_key_value() {
+                None => return no_default,
+                Some((label, _)) => label
+            }
+            Some(label) => label
+        };
+        self.entries.get(default_label).unwrap().values().map(|ratio| {
+            ratio.clone()
+        }).collect()
+    }
+
+    fn clear_default_gearset(&mut self) {
+        self.default = None;
+    }
+
+    fn update_ratio(&mut self, gearset: &GearsetLabel, gear_idx: usize, ratio: Option<String>) {
+        match self.entries.get_mut(gearset) {
+            None => {}
+            Some(set) => {
+                set.insert(gear_idx, ratio);
+            }
+        }
+    }
+
+    fn add_gearset(&mut self) -> GearsetLabel {
+        let mut new_ratio_map = BTreeMap::new();
+        for idx in 0..self.num_gears {
+            new_ratio_map.insert(idx, None);
+        }
+        let new_label =
+            GearsetLabel::new(self.next_idx, format!("GEARSET_{}", self.next_idx));
+        self.entries.insert(new_label.clone(), new_ratio_map);
+        self.next_idx += 1;
+        new_label
+    }
+
+    fn remove_gearset(&mut self, label: &GearsetLabel) {
+        match self.entries.remove(label) {
+            None => {}
+            Some(_) => if let Some(default) = &self.default {
+                if default == label {
+                    self.default = None;
+                }
+            }
+        }
+    }
+
+    fn add_gear(&mut self) {
+        for gear_set in self.entries.values_mut() {
+            gear_set.insert(self.num_gears, None);
+        }
+        self.num_gears += 1;
+    }
+
+    fn remove_gear(&mut self) {
+        for gear_set in self.entries.values_mut() {
+            gear_set.pop_last();
+        }
+        self.num_gears -= 1;
+    }
+
+    fn create_gearset_lists(&self) -> Row<'static, EditMessage>
+    {
+        let mut gearset_row = Row::new()
+            .height(Length::Shrink)
+            .width(Length::Shrink)
+            .spacing(5)
+            .padding(Padding::from([0, 10]))
+            .align_items(Alignment::Fill);
+        for (gearset_label, gearset_map) in self.entries.iter() {
+            let mut col = Column::new()
+                .align_items(Alignment::Center)
+                .spacing(5)
+                .padding(Padding::from([0, 10]))
+                .height(Length::Shrink);
+            let mut displayed_ratios = Vec::new();
+            for (gear_idx, ratio) in gearset_map.iter() {
+                let placeholder = match self.original_values.get(gearset_label) {
+                    None => String::new(),
+                    Some(set) => match set.get(gear_idx) {
+                        None => String::new(),
+                        Some(current_ratio) =>  current_ratio.clone()
+                    }
+                };
+                let displayed_ratio = match ratio {
+                    None => String::new(),
+                    Some(ratio) => ratio.clone()
+                };
+                displayed_ratios.push((placeholder, displayed_ratio));
+            }
+            col = col.push(text(format!("{}", gearset_label)));
+            col = col.push(self.create_gear_ratio_column(gearset_label.clone(), displayed_ratios));
+            gearset_row = gearset_row.push(col);
+        }
+        gearset_row.push(
+            Container::new(
+                create_add_button(GearUpdate(Gearset(GearsetUpdate::AddGearset())))
+                    .width(Length::Units(50))
+                    .height(Length::Units(50))
+            ).align_y(Vertical::Center).height(Length::Fill)
+        )
+    }
+
+    fn create_gear_ratio_column(&self,
+                                gearset_label: GearsetLabel,
+                                row_vals: Vec<(String, String)>)
+        -> Column<'static, EditMessage>
+    {
+        let mut gear_list = Column::new()
+            .width(Length::Shrink)
+            .spacing(5)
+            .align_items(Alignment::Center);
+        for (gear_idx, (placeholder, new_ratio)) in row_vals.iter().enumerate() {
+            let mut gear_row = Row::new()
+                .width(Length::Shrink)
+                .align_items(Alignment::Center)
+                .spacing(5);
+            let l = Text::new(format!("Gear {}", gear_idx+1)).vertical_alignment(Vertical::Bottom);
+            let label = gearset_label.clone();
+            let t = text_input(
+                placeholder,
+                new_ratio,
+                move |new_value| {
+                    GearUpdate(Gearset(GearsetUpdate::UpdateRatio(label.clone(), gear_idx, new_value)))
+                }
+            ).width(Length::Units(84));
+            gear_row = gear_row.push(l).push(t);
+            gear_list = gear_list.push(gear_row);
+        }
+        let selected = match &self.default {
+            None => None,
+            Some(label) => Some(label.idx)
+        };
+        let delete_button =
+            create_delete_button(GearUpdate(Gearset(GearsetUpdate::RemoveGearset(gearset_label.clone()))));
+        gear_list = gear_list.push(
+            Radio::new(
+                gearset_label.idx(),
+                "Default",
+                selected,
+                move |_| { GearUpdate(Gearset(DefaultGearsetSelected(gearset_label.clone()))) }
+            ).size(10).text_size(14).spacing(5)
+        );
+        gear_list.push(delete_button)
+    }
+}
+
 pub struct GearSets {
-    current_drivetrain_data: Vec<f64>,
-    current_setup_data: Vec<GearSet>,
-    updated_drivetrain_data: BTreeMap<GearsetLabel, BTreeMap<usize, Option<String>>>,
-    final_drive_data: FinalDrive,
-    default_gearset: Option<GearsetLabel>
+    original_drivetrain_data: Vec<f64>,
+    original_setup_data: Option<setup::gears::GearConfig>,
+    updated_gearsets: GearSetContainer,
+    final_drive_data: FinalDrive
 }
 
 impl From<FixedGears> for GearSets {
@@ -96,46 +338,27 @@ impl GearSets {
     {
         let updated_gearsets = GearSetContainer::from_setup_data(&drivetrain_data, &setup_data);
         GearSets {
-            current_drivetrain_data: drivetrain_data,
-            current_setup_data: setup_data,
-            updated_drivetrain_data,
-            final_drive_data,
-            default_gearset
+            original_drivetrain_data: drivetrain_data,
+            original_setup_data: setup_data,
+            updated_gearsets,
+            final_drive_data
         }
     }
-    fn create_gear_ratio_column(&self, gearset_label: GearsetLabel, row_vals: Vec<(String, String)>) -> Column<'static, EditMessage>
-    {
-        let mut gear_list = Column::new().width(Length::Shrink).spacing(5).padding(Padding::from([0, 10])).align_items(Alignment::Center);
-        for (gear_idx, (placeholder, new_ratio)) in row_vals.iter().enumerate() {
-            let mut gear_row = Row::new()
-                .width(Length::Shrink)
-                .align_items(Alignment::Center)
-                .spacing(5);
-            let l = Text::new(format!("Gear {}", gear_idx+1)).vertical_alignment(Vertical::Bottom);
-            let label = gearset_label.clone();
-            let t = text_input(
-                placeholder,
-                new_ratio,
-                move |new_value| {
-                    GearUpdate(Gearset(GearsetUpdate::UpdateRatio(label.clone(), gear_idx, new_value)))
-                }
-            ).width(Length::Units(84));
-            gear_row = gear_row.push(l).push(t);
-            gear_list = gear_list.push(gear_row);
-        }
-        let selected = match &self.default_gearset {
-            None => None,
-            Some(label) => Some(label.idx())
-        };
-        gear_list = gear_list.push(
-            Radio::new(
-                gearset_label.idx(),
-                "Default",
-                selected,
-                move |_| { GearUpdate(Gearset(DefaultGearsetSelected(gearset_label.clone()))) }
-            ).size(10).text_size(14).spacing(5)
-        );
-        gear_list
+
+    pub(crate) fn extract_original_drivetrain_data(&mut self) -> Vec<f64> {
+        std::mem::take(&mut self.original_drivetrain_data)
+    }
+
+    pub(crate) fn extract_original_setup_data(&mut self) -> Option<setup::gears::GearConfig> {
+        std::mem::take(&mut self.original_setup_data)
+    }
+
+    pub(crate) fn extract_final_drive_data(&mut self) -> FinalDrive {
+        std::mem::take(&mut self.final_drive_data)
+    }
+
+    pub(crate) fn get_default_ratios(&self) -> Vec<Option<String>> {
+        self.updated_gearsets.default_ratios()
     }
 }
 
@@ -148,30 +371,26 @@ impl GearConfiguration for GearSets {
         match update_type {
             Gearset(update) => { match update {
                 GearsetUpdate::AddGear() => {
-                    for gear_set in self.updated_drivetrain_data.values_mut() {
-                        let gear_idx: usize = match gear_set.last_key_value() {
-                            None => { 0 }
-                            Some((max_gear_idx, _)) => { max_gear_idx+1 }
-                        };
-                        gear_set.insert(gear_idx, None);
-                    }
+                    self.updated_gearsets.add_gear();
                 }
                 GearsetUpdate::RemoveGear() => {
-                    for gear_set in self.updated_drivetrain_data.values_mut() {
-                        gear_set.pop_last();
-                    }
+                    self.updated_gearsets.remove_gear();
                 }
                 GearsetUpdate::UpdateRatio(set_idx, gear_idx, ratio) => {
-                    if let Some(gear_set) = self.updated_drivetrain_data.get_mut(&set_idx) {
-                        if ratio.is_empty() {
-                            gear_set.insert(gear_idx, None);
-                        } else if is_valid_ratio(&ratio) {
-                            gear_set.insert(gear_idx, Some(ratio));
-                        }
+                    if ratio.is_empty() {
+                        self.updated_gearsets.update_ratio(&set_idx, gear_idx, None);
+                    } else if is_valid_ratio(&ratio) {
+                        self.updated_gearsets.update_ratio(&set_idx, gear_idx, Some(ratio));
                     }
                 }
                 GearsetUpdate::DefaultGearsetSelected(label) => {
-                    self.default_gearset = Some(label);
+                    self.updated_gearsets.set_default_gearset(&label);
+                }
+                GearsetUpdate::AddGearset() => {
+                    self.updated_gearsets.add_gearset();
+                }
+                GearsetUpdate::RemoveGearset(label) => {
+                    self.updated_gearsets.remove_gearset(&label);
                 }
             }}
             _ => {}
