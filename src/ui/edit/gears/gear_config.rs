@@ -187,17 +187,12 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<GearConfig, S
             Ok(GearConfig::Fixed(FixedGears::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data)))
         }
         GearConfigType::GearSets => {
-            let current_setup_data =  match drivetrain_gear_setup {
-                    None => Vec::new(),
-                    Some(gear_config) => { match gear_config {
-                        setup::gears::GearConfig::GearSets(gear_set) => gear_set,
-                        setup::gears::GearConfig::PerGear(_) => Vec::new()
-                    }}
-            };
-            Ok(GearConfig::GearSets(GearSets::from_gear_data(drivetrain_data, current_setup_data, final_drive_data)))
+            Ok(GearConfig::GearSets(GearSets::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data)))
         }
         GearConfigType::PerGearConfig => {
-            Ok(GearConfig::Customizable(CustomizableGears::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data)))
+            Ok(GearConfig::Customizable(CustomizableGears::from_gear_data(drivetrain_data,
+                                                                          drivetrain_gear_setup,
+                                                                          final_drive_data)))
         }
     }
 }
@@ -207,12 +202,20 @@ pub fn convert_gear_configuration(from: GearConfig, to: GearConfigType)
 {
     let from_type = from.get_config_type();
     match to {
-        GearConfigType::Fixed => { match from {
-            GearConfig::GearSets(_) => Err((from, format!("{} to {} is not yet supported", from_type, to))),
+        GearConfigType::Fixed => match from {
+            GearConfig::GearSets(g) => Ok(GearConfig::Fixed(FixedGears::from(g))),
             GearConfig::Customizable(c) => Ok(GearConfig::Fixed(FixedGears::from(c))),
-            _ => Err((from, format!("Config is already of type {}", to)))
-        }}
-        GearConfigType::GearSets => Err((from, "Todo".to_string())),
-        GearConfigType::PerGearConfig => Err((from, "Todo".to_string()))
+            GearConfig::Fixed(_) => Err((from, format!("Config is already of type {}", to)))
+        }
+        GearConfigType::GearSets => match from {
+            GearConfig::Fixed(f) => Ok(GearConfig::GearSets(GearSets::from(f))),
+            GearConfig::Customizable(_) => Err((from, format!("{} to {} is not yet supported", from_type, to))),
+            GearConfig::GearSets(_) => Err((from, format!("Config is already of type {}", to)))
+        }
+        GearConfigType::PerGearConfig => match from {
+            GearConfig::Fixed(f) => Ok(GearConfig::Customizable(CustomizableGears::from(f))),
+            GearConfig::GearSets(_) => Err((from, format!("{} to {} is not yet supported", from_type, to))),
+            GearConfig::Customizable(_) => Err((from, format!("Config is already of type {}", to)))
+        }
     }
 }

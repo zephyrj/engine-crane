@@ -89,23 +89,16 @@ impl EditTab {
                 }
             }
             EditMessage::GearConfigSelected(choice) => {
-                if choice == GearConfigType::GearSets {
-                    return;
-                }
-
                 let current_config_type =
                     if let Some(config) = &self.gear_configuration {
                         Some(config.get_config_type())
                     } else {
                         None
                     };
-
                 match current_config_type {
                     None => { return; }
-                    Some(config_type) => {
-                        if config_type == choice {
-                            return;
-                        }
+                    Some(config_type) => if config_type == choice {
+                        return;
                     }
                 }
 

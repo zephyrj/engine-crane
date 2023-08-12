@@ -374,7 +374,7 @@ mod tests {
     fn extract_acd() {
         //
         // /home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/ks_ferrari_f2004/data.acd
-        let path = Path::new("/home/josykes/Downloads/car/URD_Radical_SR3_XXR_V1_4/assettocorsa/content/cars/urd_radical_sr3xxr_2023/data.acd");
+        let path = Path::new("/home/josykes/Downloads/car/RSS_Formula_Hybrid_X_2022-Assetto_Corsa-v4/content/cars/rss_formula_hybrid_x/data.acd");
         AcdArchive::load_from_acd_file(path).unwrap().unpack().unwrap();
     }
 

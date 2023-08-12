@@ -68,10 +68,22 @@ impl From<FixedGears> for CustomizableGears {
         let mut new_setup_data =
             Self::load_from_setup_data(&original_drivetrain_data, &original_setup_data);
         if new_setup_data.is_empty() {
-            for (idx, ratio) in original_drivetrain_data.iter().enumerate() {
+            for (idx, opt) in fixed_gears.get_updated_ratios().iter().enumerate() {
                 let mut ratio_set = RatioSet::new();
-                let ratio_idx = ratio_set.insert(ratio.to_string(), *ratio);
-                let _ = ratio_set.set_default(ratio_idx);
+                let default_idx = match opt {
+                    None => match original_drivetrain_data.get(idx) {
+                        None => None,
+                        Some(ratio) => {
+                            Some(ratio_set.insert(ratio.to_string(), *ratio))
+                        }
+                    }
+                    Some(ratio) => {
+                        Some(ratio_set.insert(ratio.to_string(), *ratio))
+                    }
+                };
+                if let Some(idx) = default_idx {
+                    let _ = ratio_set.set_default(idx);
+                }
                 new_setup_data.insert((idx+1).into(), ratio_set);
             }
         }
@@ -86,7 +98,10 @@ impl From<FixedGears> for CustomizableGears {
 }
 
 impl CustomizableGears {
-    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>, drivetrain_setup_data: Option<GearConfig>, final_drive_data: FinalDrive) -> CustomizableGears {
+    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>,
+                                 drivetrain_setup_data: Option<GearConfig>,
+                                 final_drive_data: FinalDrive) -> CustomizableGears
+    {
         let new_setup_data = Self::load_from_setup_data(&drivetrain_data, &drivetrain_setup_data);
         CustomizableGears {
             original_drivetrain_data: drivetrain_data,
@@ -202,7 +217,7 @@ impl CustomizableGears {
         r
     }
 
-    pub(crate) fn get_default_gear_ratios(&self) -> Vec<Option<f64>> {
+    pub(crate) fn get_gear_ratios(&self) -> Vec<Option<f64>> {
         self.new_setup_data.values().map(|ratio_set|{
             match ratio_set.default_ratio() {
                 None => None,

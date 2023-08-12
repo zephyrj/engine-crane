@@ -30,6 +30,7 @@ use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::FinalDrive;
 use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::fixed::FixedGears;
 use crate::ui::edit::gears::GearsetUpdate::DefaultGearsetSelected;
 use crate::ui::edit::gears::GearUpdateType::Gearset;
 
@@ -50,34 +51,50 @@ pub struct GearSets {
     default_gearset: Option<GearsetLabel>
 }
 
-impl GearSets {
-    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>, setup_data: Vec<GearSet>, final_drive_data: FinalDrive) -> GearSets {
-        let mut default_gearset = None;
-        let updated_drivetrain_data = setup_data.iter().enumerate().map(
-            |(gearset_idx, gear_set)| {
-                let mut is_default = true;
-                let mut ratio_map: BTreeMap<usize, Option<String>> = BTreeMap::new();
-                gear_set.ratios().iter().enumerate().for_each(
-                    |(gear_idx, ratio)| {
-                        if is_default {
-                            if let Some(drivetrain_ratio) = drivetrain_data.get(gear_idx) {
-                                if *drivetrain_ratio != *ratio {
-                                    is_default = false;
-                                }
-                            } else {
-                                is_default = false;
-                            }
-                        }
-                        ratio_map.insert(gear_idx, None);
+impl From<FixedGears> for GearSets {
+    fn from(mut value: FixedGears) -> Self {
+        let original_drivetrain_data = value.extract_original_drivetrain_data();
+        let original_setup_data = value.extract_original_setup_data();
+        let mut updated_gearsets =
+            GearSetContainer::from_setup_data(&original_drivetrain_data, &original_setup_data);
+        let mut new_gearset_label: Option<GearsetLabel> = None;
+
+        for (ratio_idx, opt) in value.get_updated_ratios().iter().enumerate() {
+            match opt {
+                None => continue,
+                Some(ratio) => {
+                    if new_gearset_label.is_none() {
+                        new_gearset_label = Some(updated_gearsets.add_gearset());
                     }
-                );
-                let label = GearsetLabel::new(gearset_idx, gear_set.name().to_string());
-                if is_default {
-                    default_gearset = Some(label.clone());
+                    updated_gearsets.update_ratio(new_gearset_label.as_ref().unwrap(),
+                                                  ratio_idx,
+                                                  Some(ratio.to_string()));
                 }
-                (label, ratio_map)
             }
-        ).collect();
+        }
+        if updated_gearsets.is_empty() {
+            let label = updated_gearsets.add_gearset();
+            for (idx, ratio) in original_drivetrain_data.iter().enumerate() {
+                updated_gearsets.update_ratio(&label, idx, Some(ratio.to_string()));
+            }
+            updated_gearsets.set_default_gearset(&label);
+        }
+
+        GearSets {
+            original_drivetrain_data,
+            original_setup_data,
+            updated_gearsets,
+            final_drive_data: value.extract_final_drive_data(),
+        }
+    }
+}
+
+impl GearSets {
+    pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>,
+                                 setup_data: Option<setup::gears::GearConfig>,
+                                 final_drive_data: FinalDrive) -> GearSets
+    {
+        let updated_gearsets = GearSetContainer::from_setup_data(&drivetrain_data, &setup_data);
         GearSets {
             current_drivetrain_data: drivetrain_data,
             current_setup_data: setup_data,
@@ -165,34 +182,23 @@ impl GearConfiguration for GearSets {
         self.final_drive_data.handle_update(update_type)
     }
 
-    fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
+    fn add_editable_gear_list<'a, 'b>(
+        &'a self,
+        mut layout: Column<'b, EditMessage>
+    ) -> Column<'b, EditMessage>
         where 'b: 'a
     {
-        let mut gearset_row = Row::new().width(Length::Shrink).spacing(5).padding(Padding::from([0, 10]));
-        for (gearset_label, gearset_map) in self.updated_drivetrain_data.iter() {
-            let mut col = Column::new().align_items(Alignment::Center).spacing(5).padding(Padding::from([0, 10]));
-            let mut displayed_ratios = Vec::new();
-            for (gear_idx, ratio) in gearset_map.iter() {
-                let mut placeholder = String::new();
-                let displayed_ratio = match ratio {
-                    None => {
-                        if let Some(current_set) = self.current_setup_data.get(gearset_label.idx()) {
-                            if let Some(current_ratio) = current_set.ratios().get(*gear_idx) {
-                                placeholder = current_ratio.to_string();
-                            }
-                        }
-                        String::new()
-                    }
-                    Some(ratio) => ratio.clone()
-                };
-                displayed_ratios.push((placeholder, displayed_ratio));
-            }
-            col = col.push(text(format!("{}", gearset_label)));
-            col = col.push(self.create_gear_ratio_column(gearset_label.clone(), displayed_ratios));
-            gearset_row = gearset_row.push(col);
-        }
-        gearset_row = gearset_row.push( self.final_drive_data.create_final_drive_column());
-        layout = layout.push(gearset_row);
+        let mut layout_row = Row::new().height(Length::Shrink).spacing(7).align_items(Alignment::Fill);
+        let mut layout_col = Column::new().height(Length::Shrink);
+        layout_col = layout_col.push(self.updated_gearsets.create_gearset_lists()).height(Length::Shrink);
+        layout_row = layout_row.push(layout_col);
+        layout_row = layout_row.push(vertical_rule(3));
+        layout_row = layout_row.push(
+            Column::new()
+                .height(Length::Shrink)
+                .push(self.final_drive_data.create_final_drive_column())
+        );
+        layout = layout.push(layout_row);
         let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5);
         let add_ratio_button = iced::widget::button(
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),

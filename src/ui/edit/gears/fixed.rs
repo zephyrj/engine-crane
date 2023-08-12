@@ -30,6 +30,7 @@ use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::{FinalDrive, FinalDriveUpdate};
 use crate::ui::edit::gears::{GearConfigType, GearConfiguration, GearUpdateType};
 use crate::ui::edit::gears::customizable::CustomizableGears;
+use crate::ui::edit::gears::gear_sets::GearSets;
 use crate::ui::edit::gears::GearUpdateType::Fixed;
 
 
@@ -47,10 +48,30 @@ pub struct FixedGears {
     final_drive_data: FinalDrive
 }
 
+impl From<GearSets> for FixedGears {
+    fn from(mut value: GearSets) -> Self {
+        let original_drivetrain_data = value.extract_original_drivetrain_data();
+        let default_ratios = value.get_default_ratios();
+        let updated_drivetrain_data =
+            default_ratios.into_iter().enumerate().map(|(idx, default)| {
+                match default {
+                    None => (idx, None),
+                    Some(ratio) => (idx, Some(ratio))
+                }
+            }).collect();
+        FixedGears {
+            original_drivetrain_data,
+            original_setup_data: value.extract_original_setup_data(),
+            updated_drivetrain_data,
+            final_drive_data: value.extract_final_drive_data()
+        }
+    }
+}
+
 impl From<CustomizableGears> for FixedGears {
     fn from(mut value: CustomizableGears) -> Self {
         let original_drivetrain_data = value.extract_original_drivetrain_data();
-        let default_ratios = value.get_default_gear_ratios();
+        let default_ratios = value.get_gear_ratios();
         let updated_drivetrain_data =
             default_ratios.into_iter().enumerate().map(|(idx, default)| {
                 match default {
@@ -131,6 +152,19 @@ impl FixedGears {
 
     pub(crate) fn extract_final_drive_data(&mut self) -> FinalDrive {
         std::mem::take(&mut self.final_drive_data)
+    }
+    
+    pub(crate) fn get_updated_ratios(&self) -> Vec<Option<f64>> {
+        self.updated_drivetrain_data.values().map(|opt|{
+            return if let Some(val) = opt {
+                match val.parse::<f64>() {
+                    Ok(ratio) => Some(ratio),
+                    Err(_) => None
+                }
+            } else {
+                None
+            }
+        }).collect()
     }
 }
 
