@@ -71,7 +71,7 @@ impl From<GearSets> for FixedGears {
 impl From<CustomizableGears> for FixedGears {
     fn from(mut value: CustomizableGears) -> Self {
         let original_drivetrain_data = value.extract_original_drivetrain_data();
-        let default_ratios = value.get_gear_ratios();
+        let default_ratios = value.get_default_gear_ratios();
         let updated_drivetrain_data =
             default_ratios.into_iter().enumerate().map(|(idx, default)| {
                 match default {

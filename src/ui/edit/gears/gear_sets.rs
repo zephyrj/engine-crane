@@ -24,7 +24,6 @@ use std::fmt::{Display, Formatter};
 use iced::{Alignment, Length, Padding};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, Radio, Row, Text};
-use iced_native::Widget;
 use iced_native::widget::{text, text_input, vertical_rule};
 
 use crate::assetto_corsa::car::data::setup;
@@ -34,6 +33,7 @@ use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::FinalDrive;
 use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::customizable::CustomizableGears;
 use crate::ui::edit::gears::fixed::FixedGears;
 use crate::ui::edit::gears::GearsetUpdate::DefaultGearsetSelected;
 use crate::ui::edit::gears::GearUpdateType::Gearset;
@@ -145,8 +145,17 @@ impl GearSetContainer {
             }
             Some(label) => label
         };
-        self.entries.get(default_label).unwrap().values().map(|ratio| {
-            ratio.clone()
+        self.entries.get(default_label).unwrap().values().enumerate().map(|(idx,ratio_opt)| {
+            match ratio_opt {
+                None => match self.original_values.get(default_label) {
+                    None => None,
+                    Some(og_set) => match og_set.get(&idx) {
+                        None => None,
+                        Some(og_ratio) => Some(og_ratio.clone())
+                    }
+                }
+                Some(_) => ratio_opt.clone()
+            }
         }).collect()
     }
 
@@ -198,6 +207,34 @@ impl GearSetContainer {
             gear_set.pop_last();
         }
         self.num_gears -= 1;
+    }
+
+    fn get_all_ratios(&self) -> Vec<Vec<String>> {
+        let mut gear_ratios_vec = Vec::new();
+        for _ in 0..self.num_gears {
+            gear_ratios_vec.push(Vec::new())
+        }
+        for (label, gearset) in &self.entries {
+            for (ratio_idx, ratio_opt) in gearset {
+                match ratio_opt {
+                    None => match self.original_values.get(&label) {
+                        None => {}
+                        Some(og_set) => match og_set.get(&ratio_idx) {
+                            None => {}
+                            Some(ratio) => match gear_ratios_vec.get_mut(*ratio_idx) {
+                                None => {}
+                                Some(gear_vec) => gear_vec.push(ratio.clone())
+                            }
+                        }
+                    }
+                    Some(ratio) => match gear_ratios_vec.get_mut(*ratio_idx) {
+                        None => {}
+                        Some(gear_vec) => gear_vec.push(ratio.clone())
+                    }
+                }
+            }
+        }
+        gear_ratios_vec
     }
 
     fn create_gearset_lists(&self) -> Row<'static, EditMessage>
@@ -299,8 +336,8 @@ impl From<FixedGears> for GearSets {
         let original_setup_data = value.extract_original_setup_data();
         let mut updated_gearsets =
             GearSetContainer::from_setup_data(&original_drivetrain_data, &original_setup_data);
-        let mut new_gearset_label: Option<GearsetLabel> = None;
 
+        let mut new_gearset_label: Option<GearsetLabel> = None;
         for (ratio_idx, opt) in value.get_updated_ratios().iter().enumerate() {
             match opt {
                 None => continue,
@@ -322,6 +359,42 @@ impl From<FixedGears> for GearSets {
             updated_gearsets.set_default_gearset(&label);
         }
 
+        GearSets {
+            original_drivetrain_data,
+            original_setup_data,
+            updated_gearsets,
+            final_drive_data: value.extract_final_drive_data(),
+        }
+    }
+}
+
+impl From<CustomizableGears> for GearSets {
+    fn from(mut value: CustomizableGears) -> Self {
+        let original_drivetrain_data = value.extract_original_drivetrain_data();
+        let original_setup_data = value.extract_original_setup_data();
+        let mut updated_gearsets =
+            GearSetContainer::from_setup_data(&original_drivetrain_data, &original_setup_data);
+        let mut new_gearset_label: Option<GearsetLabel> = None;
+        for (ratio_idx, opt) in value.get_default_gear_ratios().iter().enumerate() {
+            match opt {
+                None => continue,
+                Some(ratio) => {
+                    if new_gearset_label.is_none() {
+                        new_gearset_label = Some(updated_gearsets.add_gearset());
+                    }
+                    updated_gearsets.update_ratio(new_gearset_label.as_ref().unwrap(),
+                                                  ratio_idx,
+                                                  Some(ratio.to_string()));
+                }
+            }
+        }
+        if updated_gearsets.is_empty() {
+            let label = updated_gearsets.add_gearset();
+            for (idx, ratio) in original_drivetrain_data.iter().enumerate() {
+                updated_gearsets.update_ratio(&label, idx, Some(ratio.to_string()));
+            }
+            updated_gearsets.set_default_gearset(&label);
+        }
         GearSets {
             original_drivetrain_data,
             original_setup_data,
@@ -359,6 +432,10 @@ impl GearSets {
 
     pub(crate) fn get_default_ratios(&self) -> Vec<Option<String>> {
         self.updated_gearsets.default_ratios()
+    }
+
+    pub(crate) fn get_all_ratios(&self) -> Vec<Vec<String>> {
+        self.updated_gearsets.get_all_ratios()
     }
 }
 

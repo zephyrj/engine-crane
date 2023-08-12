@@ -22,6 +22,7 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
+use std::num::ParseFloatError;
 use fraction::ToPrimitive;
 use iced::{Alignment, Length, Padding};
 use iced::alignment::{Horizontal, Vertical};
@@ -36,6 +37,7 @@ use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearConfiguration, GearUpdateType};
 use crate::ui::edit::gears::final_drive::FinalDrive;
 use crate::ui::edit::gears::fixed::FixedGears;
+use crate::ui::edit::gears::gear_sets::GearSets;
 use crate::ui::edit::gears::GearUpdateType::CustomizedGear;
 use crate::ui::edit::gears::ratio_set::{RatioEntry, RatioSet};
 
@@ -93,6 +95,47 @@ impl From<FixedGears> for CustomizableGears {
             new_setup_data,
             new_ratio_data: None,
             final_drive_data: fixed_gears.extract_final_drive_data()
+        }
+    }
+}
+
+impl From<GearSets> for CustomizableGears {
+    fn from(mut value: GearSets) -> Self {
+        let original_drivetrain_data = value.extract_original_drivetrain_data();
+        let original_setup_data = value.extract_original_setup_data();
+        let mut new_setup_data =
+            Self::load_from_setup_data(&original_drivetrain_data, &original_setup_data);
+        if new_setup_data.is_empty() {
+            let default_ratios = value.get_default_ratios();
+            for (gear_idx, ratio_vec) in value.get_all_ratios().into_iter().enumerate() {
+                let mut ratio_set = RatioSet::new();
+                ratio_vec.into_iter().for_each(|ratio| {
+                    match ratio.parse::<f64>() {
+                        Ok(val) => {
+                            let is_default = match default_ratios.get(gear_idx) {
+                                None => false,
+                                Some(opt) => match opt {
+                                    None => false,
+                                    Some(og_ratio) => *og_ratio == ratio
+                                }
+                            };
+                            let idx = ratio_set.insert(ratio, val);
+                            if is_default {
+                                ratio_set.set_default(idx);
+                            }
+                        }
+                        Err(_) => {}
+                    }
+                });
+                new_setup_data.insert((gear_idx+1).into(), ratio_set);
+            }
+        }
+        CustomizableGears {
+            original_drivetrain_data,
+            original_setup_data,
+            new_setup_data,
+            new_ratio_data: None,
+            final_drive_data: value.extract_final_drive_data()
         }
     }
 }
@@ -217,7 +260,7 @@ impl CustomizableGears {
         r
     }
 
-    pub(crate) fn get_gear_ratios(&self) -> Vec<Option<f64>> {
+    pub(crate) fn get_default_gear_ratios(&self) -> Vec<Option<f64>> {
         self.new_setup_data.values().map(|ratio_set|{
             match ratio_set.default_ratio() {
                 None => None,
