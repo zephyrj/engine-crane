@@ -24,6 +24,7 @@ use iced::{Alignment, Length, Padding};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Row, Text};
 use iced_native::widget::{text, text_input};
+use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::setup::gears::GearConfig;
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
@@ -171,15 +172,13 @@ impl FixedGears {
             }
         }).collect()
     }
-}
 
-impl GearConfiguration for FixedGears {
-    fn get_config_type(&self) -> GearConfigType {
+    pub(crate) fn get_config_type(&self) -> GearConfigType {
         GearConfigType::Fixed
     }
 
     // TODO return a Result so errors can be passed somewhere for viewing
-    fn handle_gear_update(&mut self, update_type: GearUpdateType) {
+    pub(crate) fn handle_gear_update(&mut self, update_type: GearUpdateType) {
         match update_type {
             Fixed(update) => { match update {
                 FixedGearUpdate::AddGear() => {
@@ -204,11 +203,11 @@ impl GearConfiguration for FixedGears {
         }
     }
 
-    fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
+    pub(crate) fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
         self.final_drive_data.handle_update(update_type)
     }
 
-    fn add_editable_gear_list<'a, 'b>(
+    pub(crate) fn add_editable_gear_list<'a, 'b>(
         &'a self,
         mut layout: Column<'b, EditMessage>
     ) -> Column<'b, EditMessage>
@@ -250,6 +249,10 @@ impl GearConfiguration for FixedGears {
             .on_press(GearUpdate(Fixed(FixedGearUpdate::RemoveGear())));
         add_remove_row = add_remove_row.push(delete_gear_button);
         layout.push(add_remove_row)
+    }
+
+    pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
+        Ok(())
     }
 }
 

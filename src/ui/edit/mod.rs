@@ -128,7 +128,14 @@ impl EditTab {
                 }
             }
             EditMessage::ApplyChanges() => {
-
+                if let Some(config) = &mut self.gear_configuration {
+                    if let Some(car_path) = &self.current_car_path {
+                        match config.write_to_car(car_path) {
+                            Ok(_) => {}
+                            Err(e) => error!(e)
+                        }
+                    }
+                }
             }
             EditMessage::ResetChanges() => {
                 match &self.current_car_path {

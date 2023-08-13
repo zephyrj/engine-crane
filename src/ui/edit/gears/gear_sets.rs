@@ -26,7 +26,7 @@ use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{text, text_input, vertical_rule};
 
-use crate::assetto_corsa::car::data::setup;
+use crate::assetto_corsa::car::data::{Drivetrain, setup};
 use crate::ui::button::{create_add_button, create_delete_button};
 
 use crate::ui::edit::EditMessage;
@@ -437,14 +437,12 @@ impl GearSets {
     pub(crate) fn get_all_ratios(&self) -> Vec<Vec<String>> {
         self.updated_gearsets.get_all_ratios()
     }
-}
 
-impl GearConfiguration for GearSets {
-    fn get_config_type(&self) -> GearConfigType {
+    pub(crate) fn get_config_type(&self) -> GearConfigType {
         GearConfigType::GearSets
     }
 
-    fn handle_gear_update(&mut self, update_type: GearUpdateType) {
+    pub(crate) fn handle_gear_update(&mut self, update_type: GearUpdateType) {
         match update_type {
             Gearset(update) => { match update {
                 GearsetUpdate::AddGear() => {
@@ -474,11 +472,11 @@ impl GearConfiguration for GearSets {
         }
     }
 
-    fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
+    pub(crate) fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
         self.final_drive_data.handle_update(update_type)
     }
 
-    fn add_editable_gear_list<'a, 'b>(
+    pub(crate) fn add_editable_gear_list<'a, 'b>(
         &'a self,
         mut layout: Column<'b, EditMessage>
     ) -> Column<'b, EditMessage>
@@ -510,6 +508,10 @@ impl GearConfiguration for GearSets {
             .on_press(GearUpdate(Gearset(GearsetUpdate::RemoveGear())));
         add_remove_row = add_remove_row.push(delete_button);
         layout.push(add_remove_row)
+    }
+
+    pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
+        Ok(())
     }
 }
 

@@ -26,7 +26,12 @@ mod gear_sets;
 mod customizable;
 mod ratio_set;
 
-pub use gear_config::{gear_configuration_builder, convert_gear_configuration, GearConfig, GearConfiguration, GearUpdateType, GearConfigType};
+pub use gear_config::{gear_configuration_builder,
+                      convert_gear_configuration,
+                      GearConfig,
+                      GearConfiguration,
+                      GearUpdateType,
+                      GearConfigType};
 pub use final_drive::FinalDriveUpdate;
 pub use fixed::FixedGearUpdate;
 pub use gear_sets::GearsetUpdate;

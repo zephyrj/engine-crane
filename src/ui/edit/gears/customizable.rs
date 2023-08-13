@@ -30,6 +30,7 @@ use iced::theme::Button;
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{scrollable, text, text_input};
 use iced_native::widget::scrollable::Properties;
+use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::setup::gears::{GearConfig, SingleGear};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
 use crate::ui::edit::EditMessage;
@@ -280,14 +281,12 @@ impl CustomizableGears {
     pub(crate) fn extract_final_drive_data(&mut self) -> FinalDrive {
         std::mem::take(&mut self.final_drive_data)
     }
-}
 
-impl GearConfiguration for CustomizableGears {
-    fn get_config_type(&self) -> GearConfigType {
+    pub(crate) fn get_config_type(&self) -> GearConfigType {
         GearConfigType::PerGearConfig
     }
 
-    fn handle_gear_update(&mut self, update_type: GearUpdateType) {
+    pub(crate) fn handle_gear_update(&mut self, update_type: GearUpdateType) {
         match update_type {
             CustomizedGear(update) => { match update {
                 CustomizedGearUpdate::AddGear() => {
@@ -359,11 +358,11 @@ impl GearConfiguration for CustomizableGears {
         }
     }
 
-    fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
+    pub(crate) fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
         self.final_drive_data.handle_update(update_type)
     }
 
-    fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
+    pub(crate) fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
         where 'b: 'a
     {
         let mut gearset_roe = Row::new().spacing(5).padding(Padding::from([0, 10])).width(Length::Shrink);
@@ -400,6 +399,10 @@ impl GearConfiguration for CustomizableGears {
             .style(Button::Destructive);
         add_remove_row = add_remove_row.push(delete_gear_button);
         layout.push(Container::new(add_remove_row).height(Length::FillPortion(1)).align_y(Vertical::Top).padding(0))
+    }
+
+    pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
+        Ok(())
     }
 }
 

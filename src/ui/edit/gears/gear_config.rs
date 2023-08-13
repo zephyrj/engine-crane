@@ -20,7 +20,7 @@
  */
 
 use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use iced::widget::{Column};
 
 use tracing::{error, warn};
@@ -72,6 +72,7 @@ pub trait GearConfiguration {
     {
         layout
     }
+    fn write_to_car(&self, car_path: &Path) -> Result<(), String>;
 }
 
 pub enum GearConfig {
@@ -111,6 +112,38 @@ impl GearConfiguration for GearConfig {
             GearConfig::GearSets(g) => g.add_editable_gear_list(layout),
             GearConfig::Customizable(c) => c.add_editable_gear_list(layout)
         }
+    }
+
+    fn write_to_car(&self, car_path: &Path) -> Result<(), String> {
+        let mut car = match Car::load_from_path(car_path) {
+            Ok(c) => { c }
+            Err(err) => {
+                let err_str = format!("Failed to load {}. {}", car_path.display(), err.to_string());
+                error!("{}", &err_str);
+                return Err(err_str);
+            }
+        };
+        match Drivetrain::from_car(&mut car) {
+            Ok(mut d) => {
+                match self {
+                    GearConfig::Fixed(f) => f.apply_drivetrain_changes(&mut d),
+                    GearConfig::GearSets(g) => g.apply_drivetrain_changes(&mut d),
+                    GearConfig::Customizable(c) => c.apply_drivetrain_changes(&mut d)
+                }
+            },
+            Err(e) => {
+                return Err(format!("Failed to load drivetrain data from {}. {}",
+                                   car_path.display(),
+                                   e.to_string()));
+            }
+        }?;
+        // let setup_data =
+        // match self {
+        //     GearConfig::Fixed(f) => {},
+        //     GearConfig::GearSets(g) => {},
+        //     GearConfig::Customizable(c) => {}
+        // }
+        Ok(())
     }
 }
 
