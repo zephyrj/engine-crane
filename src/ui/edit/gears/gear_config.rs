@@ -19,7 +19,6 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use iced::widget::{Column};

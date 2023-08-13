@@ -24,9 +24,9 @@ mod gears;
 use super::{Message, Tab};
 use std::path::{PathBuf};
 
-use iced::{Alignment, Element, Length, Padding};
+use iced::{Alignment, Element, Length, Padding, theme};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule};
+use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule, Button};
 use iced_aw::{TabLabel};
 use tracing::{error};
 
@@ -45,7 +45,9 @@ pub enum EditMessage {
     CarSelected(ListPath),
     GearConfigSelected(GearConfigType),
     GearUpdate(GearUpdateType),
-    FinalDriveUpdate(FinalDriveUpdate)
+    FinalDriveUpdate(FinalDriveUpdate),
+    ApplyChanges(),
+    ResetChanges()
 }
 
 impl EditTab {
@@ -125,6 +127,22 @@ impl EditTab {
                     config.handle_final_drive_update(update_type);
                 }
             }
+            EditMessage::ApplyChanges() => {
+
+            }
+            EditMessage::ResetChanges() => {
+                match &self.current_car_path {
+                    None => error!("Reset pressed when no car selected"),
+                    Some(current_car_path) => {
+                        match gear_configuration_builder(&current_car_path) {
+                            Ok(config) => { self.gear_configuration = Some(config) }
+                            Err(e) => {
+                                error!(e)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -155,15 +173,28 @@ impl Tab for EditTab {
                 Some(ListPath {full_path: path.clone()})
             }
         };
+        let mut command_row = Row::new().spacing(5);
+        let mut apply_but = Button::new("Apply")
+            .style(theme::Button::Positive);
+        let mut reset_but =
+            Button::new("Revert changes")
+            .style(theme::Button::Destructive);
+        if let Some(_) =current_car {
+            apply_but = apply_but.on_press(EditMessage::ApplyChanges());
+            reset_but = reset_but.on_press(EditMessage::ResetChanges());
+        }
+        command_row = command_row.push(apply_but).push(reset_but);
+
         let car_select_container = Column::new()
             .align_items(Alignment::Start)
-            //.padding(10)
+            .spacing(5)
             .push(Text::new("Assetto Corsa car"))
             .push(pick_list(
                 &app_data.assetto_corsa_data.available_cars,
                 current_car,
                 EditMessage::CarSelected,
-            ));
+            ))
+            .push(command_row);
         let select_container = Row::new()
             //.align_items(Align::)
             .padding(Padding::from([0, 10]))
