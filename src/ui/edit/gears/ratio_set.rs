@@ -55,6 +55,10 @@ impl RatioSet {
             default_idx: None
         }
     }
+    
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
 
     pub fn max_name_len(&self) -> usize {
         self.max_name_length

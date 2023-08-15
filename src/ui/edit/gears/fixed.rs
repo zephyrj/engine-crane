@@ -24,12 +24,14 @@ use iced::{Alignment, Length, Padding};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Row, Text};
 use iced_native::widget::{text, text_input};
+use crate::assetto_corsa::car;
 use crate::assetto_corsa::car::data::Drivetrain;
-use crate::assetto_corsa::car::data::setup::gears::GearConfig;
+use crate::assetto_corsa::car::data::setup::gears::{GearConfig, GearData};
+use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::{FinalDrive, FinalDriveUpdate};
-use crate::ui::edit::gears::{GearConfigType, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::{GearConfigType, GearUpdateType};
 use crate::ui::edit::gears::customizable::CustomizableGears;
 use crate::ui::edit::gears::gear_sets::GearSets;
 use crate::ui::edit::gears::GearUpdateType::Fixed;
@@ -252,6 +254,17 @@ impl FixedGears {
     }
 
     pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
+        let mut gearbox_data =
+            car::data::drivetrain::Gearbox::load_from_parent(drivetrain)
+                .map_err(|e| format!("{}", e.to_string()))?;
+        let _ = gearbox_data.update_gears(self.get_updated_gear_values());
+        gearbox_data.update_car_data(drivetrain).map_err(|e| e.to_string())?;
+        self.final_drive_data.apply_drivetrain_changes(drivetrain)
+    }
+
+    pub(crate) fn apply_setup_changes(&self, gear_data: &mut GearData) -> Result<(), String> {
+        gear_data.clear_gear_config();
+        self.final_drive_data.apply_setup_changes(gear_data)?;
         Ok(())
     }
 }

@@ -23,13 +23,14 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use iced::widget::{Column};
 
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
 use crate::assetto_corsa::car::data::{Drivetrain, setup};
+use crate::assetto_corsa::car::data::setup::gears::GearData;
 use crate::assetto_corsa::car::data::setup::Setup;
-use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
+use crate::assetto_corsa::traits::{CarDataUpdater, extract_mandatory_section, MandatoryDataSection};
 
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::gears::customizable::CustomizableGears;
@@ -129,6 +130,14 @@ impl GearConfiguration for GearConfig {
                     GearConfig::Fixed(f) => f.apply_drivetrain_changes(&mut d),
                     GearConfig::GearSets(g) => g.apply_drivetrain_changes(&mut d),
                     GearConfig::Customizable(c) => c.apply_drivetrain_changes(&mut d)
+                }?;
+                match d.write() {
+                    Ok(_) => info!("Successfully updated drivetrain data for {}", car_path.display()),
+                    Err(e) => {
+                        return Err(format!("Failed to write car drivetrain data for {}. {}",
+                                           car_path.display(),
+                                           e.to_string()));
+                    }
                 }
             },
             Err(e) => {
@@ -136,13 +145,47 @@ impl GearConfiguration for GearConfig {
                                    car_path.display(),
                                    e.to_string()));
             }
-        }?;
-        // let setup_data =
-        // match self {
-        //     GearConfig::Fixed(f) => {},
-        //     GearConfig::GearSets(g) => {},
-        //     GearConfig::Customizable(c) => {}
-        // }
+        };
+
+        match Setup::from_car(&mut car) {
+            Ok(setup_opt) => match setup_opt {
+                None => {}
+                Some(mut setup) => match GearData::load_from_parent(&setup) {
+                    Ok(mut gear_data) => {
+                        match self {
+                            GearConfig::Fixed(f) => f.apply_setup_changes(&mut gear_data),
+                            GearConfig::GearSets(g) => g.apply_setup_changes(&mut gear_data),
+                            GearConfig::Customizable(c) => c.apply_setup_changes(&mut gear_data)
+                        }?;
+                        match gear_data.update_car_data(&mut setup) {
+                            Ok(_) => match setup.write() {
+                                Ok(_) => info!("Successfully updated setup data for {}", car_path.display()),
+                                Err(e) => {
+                                    return Err(format!("Failed to write car setup data for {}. {}",
+                                                       car_path.display(),
+                                                       e.to_string()));
+                                }
+                            }
+                            Err(e) => {
+                                return Err(format!("Failed to update car setup data for {}. {}",
+                                                   car_path.display(),
+                                                   e.to_string()));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        return Err(format!("Failed to load gear setup data from {}. {}",
+                                           car_path.display(),
+                                           e.to_string()));
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(format!("Failed to load setup data from {}. {}",
+                                   car_path.display(),
+                                   e.to_string()));
+            }
+        };
         Ok(())
     }
 }

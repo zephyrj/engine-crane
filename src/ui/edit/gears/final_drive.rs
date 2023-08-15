@@ -25,11 +25,14 @@ use iced::{Alignment, Length};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Radio, Row, Text};
 use iced_native::widget::{text, text_input};
-use crate::assetto_corsa::car::data::setup::gears::SingleGear;
+use crate::assetto_corsa::car;
+use crate::assetto_corsa::car::data::Drivetrain;
+use crate::assetto_corsa::car::data::setup::gears::{GearData, SingleGear};
+use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::gears::final_drive::FinalDriveUpdate::RemoveRatioPressed;
-use crate::ui::edit::gears::ratio_set::RatioSet;
+use crate::ui::edit::gears::ratio_set::{RatioSet};
 
 
 #[derive(Debug, Clone)]
@@ -199,6 +202,36 @@ impl FinalDrive {
             .width(Length::Units(20))
         );
         r
+    }
+
+    pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
+        let ratio = match self.new_setup_data.default_ratio() {
+            None => match self.new_setup_data.entries().first() {
+                None => 3.0f64,
+                Some(entry) => entry.ratio
+            }
+            Some(entry) => entry.ratio
+        };
+        let mut gearbox_data =
+            car::data::drivetrain::Gearbox::load_from_parent(drivetrain)
+                .map_err(|e| format!("{}", e.to_string()))?;
+        gearbox_data.update_final_drive(ratio);
+        gearbox_data.update_car_data(drivetrain).map_err(|e| format!("{}", e.to_string()))?;
+        Ok(())
+    }
+
+    pub(crate) fn apply_setup_changes(&self, gear_data: &mut GearData) -> Result<(), String> {
+        if self.new_setup_data.len() <= 1 {
+            gear_data.clear_final_drive();
+        } else {
+            let final_ratios = self.new_setup_data.entries().iter().map(
+                |entry| {
+                    (entry.name.clone(), entry.ratio)
+                }
+            ).collect();
+            gear_data.set_final_drive(Some(SingleGear::new_final_drive(final_ratios)));
+        }
+        Ok(())
     }
 }
 

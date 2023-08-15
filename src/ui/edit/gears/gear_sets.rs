@@ -513,6 +513,10 @@ impl GearSets {
     pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
         Ok(())
     }
+
+    pub(crate) fn apply_setup_changes(&self, gear_data: &mut setup::gears::GearData) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

@@ -30,7 +30,7 @@ use iced::theme::Button;
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{scrollable, text, text_input};
 use iced_native::widget::scrollable::Properties;
-use crate::assetto_corsa::car::data::Drivetrain;
+use crate::assetto_corsa::car::data::{Drivetrain, setup};
 use crate::assetto_corsa::car::data::setup::gears::{GearConfig, SingleGear};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
 use crate::ui::edit::EditMessage;
@@ -402,6 +402,10 @@ impl CustomizableGears {
     }
 
     pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub(crate) fn apply_setup_changes(&self, gear_data: &mut setup::gears::GearData) -> Result<(), String> {
         Ok(())
     }
 }
