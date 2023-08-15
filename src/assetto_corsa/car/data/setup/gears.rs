@@ -48,6 +48,7 @@ impl MandatoryDataSection for GearData {
 
 impl CarDataUpdater for GearData {
     fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        self.clear_existing_config(car_data)?;
         if let Some(gear_config) = &self.gear_config {
             gear_config.update_car_data(car_data)?;
         }
@@ -85,8 +86,25 @@ impl GearData {
         std::mem::replace(&mut self.gear_config, new_gear_config)
     }
 
+    pub fn clear_gear_config(&mut self) -> Option<GearConfig> {
+        self.set_gear_config(None)
+    }
+
     pub fn set_final_drive(&mut self, new_final_drive: Option<SingleGear>) -> Option<SingleGear> {
         std::mem::replace(&mut self.final_drive, new_final_drive)
+    }
+
+    pub fn clear_final_drive(&mut self) -> Option<SingleGear> {
+        self.set_final_drive(None)
+    }
+
+    fn clear_existing_config(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        SingleGear::delete_all_gears_from_car_data(car_data)?;
+        SingleGear::delete_final_drive_from_car_data(car_data)?;
+        let ini_data = car_data.mut_ini_data();
+        GearSet::delete_all_from_ini(ini_data);
+        ini_data.remove_section("GEARS");
+        Ok(())
     }
 }
 
@@ -154,16 +172,7 @@ impl GearConfig {
         Ok(None)
     }
 
-    pub fn clear_existing_config(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
-        SingleGear::delete_all_from_car_data(car_data)?;
-        let ini_data = car_data.mut_ini_data();
-        GearSet::delete_all_from_ini(ini_data);
-        ini_data.remove_section("GEARS");
-        Ok(())
-    }
-
-    pub fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
-        self.clear_existing_config(car_data)?;
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
         match &self {
             GearSets(gearset_vec) => {
                 let ini_data = car_data.mut_ini_data();
@@ -308,7 +317,7 @@ impl SingleGear {
         sort_by_numeric_index(sections)
     }
 
-    pub fn delete_all_from_car_data(car_data: &mut dyn CarDataFile) -> Result<()> {
+    pub fn delete_all_gears_from_car_data(car_data: &mut dyn CarDataFile) -> Result<()> {
         let existing_gear_names : Vec<String>;
         {
             let ini_data = car_data.mut_ini_data();
@@ -324,6 +333,12 @@ impl SingleGear {
             }
             car_data.mut_ini_data().remove_section(&name);
         }
+        Ok(())
+    }
+
+    pub fn delete_final_drive_from_car_data(car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
+        ini_data.remove_section("FINAL_GEAR_RATIO");
         Ok(())
     }
 
@@ -839,6 +854,26 @@ mod tests {
     }
 
     #[test]
+    fn clear_customizable_setup() {
+        {
+            let mut car = setup_tmp_car_as("gears-per-gear-ratio-file");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut data = GearData::load_from_parent(&car_setup_data).unwrap();
+            assert!(data.gear_config.is_some());
+            data.clear_gear_config();
+            data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        assert!(!car_setup_data.ini_data.contains_section("GEARS"));
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        assert!(gear_data.gear_config.is_none());
+        assert!(gear_data.final_drive.is_some());
+    }
+
+    #[test]
     fn update_final_drive() {
         let final_ratios = vec![("4.500".to_owned(), 4.500), ("4.300".to_owned(), 4.300), ("4.000".to_owned(), 4.000)];
         {
@@ -860,5 +895,44 @@ mod tests {
             assert_eq!(actual.0, expected.0);
             assert_eq!(actual.1, expected.1);
         }
+    }
+
+    #[test]
+    fn clear_final_drive() {
+        {
+            let mut car = setup_tmp_car_as("gears-per-gear-ratio-file");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut data = GearData::load_from_parent(&car_setup_data).unwrap();
+            assert!(data.final_drive.is_some());
+            data.clear_final_drive();
+            data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        assert!(gear_data.gear_config.is_some());
+        assert!(gear_data.final_drive.is_none());
+    }
+
+    #[test]
+    fn clear_only_final_drive() {
+        {
+            let mut car = setup_tmp_car_as("only-final-drive");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut data = GearData::load_from_parent(&car_setup_data).unwrap();
+            assert!(data.final_drive.is_some());
+            data.clear_final_drive();
+            data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        assert!(!car_setup_data.ini_data.contains_section("GEARS"));
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        assert!(gear_data.gear_config.is_none());
+        assert!(gear_data.final_drive.is_none());
     }
 }
