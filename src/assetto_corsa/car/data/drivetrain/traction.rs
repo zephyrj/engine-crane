@@ -27,7 +27,7 @@ use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSec
 use crate::assetto_corsa::error::{PropertyParseError, Result};
 
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DriveType {
     RWD,
     FWD,

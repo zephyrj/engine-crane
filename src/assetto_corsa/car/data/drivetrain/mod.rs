@@ -137,91 +137,230 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+    use crate::assetto_corsa::Car;
     use crate::assetto_corsa::car::data::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, Gearbox, Traction};
-    use crate::assetto_corsa::traits::{extract_mandatory_section, MandatoryDataSection};
+    use crate::assetto_corsa::car::data::drivetrain::traction::DriveType;
+    use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, extract_mandatory_section, MandatoryDataSection};
 
-    const RWD_TEST_DATA: &'static str = r#"
-[HEADER]
-VERSION=3
+    const TEST_DATA_PATH: &'static str = "test_data";
+    const TEMP_TEST_CAR_NAME_PREFIX: &'static str = "tmp_car";
 
-[TRACTION]
-TYPE=RWD					; Wheel drive. Possible options: FWD (Front Wheel Drive), RWD (Rear Wheel Drive)
+    struct TestFileHelper {
+        test_name: String
+    }
 
-[GEARS]
-COUNT=6				; forward gears number
-GEAR_R=-3.818			; rear gear ratio
-; forward gears ratios. must be equal to number of gears defined on count
-GEAR_1=2.36
-GEAR_2=1.94
-GEAR_3=1.56
-GEAR_4=1.29
-GEAR_5=1.10
-GEAR_6=0.92
+    impl TestFileHelper {
+        pub fn new(test_name: String) -> TestFileHelper {
+            TestFileHelper{test_name}
+        }
 
-FINAL=3.10		; final gear ratio
+        fn get_tmp_car_folder(&self) -> String {
+            format!("{}_{}", TEMP_TEST_CAR_NAME_PREFIX, self.test_name)
+        }
 
-[DIFFERENTIAL]
-POWER=0.10			; differential lock under power. 1.0=100% lock - 0 0% lock
-COAST=0.90			; differential lock under coasting. 1.0=100% lock 0=0% lock
-PRELOAD=13			; preload torque setting
+        fn get_test_car_path(&self, car_name: &str) -> PathBuf {
+            let mut test_folder_path = PathBuf::from(Path::new(file!()).parent().unwrap());
+            test_folder_path.push(format!("{}/{}", TEST_DATA_PATH, car_name));
+            test_folder_path
+        }
 
-[GEARBOX]
-CHANGE_UP_TIME=130		; change up time in milliseconds
-CHANGE_DN_TIME=180		; change down time in milliseconds
-AUTO_CUTOFF_TIME=150		; Auto cutoff time for upshifts in milliseconds, 0 to disable
-SUPPORTS_SHIFTER=0		; 1=Car supports shifter, 0=car supports only paddles
-VALID_SHIFT_RPM_WINDOW=800			;range window additional to the precise rev matching rpm that permits gear engage.
-CONTROLS_WINDOW_GAIN=0.4			;multiplayer for gas,brake,clutch pedals that permits gear engage on different rev matching rpm. the lower the more difficult.
-INERTIA=0.018					; gearbox inertia. default values to 0.02 if not set
+        fn load_test_car(&self, test_car_name: &str) -> Car {
+            Car::load_from_path(&self.get_test_car_path(test_car_name)).unwrap()
+        }
 
-[CLUTCH]
-MAX_TORQUE=400
+        fn load_tmp_car(&self) -> Car {
+            self.load_test_car(&self.get_tmp_car_folder())
+        }
 
-[AUTOCLUTCH]
-UPSHIFT_PROFILE=NONE			; Name of the autoclutch profile for upshifts. NONE to disable autoclutch on shift up
-DOWNSHIFT_PROFILE=DOWNSHIFT_PROFILE	; Same as above for downshifts
-USE_ON_CHANGES=1				; Use the autoclutch on gear shifts even when autoclutch is set to off. Needed for cars with semiautomatic gearboxes. values 1,0
-MIN_RPM=2000					; Minimum rpm for autoclutch engadgement
-MAX_RPM=3000					; Maximum rpm for autoclutch engadgement
-FORCED_ON=0
+        fn delete_tmp_car(&self) {
+            let tmp_car_path = self.get_test_car_path(&self.get_tmp_car_folder());
+            if tmp_car_path.exists() {
+                std::fs::remove_dir_all(tmp_car_path).unwrap();
+            }
+        }
 
-[DOWNSHIFT_PROFILE]
-POINT_0=10				; Time to reach fully depress clutch
-POINT_1=190				; Time to start releasing clutch
-POINT_2=250				; Time to reach fully released clutch
+        fn create_tmp_car(&self) -> Car {
+            self.delete_tmp_car();
+            Car::new(self.get_test_car_path(&self.get_tmp_car_folder())).unwrap()
+        }
 
-[AUTOBLIP]
-ELECTRONIC=1				; If =1 then it is a feature of the car and cannot be disabled
-POINT_0=10				; Time to reach full level
-POINT_1=150				; Time to start releasing gas
-POINT_2=180			; Time to reach 0 gas
-LEVEL=0.7				; Gas level to be reached
+        fn setup_tmp_car_as(&self, test_car_name: &str) -> Car {
+            self.create_tmp_car();
+            let mut copy_options = fs_extra::dir::CopyOptions::new();
+            copy_options.content_only = true;
+            fs_extra::dir::copy(self.get_test_car_path(test_car_name),
+                                self.get_test_car_path(&self.get_tmp_car_folder()),
+                                &copy_options).unwrap();
+            Car::load_from_path(&self.get_test_car_path(&self.get_tmp_car_folder())).unwrap()
+        }
+    }
 
-[AUTO_SHIFTER]
-UP=6300
-DOWN=4500
-SLIP_THRESHOLD=1.1
-GAS_CUTOFF_TIME=0.28
 
-[DOWNSHIFT_PROTECTION]
-ACTIVE=1
-DEBUG=0				; adds a line in the log for every missed downshift
-OVERREV=200		; How many RPM over the limiter the car is allowed to go
-LOCK_N=1
-"#;
-
-    // #[test]
-    // fn update_traction() -> Result<(), String> {
-    //     let new_drive_type = DriveType::FWD;
-    //
-    //     let output_ini_string = subcomponent_update_test(|traction: &mut Traction| {
-    //         traction.drive_type = new_drive_type.clone();
-    //     })?;
-    //     validate_subcomponent(output_ini_string, |gearbox: &Traction| {
-    //         assert_eq!(gearbox.drive_type, new_drive_type, "Drive type is correct");
-    //     })
+    // fn subcomponent_update_test<T: IniUpdater + MandatoryDataSection, F: FnOnce(&mut T)>(component_update_fn: F) -> Result<String, String> {
+    //     let mut drivetrain = Drivetrain::load_from_ini_string(String::from(TEST_DATA));
+    //     let mut component = extract_mandatory_section::<T>(&drivetrain).unwrap();
+    //     component_update_fn(&mut component);
+    //     drivetrain.update_subcomponent(&component).map_err(|err| format!("{}", err.to_string()))?;
+    //     Ok(drivetrain.ini_data.to_string())
     // }
     //
+    // fn validate_subcomponent<T, F>(ini_string: String, component_validation_fn: F) -> Result<(), String>
+    //     where T: MandatoryDataSection,
+    //           F: FnOnce(&T)
+    // {
+    //     let drivetrain = Drivetrain::load_from_ini_string(ini_string);
+    //     let component = extract_mandatory_section::<T>(&drivetrain).map_err(|err| format!("{}", err.to_string()))?;
+    //     component_validation_fn(&component);
+    //     Ok(())
+    // }
+
+    #[test]
+    fn update_traction() -> Result<(), String> {
+        let update_drive_type = DriveType::FWD;
+        let helper = TestFileHelper::new("update_traction".to_string());
+        {
+            let mut car = helper.setup_tmp_car_as("six-gears");
+            let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+            let mut traction_data = Traction::load_from_parent(&mut drivetrain).unwrap();
+            assert_eq!(traction_data.drive_type, DriveType::RWD);
+
+            traction_data.drive_type = update_drive_type;
+            assert!(traction_data.update_car_data(&mut drivetrain).is_ok());
+            assert!(drivetrain.write().is_ok());
+        }
+
+        let mut car = helper.load_tmp_car();
+        let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+        let traction_data = Traction::load_from_parent(&mut drivetrain).unwrap();
+        assert_eq!(traction_data.drive_type, update_drive_type);
+        helper.delete_tmp_car();
+        Ok(())
+    }
+
+    #[test]
+    fn update_same_number_gear_ratios() -> Result<(), String> {
+        let original_ratios: Vec<f64> = vec![2.36, 1.94, 1.56, 1.29, 1.10, 0.92];
+        let updated_ratios: Vec<f64> = vec![2.36, 1.98, 1.66, 1.33, 1.10, 0.88];
+        let helper = TestFileHelper::new("update_same_number_gear_ratios".to_string());
+        {
+            let mut car = helper.setup_tmp_car_as("six-gears");
+            let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+            let mut gearbox_data = Gearbox::load_from_parent(&mut drivetrain).unwrap();
+            assert_eq!(gearbox_data.num_gears(), 6);
+            assert_eq!(gearbox_data.final_drive(), 3.10);
+            for (actual, expected, ) in gearbox_data.gear_ratios().iter().zip(original_ratios) {
+                assert_eq!(*actual, expected);
+            }
+
+            let _ = gearbox_data.update_gears(updated_ratios.clone());
+            assert!(gearbox_data.update_car_data(&mut drivetrain).is_ok());
+            assert!(drivetrain.write().is_ok());
+        }
+
+        let mut car = helper.load_tmp_car();
+        let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+        let gearbox_data = Gearbox::load_from_parent(&mut drivetrain).unwrap();
+        assert_eq!(gearbox_data.num_gears(), updated_ratios.len());
+        assert_eq!(gearbox_data.final_drive(), 3.10);
+        for (actual, expected, ) in gearbox_data.gear_ratios().iter().zip(updated_ratios) {
+            assert_eq!(expected, *actual);
+        }
+        helper.delete_tmp_car();
+        Ok(())
+    }
+
+    #[test]
+    fn update_more_gear_ratios() -> Result<(), String> {
+        let original_ratios: Vec<f64> = vec![2.36, 1.94, 1.56, 1.29, 1.10, 0.92];
+        let updated_ratios: Vec<f64> = vec![2.36, 1.98, 1.66, 1.33, 1.10, 0.88, 0.72];
+        let helper = TestFileHelper::new("update_more_gear_ratios".to_string());
+        {
+            let mut car = helper.setup_tmp_car_as("six-gears");
+            let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+            let mut gearbox_data = Gearbox::load_from_parent(&mut drivetrain).unwrap();
+            assert_eq!(gearbox_data.num_gears(), 6);
+            assert_eq!(gearbox_data.final_drive(), 3.10);
+            for (actual, expected, ) in gearbox_data.gear_ratios().iter().zip(original_ratios) {
+                assert_eq!(*actual, expected);
+            }
+
+            let _ = gearbox_data.update_gears(updated_ratios.clone());
+            assert_eq!(gearbox_data.num_gears(), updated_ratios.len());
+            assert!(gearbox_data.update_car_data(&mut drivetrain).is_ok());
+            assert!(drivetrain.write().is_ok());
+        }
+
+        let mut car = helper.load_tmp_car();
+        let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+        let gearbox_data = Gearbox::load_from_parent(&mut drivetrain).unwrap();
+        assert_eq!(gearbox_data.num_gears(), updated_ratios.len());
+        assert_eq!(gearbox_data.final_drive(), 3.10);
+        for (actual, expected, ) in gearbox_data.gear_ratios().iter().zip(updated_ratios) {
+            assert_eq!(expected, *actual);
+        }
+        helper.delete_tmp_car();
+        Ok(())
+    }
+
+    #[test]
+    fn update_less_gear_ratios() -> Result<(), String> {
+        let original_ratios: Vec<f64> = vec![2.36, 1.94, 1.56, 1.29, 1.10, 0.92];
+        let updated_ratios: Vec<f64> = vec![2.36, 1.98, 1.66, 1.33];
+        let helper = TestFileHelper::new("update_less_gear_ratios".to_string());
+        {
+            let mut car = helper.setup_tmp_car_as("six-gears");
+            let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+            let mut gearbox_data = Gearbox::load_from_parent(&mut drivetrain).unwrap();
+            assert_eq!(gearbox_data.num_gears(), 6);
+            assert_eq!(gearbox_data.final_drive(), 3.10);
+            for (actual, expected, ) in gearbox_data.gear_ratios().iter().zip(original_ratios) {
+                assert_eq!(*actual, expected);
+            }
+
+            let _ = gearbox_data.update_gears(updated_ratios.clone());
+            assert!(gearbox_data.update_car_data(&mut drivetrain).is_ok());
+            assert!(drivetrain.write().is_ok());
+        }
+
+        let mut car = helper.load_tmp_car();
+        let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+        let gearbox_data = Gearbox::load_from_parent(&mut drivetrain).unwrap();
+        assert_eq!(gearbox_data.num_gears(), updated_ratios.len());
+        assert_eq!(gearbox_data.final_drive(), 3.10);
+        for (actual, expected, ) in gearbox_data.gear_ratios().iter().zip(updated_ratios) {
+            assert_eq!(expected, *actual);
+        }
+        helper.delete_tmp_car();
+        Ok(())
+    }
+
+    #[test]
+    fn update_final_drive() -> Result<(), String> {
+        let original: f64 = 3.10;
+        let updated: f64 = 3.20;
+        let helper = TestFileHelper::new("update_final_drive".to_string());
+        {
+            let mut car = helper.setup_tmp_car_as("six-gears");
+            let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+            let mut gearbox_data = Gearbox::load_from_parent(&mut drivetrain).unwrap();
+            assert_eq!(gearbox_data.num_gears(), 6);
+            assert_eq!(gearbox_data.final_drive(), original);
+
+            gearbox_data.update_final_drive(updated);
+            assert!(gearbox_data.update_car_data(&mut drivetrain).is_ok());
+            assert!(drivetrain.write().is_ok());
+        }
+
+        let mut car = helper.load_tmp_car();
+        let mut drivetrain = Drivetrain::from_car(&mut car).unwrap();
+        let gearbox_data = Gearbox::load_from_parent(&mut drivetrain).unwrap();
+        assert_eq!(gearbox_data.num_gears(), 6);
+        assert_eq!(gearbox_data.final_drive(), updated);
+        helper.delete_tmp_car();
+        Ok(())
+    }
+
     // #[test]
     // fn update_gearbox() -> Result<(), String> {
     //     let new_change_up_time = 140;
