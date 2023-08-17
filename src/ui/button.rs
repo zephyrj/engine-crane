@@ -36,3 +36,13 @@ pub fn create_delete_button<Message>(on_press: Message) -> Button<'static, Messa
         .style(theme::Button::Destructive)
         .padding(2)
 }
+
+pub fn create_disabled_delete_button<Message>() -> Button<'static, Message> {
+    let img =
+        Svg::new(Handle::from_memory(DELETE_SVG))
+            .style(theme::Svg::custom_fn(|_| { svg::Appearance{color: Some(Color::WHITE)} }))
+            .content_fit(ContentFit::Fill);
+    iced::widget::button(img)
+        .style(theme::Button::Destructive)
+        .padding(2)
+}

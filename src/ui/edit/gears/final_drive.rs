@@ -29,7 +29,7 @@ use crate::assetto_corsa::car;
 use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::setup::gears::{GearData, SingleGear};
 use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
-use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
+use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::gears::final_drive::FinalDriveUpdate::RemoveRatioPressed;
 use crate::ui::edit::gears::ratio_set::{RatioSet};
@@ -144,7 +144,11 @@ impl FinalDrive {
                     move |idx| { EditMessage::FinalDriveUpdate(FinalDriveUpdate::DefaultSelected(idx)) }
                 ).size(10)
             );
-            r = r.push(create_delete_button(EditMessage::FinalDriveUpdate(RemoveRatioPressed(ratio_entry.idx))).height(Length::Units(15)).width(Length::Units(15)));
+            let del_but = match self.new_setup_data.len() > 1 {
+                true => create_delete_button(EditMessage::FinalDriveUpdate(RemoveRatioPressed(ratio_entry.idx))),
+                false => create_disabled_delete_button()
+            };
+            r = r.push(del_but.height(Length::Units(15)).width(Length::Units(15)));
             col = col.push(r);
         }
         if let Some(_) = &self.new_ratio_data {
