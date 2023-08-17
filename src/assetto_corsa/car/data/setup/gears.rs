@@ -19,8 +19,8 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::cmp::{min, Ordering};
-use std::collections::HashMap;
+use std::cmp::{Ordering};
+use std::collections::{BTreeMap, HashMap};
 use fraction::Bounded;
 use itertools::Itertools;
 use crate::assetto_corsa::car::data::setup::gears::GearConfig::{GearSets, PerGear};
@@ -115,7 +115,28 @@ pub enum GearConfig {
 }
 
 impl GearConfig {
-    pub fn new_gearset_config(gearset_ratios: &HashMap<String, Vec<f64>>) -> GearConfig {
+    pub fn new_gearset_config_from_btree_map(gearset_ratios: BTreeMap<String, Vec<f64>>) -> GearConfig {
+        let mut gearsets: Vec<GearSet> = Vec::new();
+        let mut num_gears = 0;
+        for (name, gearset_vec) in gearset_ratios {
+            if num_gears == 0 {
+                num_gears = gearset_vec.len();
+            }
+            if gearset_vec.len() >= num_gears {
+                gearsets.push(GearSet::new(name, gearset_vec[0..num_gears].to_vec()));
+            } else {
+                let mut fixed_ratios = Vec::with_capacity(num_gears);
+                fixed_ratios.fill(1.0);
+                for (idx, g) in gearset_vec.iter().enumerate() {
+                    fixed_ratios[idx] = *g;
+                }
+                gearsets.push(GearSet::new(name, fixed_ratios));
+            }
+        }
+        return GearSets(gearsets)
+    }
+
+    pub fn new_gearset_config_from_map(gearset_ratios: &HashMap<String, Vec<f64>>) -> GearConfig {
         let mut gearsets: Vec<GearSet> = Vec::new();
         let mut num_gears = 0;
         for (name, gearset_vec) in gearset_ratios {
@@ -720,7 +741,7 @@ mod tests {
             let mut gearset_map = HashMap::new();
             gearset_map.insert("original".to_string(), orig_ratios.clone());
             gearset_map.insert("updated".to_string(), updated_ratios.clone());
-            gear_data.set_gear_config(Some(GearConfig::new_gearset_config(&gearset_map)));
+            gear_data.set_gear_config(Some(GearConfig::new_gearset_config_from_map(&gearset_map)));
             gear_data.update_car_data(&mut car_setup_data).unwrap();
             car_setup_data.write().unwrap();
         }
@@ -831,7 +852,7 @@ mod tests {
             let mut gearset_map = HashMap::new();
             gearset_map.insert("original".to_string(), orig_ratios.clone());
             gearset_map.insert("updated".to_string(), updated_ratios.clone());
-            gear_data.set_gear_config(Some(GearConfig::new_gearset_config(&gearset_map)));
+            gear_data.set_gear_config(Some(GearConfig::new_gearset_config_from_map(&gearset_map)));
             gear_data.update_car_data(&mut car_setup_data).unwrap();
             car_setup_data.write().unwrap();
         }

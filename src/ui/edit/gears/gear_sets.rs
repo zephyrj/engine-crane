@@ -25,14 +25,16 @@ use iced::{Alignment, Length, Padding};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{text, text_input, vertical_rule};
+use crate::assetto_corsa::car;
 
 use crate::assetto_corsa::car::data::{Drivetrain, setup};
+use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button};
 
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::FinalDrive;
-use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearUpdateType};
 use crate::ui::edit::gears::customizable::CustomizableGears;
 use crate::ui::edit::gears::fixed::FixedGears;
 use crate::ui::edit::gears::GearsetUpdate::DefaultGearsetSelected;
@@ -147,13 +149,7 @@ impl GearSetContainer {
         };
         self.entries.get(default_label).unwrap().values().enumerate().map(|(idx,ratio_opt)| {
             match ratio_opt {
-                None => match self.original_values.get(default_label) {
-                    None => None,
-                    Some(og_set) => match og_set.get(&idx) {
-                        None => None,
-                        Some(og_ratio) => Some(og_ratio.clone())
-                    }
-                }
+                None => self.get_og_ratio(default_label, idx),
                 Some(_) => ratio_opt.clone()
             }
         }).collect()
@@ -235,6 +231,29 @@ impl GearSetContainer {
             }
         }
         gear_ratios_vec
+    }
+
+    fn get_og_ratio(&self, label: &GearsetLabel, gear_idx: usize) -> Option<String> {
+        Some(self.original_values.get(&label)?.get(&gear_idx)?.clone())
+    }
+
+    fn to_setup_map(&self) -> BTreeMap<String, Vec<f64>> {
+        self.entries.iter().map(
+            |(label, ratio_map)| {
+                let ratio_vec: Vec<f64> = ratio_map.iter().map(
+                    |(idx, ratio_opt)| {
+                        match ratio_opt {
+                            None => {
+                                let s = self.get_og_ratio(&label, *idx).unwrap_or("1".to_string());
+                                s.parse().unwrap_or(1f64)
+                            },
+                            Some(ratio) => ratio.parse::<f64>().unwrap_or(1f64)
+                        }
+                    }
+                ).collect();
+                (label.name.clone(), ratio_vec)
+            }
+        ).collect()
     }
 
     fn create_gearset_lists(&self) -> Row<'static, EditMessage>
@@ -511,10 +530,33 @@ impl GearSets {
     }
 
     pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
+        let mut gearbox_data =
+            car::data::drivetrain::Gearbox::load_from_parent(drivetrain)
+                .map_err(|e| format!("{}", e.to_string()))?;
+        let default_ratios = self.updated_gearsets.default_ratios();
+        let ratio_vec: Vec<f64> = default_ratios.iter().enumerate().map(
+            |(idx, ratio_opt)| {
+                match ratio_opt {
+                    None => *self.original_drivetrain_data.get(idx).unwrap_or(&1f64),
+                    Some(ratio) => {
+                        ratio.parse::<f64>().unwrap_or(1f64)
+                    }
+                }
+            }
+        ).collect();
+        let _ = gearbox_data.update_gears(ratio_vec);
+        gearbox_data.update_car_data(drivetrain).map_err(|e| e.to_string())?;
+        self.final_drive_data.apply_drivetrain_changes(drivetrain)?;
         Ok(())
     }
 
     pub(crate) fn apply_setup_changes(&self, gear_data: &mut setup::gears::GearData) -> Result<(), String> {
+        gear_data.set_gear_config(
+            Some(
+                setup::gears::GearConfig::new_gearset_config_from_btree_map(self.updated_gearsets.to_setup_map())
+            )
+        );
+        self.final_drive_data.apply_setup_changes(gear_data)?;
         Ok(())
     }
 }
