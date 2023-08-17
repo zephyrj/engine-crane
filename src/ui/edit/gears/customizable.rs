@@ -30,8 +30,11 @@ use iced::theme::Button;
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{scrollable, text, text_input};
 use iced_native::widget::scrollable::Properties;
+use itertools::Itertools;
+use crate::assetto_corsa::car;
 use crate::assetto_corsa::car::data::{Drivetrain, setup};
 use crate::assetto_corsa::car::data::setup::gears::{GearConfig, SingleGear};
+use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
@@ -401,11 +404,39 @@ impl CustomizableGears {
         layout.push(Container::new(add_remove_row).height(Length::FillPortion(1)).align_y(Vertical::Top).padding(0))
     }
 
+    pub fn to_setup_data(&self) -> Vec<Vec<(String, f64)>> {
+        self.new_setup_data.iter().map(
+            |(label, set)| {
+                set.entries().iter().map(
+                    |s| {
+                        (s.name.clone(), s.ratio)
+                    }
+                ).collect_vec()
+            }
+        ).collect_vec()
+    }
+
     pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {
+        let mut gearbox_data =
+            car::data::drivetrain::Gearbox::load_from_parent(drivetrain)
+                .map_err(|e| format!("{}", e.to_string()))?;
+        let ratio_vec: Vec<f64> = self.get_default_gear_ratios().iter().enumerate().map(
+            |(idx, ratio_opt)| {
+                match ratio_opt {
+                    Some(ratio) => *ratio,
+                    None => *self.original_drivetrain_data.get(idx).unwrap_or(&1f64)
+                }
+            }
+        ).collect();
+        gearbox_data.update_gears(ratio_vec);
+        gearbox_data.update_car_data(drivetrain).map_err(|e| e.to_string())?;
+        self.final_drive_data.apply_drivetrain_changes(drivetrain)?;
         Ok(())
     }
 
     pub(crate) fn apply_setup_changes(&self, gear_data: &mut setup::gears::GearData) -> Result<(), String> {
+        gear_data.set_gear_config(Some(GearConfig::new_gears_config(self.to_setup_data())));
+        self.final_drive_data.apply_setup_changes(gear_data)?;
         Ok(())
     }
 }
