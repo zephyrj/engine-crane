@@ -24,10 +24,11 @@ mod gears;
 use super::{Message, Tab};
 use std::path::{PathBuf};
 
-use iced::{Alignment, Element, Length, Padding, theme};
+use iced::{Alignment, Element, Padding, theme};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule, Button};
+use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule, Button, scrollable};
 use iced_aw::{TabLabel};
+use iced_native::widget::scrollable::Properties;
 use tracing::{error};
 
 use crate::ui::{ApplicationData, ListPath};
@@ -208,8 +209,8 @@ impl Tab for EditTab {
             .spacing(20)
             .push(car_select_container);
 
-        let mut layout = Column::new().width(Length::Fill)
-            .align_items(Alignment::Start)
+        let mut layout = Column::new()
+            .align_items(Alignment::Fill)
             //.padding(10)
             .spacing(30)
             .push(select_container);
@@ -219,13 +220,13 @@ impl Tab for EditTab {
             layout = self.add_gearbox_config_selector_row(layout, gear_config.get_config_type());
             layout = gear_config.add_editable_gear_list(layout);
         }
-        let content : Element<'_, EditMessage> = Container::new(layout)
-            //.width(Length::Fill)
-            .align_x(Horizontal::Left)
-            //.height(Length::Fill)
-            .align_y(Vertical::Top)
-            .padding(20)
-            .into();
+        let content : Element<'_, EditMessage> =
+            scrollable(
+                Container::new(layout)
+                    .align_x(Horizontal::Left)
+                    .align_y(Vertical::Top)
+                    .padding(20)
+            ).horizontal_scroll(Properties::default()).into();
         content.map(Message::Edit)
     }
 }

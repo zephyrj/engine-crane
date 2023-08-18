@@ -292,8 +292,8 @@ impl GearSetContainer {
         gearset_row.push(
             Container::new(
                 create_add_button(GearUpdate(Gearset(GearsetUpdate::AddGearset())))
-                    .width(Length::Units(50))
-                    .height(Length::Units(50))
+                    .width(Length::Units(30))
+                    .height(Length::Units(30))
             ).align_y(Vertical::Center).height(Length::Fill)
         )
     }
@@ -505,7 +505,7 @@ impl GearSets {
         let mut layout_col = Column::new().height(Length::Shrink);
         layout_col = layout_col.push(self.updated_gearsets.create_gearset_lists()).height(Length::Shrink);
         layout_row = layout_row.push(layout_col);
-        layout_row = layout_row.push(vertical_rule(3));
+        layout_row = layout_row.push(vertical_rule(5));
         layout_row = layout_row.push(
             Column::new()
                 .height(Length::Shrink)
@@ -513,18 +513,25 @@ impl GearSets {
                 .push(self.final_drive_data.create_final_drive_column())
         );
         layout = layout.push(layout_row);
-        let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5);
-        let add_ratio_button = iced::widget::button(
+
+        let mut add_ratio_button = iced::widget::button(
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(GearUpdate(Gearset(GearsetUpdate::AddGear())));
-        add_remove_row = add_remove_row.push(add_ratio_button);
-        let delete_button = iced::widget::button(
+            .height(Length::Units(25));
+        if self.updated_gearsets.num_gears < 10 {
+            add_ratio_button = add_ratio_button.on_press(GearUpdate(Gearset(GearsetUpdate::AddGear())));
+        }
+
+        let mut delete_button = iced::widget::button(
             text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(GearUpdate(Gearset(GearsetUpdate::RemoveGear())));
+            .height(Length::Units(25));
+        if self.updated_gearsets.num_gears > 1 {
+            delete_button = delete_button.on_press(GearUpdate(Gearset(GearsetUpdate::RemoveGear())));
+        }
+
+        let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5);
+        add_remove_row = add_remove_row.push(add_ratio_button);
         add_remove_row = add_remove_row.push(delete_button);
         layout.push(add_remove_row)
     }

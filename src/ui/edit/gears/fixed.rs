@@ -21,13 +21,14 @@
 
 use std::collections::BTreeMap;
 use iced::{Alignment, Length, Padding};
-use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Column, Row, Text};
-use iced_native::widget::{text, text_input};
+use iced::alignment::{Vertical};
+use iced::widget::{Column, Container, Row, Text};
+use iced_native::widget::{text_input, vertical_rule};
 use crate::assetto_corsa::car;
 use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::setup::gears::{GearConfig, GearData};
 use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
+use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::{FinalDrive, FinalDriveUpdate};
@@ -109,7 +110,12 @@ impl FixedGears {
 
     fn create_gear_ratio_column(row_vals: Vec<(String, String)>) -> Column<'static, EditMessage>
     {
-        let mut gear_list = Column::new().width(Length::Shrink).spacing(5).padding(Padding::from([0, 10]));
+        let mut gear_list =
+            Column::new()
+                .align_items(Alignment::Fill)
+                .width(Length::Shrink)
+                .spacing(5)
+                .padding(Padding::from([0, 10, 12, 10]));
         let mut max_gear_idx = 0;
         for (gear_idx, (placeholder, new_ratio)) in row_vals.iter().enumerate() {
             let mut gear_row = Row::new()
@@ -128,7 +134,32 @@ impl FixedGears {
             gear_list = gear_list.push(gear_row);
             max_gear_idx = gear_idx;
         }
-        gear_list
+
+        let mut add_remove_row =
+            Row::new()
+                .width(Length::Shrink)
+                .spacing(5)
+                .padding(Padding::from([10, 0]))
+                .align_items(Alignment::Center);
+
+        let mut add_gear_button;
+        if row_vals.len() < 10 {
+            add_gear_button = create_add_button(GearUpdate(Fixed(FixedGearUpdate::AddGear())));
+        } else {
+            add_gear_button = create_disabled_add_button();
+        }
+        add_gear_button = add_gear_button.width(Length::Units(30)).height(Length::Units(30));
+        add_remove_row = add_remove_row.push(add_gear_button);
+
+        let mut delete_gear_button;
+        if row_vals.len() > 1 {
+            delete_gear_button = create_delete_button(GearUpdate(Fixed(FixedGearUpdate::RemoveGear())));
+        } else {
+            delete_gear_button = create_disabled_delete_button();
+        }
+        delete_gear_button = delete_gear_button.width(Length::Units(30)).height(Length::Units(30));
+        add_remove_row = add_remove_row.push(delete_gear_button);
+        gear_list.push(Container::new(add_remove_row).width(Length::Fill).center_x().center_y())
     }
 
     pub fn get_updated_gear_values(&self) -> Vec<f64> {
@@ -233,24 +264,13 @@ impl FixedGears {
 
             displayed_ratios.push((placeholder, current_val.to_string()));
         }
-        let mut holder = Row::new().width(Length::Shrink).spacing(10).align_items(Alignment::Start);
+        let mut holder = Row::new().width(Length::Shrink).spacing(10).align_items(Alignment::Fill);
         holder = holder.push(Self::create_gear_ratio_column(displayed_ratios));
-        holder = holder.push( self.final_drive_data.create_final_drive_column());
-        layout = layout.push(holder);
-        let mut add_remove_row = Row::new().width(Length::Shrink).spacing(5).padding(Padding::from([10, 0])).align_items(Alignment::Center);
-        let add_gear_button = iced::widget::button(
-            text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
-        )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(GearUpdate(Fixed(FixedGearUpdate::AddGear())));
-        add_remove_row = add_remove_row.push(add_gear_button);
-        let delete_gear_button = iced::widget::button(
-            text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
-        )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(GearUpdate(Fixed(FixedGearUpdate::RemoveGear())));
-        add_remove_row = add_remove_row.push(delete_gear_button);
-        layout.push(add_remove_row)
+        holder = holder.push(vertical_rule(5));
+        holder = holder.push(
+            self.final_drive_data.create_final_drive_column().padding(Padding::from([0, 10, 12, 10]))
+        );
+        layout.push(holder)
     }
 
     pub(crate) fn apply_drivetrain_changes(&self, drivetrain: &mut Drivetrain) -> Result<(), String> {

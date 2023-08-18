@@ -130,7 +130,7 @@ impl FinalDrive {
         for ratio_entry in self.new_setup_data.entries() {
             let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
             name_label = name_label.size(14);
-            let ratio_string = ratio_entry.ratio.to_string();
+            let ratio_string = ratio_entry.ratio_as_string();
             let mut ratio_input = Text::new(ratio_string).width(Length::Units(56));
             ratio_input = ratio_input.size(14);
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
@@ -154,17 +154,13 @@ impl FinalDrive {
         if let Some(_) = &self.new_ratio_data {
             col = col.push(self.add_gear_ratio_entry_row());
         } else {
-            col = col.push(self.add_gear_ratio_button());
+            col = col.push(
+                create_add_button(EditMessage::FinalDriveUpdate(FinalDriveUpdate::AddRatioPressed()))
+                    .width(Length::Units(30))
+                    .height(Length::Units(30))
+            );
         }
         col
-    }
-
-    fn add_gear_ratio_button(&self) -> iced::widget::Button<'static, EditMessage> {
-        iced::widget::button(
-            text("Add Ratio").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
-        )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(EditMessage::FinalDriveUpdate(FinalDriveUpdate::AddRatioPressed()))
     }
 
     fn add_gear_ratio_entry_row(&self) -> Row<'static, EditMessage>
@@ -212,9 +208,9 @@ impl FinalDrive {
         let ratio = match self.new_setup_data.default_ratio() {
             None => match self.new_setup_data.entries().first() {
                 None => 3.0f64,
-                Some(entry) => entry.ratio
+                Some(entry) => entry.ratio()
             }
-            Some(entry) => entry.ratio
+            Some(entry) => entry.ratio()
         };
         let mut gearbox_data =
             car::data::drivetrain::Gearbox::load_from_parent(drivetrain)
@@ -230,7 +226,7 @@ impl FinalDrive {
         } else {
             let final_ratios = self.new_setup_data.entries().iter().map(
                 |entry| {
-                    (entry.name.clone(), entry.ratio)
+                    (entry.name.clone(), entry.ratio())
                 }
             ).collect();
             gear_data.set_final_drive(Some(SingleGear::new_final_drive(final_ratios)));

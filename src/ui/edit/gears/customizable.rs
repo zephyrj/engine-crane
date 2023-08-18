@@ -22,13 +22,12 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use std::num::ParseFloatError;
 use fraction::ToPrimitive;
 use iced::{Alignment, Length, Padding};
 use iced::alignment::{Horizontal, Vertical};
 use iced::theme::Button;
 use iced::widget::{Column, Container, Radio, Row, Text};
-use iced_native::widget::{scrollable, text, text_input};
+use iced_native::widget::{scrollable, text, text_input, vertical_rule};
 use iced_native::widget::scrollable::Properties;
 use itertools::Itertools;
 use crate::assetto_corsa::car;
@@ -188,14 +187,18 @@ impl CustomizableGears {
 
     fn create_gear_ratio_column(gear_idx: &GearLabel, ratio_set: &RatioSet ) -> Column<'static, EditMessage>
     {
-        let mut col = Column::new().align_items(Alignment::Center).width(Length::Shrink).spacing(5).padding(Padding::from([0, 10, 12, 10]));
+        let mut col = Column::new()
+            .align_items(Alignment::Center)
+            .width(Length::Shrink)
+            .spacing(5)
+            .padding(Padding::from([0, 10, 12, 10]));
         col = col.push(text(gear_idx));
         let default_idx = ratio_set.default_idx();
         let name_width = (ratio_set.max_name_len() * 10).to_u16().unwrap_or(u16::MAX);
         for ratio_entry in ratio_set.entries() {
             let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
             name_label = name_label.size(14);
-            let ratio_string = ratio_entry.ratio.to_string();
+            let ratio_string = ratio_entry.ratio_as_string();
             let mut ratio_input = Text::new(ratio_string).width(Length::Units(56));
             ratio_input = ratio_input.size(14);
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
@@ -227,11 +230,9 @@ impl CustomizableGears {
     }
 
     fn add_gear_ratio_button(label: GearLabel) -> iced::widget::Button<'static, EditMessage> {
-        iced::widget::button(
-            text("Add Ratio").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
-        )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::AddRatio(label))))
+        create_add_button(GearUpdate(CustomizedGear(CustomizedGearUpdate::AddRatio(label))))
+            .width(Length::Units(30))
+            .height(Length::Units(30))
     }
 
     fn add_gear_ratio_entry_row(new_ratio_data: (GearLabel, String, String), name_max_width: u16) -> Row<'static, EditMessage>
@@ -273,7 +274,7 @@ impl CustomizableGears {
         self.new_setup_data.values().map(|ratio_set|{
             match ratio_set.default_ratio() {
                 None => None,
-                Some(ratio_entry) => Some(ratio_entry.ratio)
+                Some(ratio_entry) => Some(ratio_entry.ratio())
             }
         }).collect()
     }
@@ -373,7 +374,11 @@ impl CustomizableGears {
     pub(crate) fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
         where 'b: 'a
     {
-        let mut gearset_roe = Row::new().spacing(5).padding(Padding::from([0, 10])).width(Length::Shrink);
+        let mut gearset_roe = Row::new()
+            .spacing(5)
+            .padding(Padding::from([0, 10]))
+            .width(Length::Shrink)
+            .align_items(Alignment::Fill);
         for (gear_idx, ratio_set) in &self.new_setup_data {
             let mut gear_col = Self::create_gear_ratio_column(gear_idx, ratio_set);
             if let Some((adding_gear_label, ratio_name, ratio)) = &self.new_ratio_data {
@@ -389,24 +394,31 @@ impl CustomizableGears {
             }
             gearset_roe = gearset_roe.push(gear_col);
         }
-        gearset_roe = gearset_roe.push(self.final_drive_data.create_final_drive_column());
-        let s = scrollable(gearset_roe).horizontal_scroll(Properties::default()).height(Length::FillPortion(6));
+        gearset_roe = gearset_roe.push(vertical_rule(5));
+        gearset_roe = gearset_roe.push(
+            self.final_drive_data.create_final_drive_column().padding(Padding::from([0, 10, 12, 10]))
+        );
+        let s = scrollable(gearset_roe).horizontal_scroll(Properties::default());
         layout = layout.push(s);
         let mut add_remove_row = Row::new().height(Length::Shrink).width(Length::Shrink).spacing(5);
-        let add_gear_button = iced::widget::button(
+        let mut add_gear_button = iced::widget::button(
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
-            .height(Length::Units(25))
-            .on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::AddGear())));
+            .height(Length::Units(25));
+        if self.new_setup_data.len() < 10 {
+            add_gear_button = add_gear_button.on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::AddGear())));
+        }
         add_remove_row = add_remove_row.push(add_gear_button);
-        let delete_gear_button = iced::widget::button(
+        let mut delete_gear_button = iced::widget::button(
             text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
             .height(Length::Units(25))
-            .on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::RemoveGear())))
             .style(Button::Destructive);
+        if self.new_setup_data.len() > 1 {
+            delete_gear_button = delete_gear_button.on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::RemoveGear())));
+        }
         add_remove_row = add_remove_row.push(delete_gear_button);
-        layout.push(Container::new(add_remove_row).height(Length::FillPortion(1)).align_y(Vertical::Top).padding(0))
+        layout.push(Container::new(add_remove_row).align_y(Vertical::Top).padding(0))
     }
 
     pub fn to_setup_data(&self) -> Vec<Vec<(String, f64)>> {
@@ -414,7 +426,7 @@ impl CustomizableGears {
             |(label, set)| {
                 set.entries().iter().map(
                     |s| {
-                        (s.name.clone(), s.ratio)
+                        (s.name.clone(), s.ratio())
                     }
                 ).collect_vec()
             }

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 pub(crate) struct RatioEntry {
     pub idx: usize,
     pub name: String,
-    pub ratio: f64
+    ratio: f64
 }
 
 impl RatioEntry {
@@ -15,6 +15,14 @@ impl RatioEntry {
 
     pub fn total_cmp(&self, other: &RatioEntry) -> Ordering {
         self.ratio.total_cmp(&other.ratio)
+    }
+
+    pub fn ratio(&self) -> f64 {
+        self.ratio
+    }
+
+    pub fn ratio_as_string(&self) -> String {
+        format!("{:.4}", self.ratio)
     }
 }
 
