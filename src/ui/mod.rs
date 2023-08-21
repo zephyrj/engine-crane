@@ -61,7 +61,7 @@ pub enum Message {
     BeamNGModPathSelectPressed,
     EngineSwap(EngineSwapMessage),
     Edit(EditMessage),
-    Settings(SettingsMessage)
+    Settings(SettingsMessage),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -381,6 +381,7 @@ impl UIMain {
         self.engine_swap_tab.app_data_update(&self.app_data);
         self.edit_tab.app_data_update(&self.app_data);
     }
+
 }
 
 impl Sandbox for UIMain {
@@ -394,11 +395,12 @@ impl Sandbox for UIMain {
         info!("Created settings tab");
         let engine_swap_tab = EngineSwapTab::new();
         info!("Created engine-swap tab");
+        let edit_tab = EditTab::new(&app_data);
         UIMain {
             app_data,
             active_tab: 0,
             engine_swap_tab,
-            edit_tab: EditTab::new(),
+            edit_tab,
             settings_tab
         }
     }
