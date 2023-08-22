@@ -60,7 +60,18 @@ impl From<GearSets> for FixedGears {
             default_ratios.into_iter().enumerate().map(|(idx, default)| {
                 match default {
                     None => (idx, None),
-                    Some(ratio) => (idx, Some(ratio))
+                    Some(ratio) => {
+                        match original_drivetrain_data.get(idx) {
+                            None => (idx, Some(ratio)),
+                            Some(og_ratio) => {
+                                if og_ratio.to_string() == ratio {
+                                    (idx, None)
+                                } else {
+                                    (idx, Some(ratio))
+                                }
+                            }
+                        }
+                    }
                 }
             }).collect();
         FixedGears {
@@ -80,7 +91,18 @@ impl From<CustomizableGears> for FixedGears {
             default_ratios.into_iter().enumerate().map(|(idx, default)| {
                 match default {
                     None => (idx, None),
-                    Some(ratio) => (idx, Some(ratio.to_string()))
+                    Some(ratio) => {
+                        match original_drivetrain_data.get(idx) {
+                            None => (idx, Some(ratio.to_string())),
+                            Some(og_ratio) => {
+                                if og_ratio.eq(&ratio) {
+                                    (idx, None)
+                                } else {
+                                    (idx, Some(ratio.to_string()))
+                                }
+                            }
+                        }
+                    }
                 }
             }).collect();
         FixedGears {

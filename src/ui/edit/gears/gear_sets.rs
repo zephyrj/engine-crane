@@ -360,9 +360,10 @@ impl From<FixedGears> for GearSets {
             GearSetContainer::from_setup_data(&original_drivetrain_data, &original_setup_data);
 
         let mut new_gearset_label: Option<GearsetLabel> = None;
+        let mut missed_ratio_idx = Vec::new();
         for (ratio_idx, opt) in value.get_updated_ratios().iter().enumerate() {
             match opt {
-                None => continue,
+                None => missed_ratio_idx.push(ratio_idx),
                 Some(ratio) => {
                     if new_gearset_label.is_none() {
                         new_gearset_label = Some(updated_gearsets.add_gearset());
@@ -379,6 +380,17 @@ impl From<FixedGears> for GearSets {
                 updated_gearsets.update_ratio(&label, idx, Some(ratio.to_string()));
             }
             updated_gearsets.set_default_gearset(&label);
+        } else if new_gearset_label.is_some() {
+            for idx in missed_ratio_idx {
+                match original_drivetrain_data.get(idx) {
+                    None => continue,
+                    Some(og_ratio) => {
+                        updated_gearsets.update_ratio(new_gearset_label.as_ref().unwrap(),
+                                                      idx,
+                                                      Some(og_ratio.to_string()));
+                    }
+                }
+            }
         }
 
         GearSets {
