@@ -21,7 +21,7 @@
 
 use super::{Message, Tab};
 use std::path::{PathBuf};
-use iced::{Alignment, Element, Length, Renderer};
+use iced::{Alignment, Element, Length, Padding, Renderer};
 use iced::widget::{Button, checkbox, Column, Container, pick_list, PickList, Row, Text, TextInput};
 use iced_aw::{TabLabel};
 use iced::alignment::Horizontal;
@@ -140,8 +140,7 @@ impl Tab for EngineSwapTab {
             }
         };
         let car_select_container = Column::new()
-            .align_items(Alignment::Center)
-            //.padding(10)
+            //.align_items(Alignment::Center)
             .push(Text::new("Assetto Corsa car"))
             .push(pick_list(
                 &app_data.assetto_corsa_data.available_cars,
@@ -155,13 +154,28 @@ impl Tab for EngineSwapTab {
             }
         };
         let mod_select_container = Column::new()
-            .align_items(Alignment::Center)
+            //.align_items(Alignment::Center)
             .push(Text::new("BeamNG mod"))
             .push(PickList::new(
                 &app_data.beam_ng_data.available_mods,
                 current_mod,
                 move |val| { Message::EngineSwap(EngineSwapMessage::ModSelected(val)) }
             ));
+
+        let placeholder = match self.current_new_spec_name.as_str() {
+            "" => { "Enter new spec name" }
+            s => { s }
+        };
+        let new_spec_input = TextInput::new(
+            placeholder,
+            &self.current_new_spec_name,
+            move|val| { Message::EngineSwap(EngineSwapMessage::NameEntered(val)) },
+        ).width(Length::Units(500));
+        let car_name_container = Column::new()
+            //.align_items(Alignment::Center)
+            .push(Text::new("New spec name (this will be appended to the created car)"))
+            .push(new_spec_input);
+
         let current_weight_value = match &self.current_engine_weight {
             None => { "" }
             Some(string) => {
@@ -178,30 +192,12 @@ impl Tab for EngineSwapTab {
             ).width(Length::Units(100)));
         let select_container = Column::new()
             //.align_items(Align::)
-            .padding(10)
+            //.padding(10)
             .spacing(20)
             .push(car_select_container)
             .push(mod_select_container)
+            .push(car_name_container)
             .push(weight_input_container);
-
-        let placeholder = match self.current_new_spec_name.as_str() {
-            "" => { "Enter new spec name" }
-            s => { s }
-        };
-        let input = TextInput::new(
-            placeholder,
-            &self.current_new_spec_name,
-            move|val| { Message::EngineSwap(EngineSwapMessage::NameEntered(val)) },
-        ).width(Length::Units(500));
-        let car_name_container = Column::new()
-            .align_items(Alignment::Center)
-            .padding(10)
-            .push(Text::new("New spec name (this will be appended to the created car)"))
-            .push(input);
-        let selection_row = Row::new()
-            .align_items(Alignment::Center)
-            .push(select_container.width(Length::FillPortion(1)))
-            .push(car_name_container.width(Length::FillPortion(1)));
 
         let swap_button = Button::new(Text::new("Swap"))
             .width(Length::Units(60))
@@ -215,11 +211,11 @@ impl Tab for EngineSwapTab {
             "Unpack physics data".to_string(),
             self.unpack_physics_data,
             move |val| { Message::EngineSwap(EngineSwapMessage::UnpackToggled(val)) }
-        );
+        ).spacing(3);
 
         let control_row = Row::new()
-            .align_items(Alignment::Start)
-            .padding(10)
+            .align_items(Alignment::Center)
+            .padding(Padding::from([10, 0]))
             .spacing(10)
             .push(swap_button)
             .push(physics_pick_list)
@@ -227,9 +223,9 @@ impl Tab for EngineSwapTab {
 
         let mut layout = Column::new().width(Length::Fill)
             .align_items(Alignment::Start)
-            //.padding(10)
+            .padding(Padding::from([0, 10]))
             .spacing(30)
-            .push(selection_row)
+            .push(select_container)
             .push(control_row);
 
         if !self.status_message.is_empty() {
@@ -239,7 +235,7 @@ impl Tab for EngineSwapTab {
                     .push(Text::new(self.status_message.as_str()).horizontal_alignment(Horizontal::Center))
             )
         }
-        Container::new(layout).into()
+        Container::new(layout).padding(20).into()
     }
 }
 

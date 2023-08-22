@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use iced::{Alignment, Length, Padding};
+use iced::{Alignment, Length, Padding, theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{text, text_input, vertical_rule};
@@ -517,7 +517,8 @@ impl GearSets {
         let mut add_ratio_button = iced::widget::button(
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
-            .height(Length::Units(25));
+            .height(Length::Units(25))
+            .style(theme::Button::Positive);
         if self.updated_gearsets.num_gears < 10 {
             add_ratio_button = add_ratio_button.on_press(GearUpdate(Gearset(GearsetUpdate::AddGear())));
         }
@@ -525,7 +526,8 @@ impl GearSets {
         let mut delete_button = iced::widget::button(
             text("Delete Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
-            .height(Length::Units(25));
+            .height(Length::Units(25))
+            .style(theme::Button::Destructive);
         if self.updated_gearsets.num_gears > 1 {
             delete_button = delete_button.on_press(GearUpdate(Gearset(GearsetUpdate::RemoveGear())));
         }

@@ -343,11 +343,8 @@ impl Tab for EditTab {
         TabLabel::Text(self.title())
     }
 
-    fn content<'a, 'b>(
-        &'a self,
-        app_data: &'b ApplicationData
-    ) -> Element<'_, Self::Message>
-    where 'b: 'a
+    fn content<'a, 'b>(&'a self, app_data: &'b ApplicationData) -> Element<'_, Self::Message>
+        where 'b: 'a
     {
         let current_car = match &self.current_car_path {
             None => { None }
@@ -381,15 +378,14 @@ impl Tab for EditTab {
 
         let car_select_container = Column::new()
             .align_items(Alignment::Start)
-            .spacing(5)
             .push(Text::new("Assetto Corsa car"))
-            .push(car_select_row)
-            .push(command_row);
-        let select_container = Row::new()
-            //.align_items(Align::)
+            .push(car_select_row);
+
+        let select_container = Column::new()
             .padding(Padding::from([0, 10]))
-            .spacing(20)
-            .push(car_select_container);
+            .spacing(5)
+            .push(car_select_container)
+            .push(command_row);
 
         let mut layout = Column::new()
             .align_items(Alignment::Fill)

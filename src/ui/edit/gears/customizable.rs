@@ -404,7 +404,8 @@ impl CustomizableGears {
         let mut add_gear_button = iced::widget::button(
             text("Add Gear").horizontal_alignment(Horizontal::Center).vertical_alignment(Vertical::Center).size(12),
         )   .width(Length::Units(75))
-            .height(Length::Units(25));
+            .height(Length::Units(25))
+            .style(Button::Positive);
         if self.new_setup_data.len() < 10 {
             add_gear_button = add_gear_button.on_press(GearUpdate(CustomizedGear(CustomizedGearUpdate::AddGear())));
         }
