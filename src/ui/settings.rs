@@ -47,7 +47,7 @@ impl SettingsTab {
         match message { SettingsMessage::ThingSelected(_) => {} }
     }
 
-    pub fn app_data_update(&mut self, app_data: &ApplicationData) {
+    pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
     }
 }
 

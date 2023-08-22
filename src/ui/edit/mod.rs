@@ -26,16 +26,14 @@ use std::path::{PathBuf};
 
 use iced::{Alignment, Background, ContentFit, Element, Length, Padding, theme, Theme};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule, Button, scrollable, svg};
-use iced::widget::container::{StyleSheet};
+use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule, Button, scrollable};
 use iced_aw::{TabLabel};
 use iced_aw::style::colors::WHITE;
-use iced_native::{Color, row};
+use iced_native::{Color};
 use iced_native::widget::scrollable::Properties;
-use iced_native::widget::{button, checkbox, container, row, Svg, text};
+use iced_native::widget::{button, checkbox, container, Svg, text};
 use iced_native::svg::Handle;
 use tracing::{error, info};
-use tracing_subscriber::fmt::format;
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;
@@ -252,7 +250,13 @@ impl EditTab {
         }
     }
 
-    pub fn app_data_update(&mut self, app_data: &ApplicationData) {
+    pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
+        match update_event {
+            Message::AcPathSelectPressed | Message::EngineSwapRequested => {
+                self.load_car_list(app_data)
+            }
+            _ => {}
+        }
     }
 
     fn get_modal_content(&self) -> Option<Element<'_, EditMessage>> {
