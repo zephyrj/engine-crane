@@ -29,7 +29,7 @@ use crate::assetto_corsa::car;
 
 use crate::assetto_corsa::car::data::{Drivetrain, setup};
 use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
-use crate::ui::button::{create_add_button, create_delete_button};
+use crate::ui::button::{create_add_button, create_delete_button, create_disabled_delete_button};
 
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
@@ -328,8 +328,11 @@ impl GearSetContainer {
             None => None,
             Some(label) => Some(label.idx)
         };
-        let delete_button =
-            create_delete_button(GearUpdate(Gearset(GearsetUpdate::RemoveGearset(gearset_label.clone()))));
+        let delete_button = match self.entries.len() > 1 {
+            true => create_delete_button(GearUpdate(Gearset(GearsetUpdate::RemoveGearset(gearset_label.clone())))),
+            false => create_disabled_delete_button()
+        };
+
         gear_list = gear_list.push(
             Radio::new(
                 gearset_label.idx(),
