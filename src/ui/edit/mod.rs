@@ -30,11 +30,12 @@ use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_ru
 use iced::widget::container::{StyleSheet};
 use iced_aw::{TabLabel};
 use iced_aw::style::colors::WHITE;
-use iced_native::Color;
+use iced_native::{Color, row};
 use iced_native::widget::scrollable::Properties;
-use iced_native::widget::{button, container, Svg, text};
+use iced_native::widget::{button, checkbox, container, row, Svg, text};
 use iced_native::svg::Handle;
 use tracing::{error, info};
+use tracing_subscriber::fmt::format;
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;
@@ -52,8 +53,15 @@ pub struct EditTab {
     current_car_path: Option<PathBuf>,
     gear_configuration: Option<GearConfig>,
     update_successful: bool,
-    show_modal: bool,
+    modal_state: ModalState,
     show_all_cars: bool
+}
+
+#[derive(Debug, Copy, Clone)]
+enum ModalState {
+    Hidden,
+    AfterUpdate,
+    AllCarsSelected
 }
 
 #[derive(Debug, Clone)]
@@ -64,7 +72,10 @@ pub enum EditMessage {
     FinalDriveUpdate(FinalDriveUpdate),
     ApplyChanges(),
     ResetChanges(),
-    ChangeConfirmation()
+    ChangeConfirmation(),
+    ShowAllCarsSelected(bool),
+    ConfirmAllCars(),
+    DeclineAllCars()
 }
 
 impl EditTab {
@@ -76,7 +87,7 @@ impl EditTab {
             current_car_path: None,
             gear_configuration: None,
             update_successful: true,
-            show_modal: false,
+            modal_state: ModalState::Hidden,
             show_all_cars: false
         };
         e.load_car_list(&app_data);
@@ -85,6 +96,8 @@ impl EditTab {
 
     fn load_car_list(&mut self, app_data: &ApplicationData) {
         self.editable_car_paths.clear();
+        self.gear_configuration = None;
+        self.current_car_path = None;
         if self.show_all_cars {
             self.editable_car_paths = app_data.assetto_corsa_data.available_cars.clone();
         } else {
@@ -177,18 +190,17 @@ impl EditTab {
             }
             EditMessage::ApplyChanges() => {
                 self.status_message = "Updating...".to_string();
-                self.show_modal = true;
+                self.modal_state = ModalState::AfterUpdate;
                 if let Some(config) = &mut self.gear_configuration {
                     if let Some(car_path) = &self.current_car_path {
                         match config.write_to_car(car_path) {
                             Ok(_) => {
                                 self.update_successful = true;
-                                self.modal_message = "Update Successful!".to_string();
-                                info!("Successfully update gear data for {}", car_path.display())
+                                info!("Successfully updated gear data for {}", car_path.display())
                             },
                             Err(e) => {
-                                self.update_successful = true;
-                                self.modal_message = format!("Failed to update gear data: {}", e);
+                                self.update_successful = false;
+                                self.status_message = format!("Failed to update gear data: {}", e);
                                 error!("Failed to update gear data for {}. {}", car_path.display(), e);
                             }
                         }
@@ -199,11 +211,29 @@ impl EditTab {
                 self.reload_selected_car();
             }
             EditMessage::ChangeConfirmation() => {
-                self.modal_message = "Updating...".to_string();
-                self.show_modal = false;
+                self.status_message.clear();
+                self.modal_state = ModalState::Hidden;
                 if self.update_successful {
                     self.reload_selected_car();
                 }
+            }
+            EditMessage::ShowAllCarsSelected(is_selected) => {
+                match is_selected {
+                    true => self.modal_state = ModalState::AllCarsSelected,
+                    false => {
+                        self.show_all_cars = false;
+                        self.load_car_list(&app_data);
+                    }
+                }
+            }
+            EditMessage::ConfirmAllCars() => {
+                self.show_all_cars = true;
+                self.modal_state = ModalState::Hidden;
+                self.load_car_list(&app_data);
+            }
+            EditMessage::DeclineAllCars() => {
+                self.show_all_cars = false;
+                self.modal_state = ModalState::Hidden;
             }
         }
     }
@@ -223,6 +253,78 @@ impl EditTab {
     }
 
     pub fn app_data_update(&mut self, app_data: &ApplicationData) {
+    }
+
+    fn get_modal_content(&self) -> Option<Element<'_, EditMessage>> {
+        match self.modal_state {
+            ModalState::Hidden => None,
+            ModalState::AfterUpdate => {
+                let f: fn(&Theme) -> container::Appearance = |theme: &Theme| {
+                    container::Appearance{
+                        text_color: None,
+                        background: Some(Background::Color(WHITE)),
+                        border_radius: 1.0,
+                        border_width: 1.0,
+                        border_color: Color::BLACK,
+                    }
+                };
+                let modal_message = match self.update_successful {
+                    true => "Update Successful!".to_string(),
+                    false => format!("Update Failed. {}", &self.status_message)
+                };
+                let modal_contents = container(
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .spacing(5)
+                        .push(container(text(modal_message)))
+                        .push(button("Ok").style(theme::Button::Positive).on_press(EditMessage::ChangeConfirmation()))
+                ).style(theme::Container::Custom(
+                    Box::new(f)
+                )).padding(20);
+                Some(modal_contents.into())
+            }
+            ModalState::AllCarsSelected => {
+                let f: fn(&Theme) -> container::Appearance = |theme: &Theme| {
+                    container::Appearance{
+                        text_color: None,
+                        background: Some(Background::Color(WHITE)),
+                        border_radius: 1.0,
+                        border_width: 1.0,
+                        border_color: Color::BLACK,
+                    }
+                };
+                let modal_message = String::from("Warning: If you edit base AC cars they will not work online");
+                let confirm = button(
+                    Row::new()
+                        .padding(0)
+                        .spacing(3)
+                        .align_items(Alignment::Center)
+                        .push(
+                            Svg::new(Handle::from_memory(ICE_CREAM_SVG))
+                                //.style(theme::Svg::custom_fn(|_| { svg::Appearance{color: Some(Color::WHITE)} }))
+                                .content_fit(ContentFit::Fill)
+                                .height(Length::Units(15))
+                                .width(Length::Units(15))
+                        )
+                        .push(text("Leave me alone, I know what I'm doing").size(14))
+                ).style(theme::Button::Destructive).on_press(EditMessage::ConfirmAllCars());
+                let decline =
+                    button(text("I've changed my mind").size(20))
+                        .style(theme::Button::Positive)
+                        .on_press(EditMessage::DeclineAllCars());
+                let modal_contents = container(
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .spacing(5)
+                        .push(container(text(modal_message)))
+                        .push(confirm)
+                        .push(decline)
+                ).style(theme::Container::Custom(
+                    Box::new(f)
+                )).padding(20);
+                Some(modal_contents.into())
+            }
+        }
     }
 }
 
@@ -261,15 +363,23 @@ impl Tab for EditTab {
         }
         command_row = command_row.push(apply_but).push(reset_but);
 
-        let car_select_container = Column::new()
-            .align_items(Alignment::Start)
-            .spacing(5)
-            .push(Text::new("Assetto Corsa car"))
+        let car_select_row = Row::new().padding(0).spacing(8).align_items(Alignment::Center)
             .push(pick_list(
                 &self.editable_car_paths,
                 current_car,
                 EditMessage::CarSelected,
             ))
+            .push(checkbox(
+                "Show all cars",
+                self.show_all_cars,
+                |new_val| EditMessage::ShowAllCarsSelected(new_val)
+            ).spacing(3));
+
+        let car_select_container = Column::new()
+            .align_items(Alignment::Start)
+            .spacing(5)
+            .push(Text::new("Assetto Corsa car"))
+            .push(car_select_row)
             .push(command_row);
         let select_container = Row::new()
             //.align_items(Align::)
@@ -295,44 +405,14 @@ impl Tab for EditTab {
                     .align_y(Vertical::Top)
                     .padding(20)
             ).horizontal_scroll(Properties::default()).into();
-        if self.show_modal {
-            let f: fn(&Theme) -> container::Appearance = |theme: &Theme| {
-                container::Appearance{
-                    text_color: None,
-                    background: Some(Background::Color(WHITE)),
-                    border_radius: 1.0,
-                    border_width: 1.0,
-                    border_color: Color::BLACK,
-                }
-            };
-            let modal_contents = Column::new()
-                .align_items(Alignment::Center)
-                .push(container(text(self.modal_message.clone()))
-                    .style(theme::Container::Custom(
-                        Box::new(f)
-                    ))
-                    .padding(5)
-                )
-                .push(
-                    button(
-                        Row::new()
-                            .padding(0)
-                            .spacing(3)
-                            .align_items(Alignment::Center)
-                            .push(text("I know what I'm doing"))
-                            .push(
-                                Svg::new(Handle::from_memory(ICE_CREAM_SVG))
-                                    .style(theme::Svg::custom_fn(|_| { svg::Appearance{color: Some(Color::WHITE)} }))
-                                    .content_fit(ContentFit::Fill)
-                                    .height(Length::Units(15))
-                                    .width(Length::Units(15))
-                            )
-                    ).on_press(EditMessage::ChangeConfirmation()));
-            let r : Element<'_, EditMessage> =
-                Modal::new(content, modal_contents).into();
-            r.map(Message::Edit)
-        } else {
-            content.map(Message::Edit)
+
+        return match self.get_modal_content() {
+            None => content.map(Message::Edit),
+            Some(modal_content) => {
+                let r : Element<'_, EditMessage> =
+                    Modal::new(content, modal_content).into();
+                r.map(Message::Edit)
+            }
         }
     }
 }
