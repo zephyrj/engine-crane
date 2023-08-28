@@ -22,8 +22,9 @@
 mod swap;
 mod edit;
 mod settings;
+mod image_data;
+mod button;
 
-use std::ffi::OsStr;
 use std::fs;
 use swap::{EngineSwapMessage, EngineSwapTab};
 use edit::{EditMessage, EditTab};
@@ -31,19 +32,19 @@ use settings::{SettingsMessage, SettingsTab};
 
 use std::path::{Path, PathBuf};
 use config::{Config, ConfigError};
-use iced::{Element, Length, Sandbox, Error, Settings, Background, Color};
+use iced::{Element, Sandbox, Error, Settings, Background, Color, Padding};
 use iced::widget::{Column, Text, Container};
 use iced_aw::{TabLabel, Tabs};
 use iced::alignment::{Horizontal, Vertical};
-//use iced_aw::tab_bar::{StyleSheet};
 use iced::Theme;
 use iced_aw::style::tab_bar::Appearance;
 use iced_aw::style::TabBarStyles;
 use iced_aw::tab_bar::StyleSheet;
-use crate::{assetto_corsa, beam_ng};
+use crate::{assetto_corsa, beam_ng, fabricator};
 use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
+use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
@@ -58,8 +59,9 @@ pub enum Message {
     AcPathSelectPressed,
     BeamNGModPathSelectPressed,
     EngineSwap(EngineSwapMessage),
+    EngineSwapRequested,
     Edit(EditMessage),
-    Settings(SettingsMessage)
+    Settings(SettingsMessage),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -192,7 +194,7 @@ impl AssettoCorsaData {
         }
     }
 
-    fn refresh_available_cars(&mut self, ac_install_path: &PathBuf) {
+    pub fn refresh_available_cars(&mut self, ac_install_path: &PathBuf) {
         self.available_cars.clear();
         if ac_install_path.is_dir() {
             self.available_cars = Self::load_available_cars(ac_install_path);
@@ -306,6 +308,10 @@ impl ApplicationData {
         self.settings.set_beamng_mod_path(&new_path);
         self.beam_ng_data.property_update(&self.settings);
     }
+
+    fn refresh_available_cars(&mut self) {
+        self.assetto_corsa_data.refresh_available_cars(&PathBuf::from(&self.settings.ac_install_path))
+    }
 }
 
 /// The default appearance of a [`TabBar`](crate::native::TabBar).
@@ -370,14 +376,14 @@ impl UIMain {
         &self.app_data.beam_ng_data
     }
 
-    pub fn notify_app_data_update(&mut self) {
+    pub fn notify_app_data_update(&mut self, update_event: &Message) {
         match self.app_data.settings.write() {
             Ok(_) => { info!("Wrote settings successfully"); }
             Err(e) => { error!("Failed to write settings. {}", e.to_string()); }
         }
-        self.settings_tab.app_data_update(&self.app_data);
-        self.engine_swap_tab.app_data_update(&self.app_data);
-        self.edit_tab.app_data_update(&self.app_data);
+        self.settings_tab.app_data_update(&self.app_data, update_event);
+        self.engine_swap_tab.app_data_update(&self.app_data, update_event);
+        self.edit_tab.app_data_update(&self.app_data, update_event);
     }
 }
 
@@ -392,11 +398,12 @@ impl Sandbox for UIMain {
         info!("Created settings tab");
         let engine_swap_tab = EngineSwapTab::new();
         info!("Created engine-swap tab");
+        let edit_tab = EditTab::new(&app_data);
         UIMain {
             app_data,
             active_tab: 0,
             engine_swap_tab,
-            edit_tab: EditTab::new(),
+            edit_tab,
             settings_tab
         }
     }
@@ -420,7 +427,7 @@ impl Sandbox for UIMain {
                     .pick_folder();
                 if let Some(path) = install_path {
                     self.app_data.update_ac_install_path(path);
-                    self.notify_app_data_update();
+                    self.notify_app_data_update(&message);
                 }
             }
             Message::BeamNGModPathSelectPressed => {
@@ -432,7 +439,77 @@ impl Sandbox for UIMain {
                     .pick_folder();
                 if let Some(path) = mod_path {
                     self.app_data.update_beamng_mod_path(path);
-                    self.notify_app_data_update();
+                    self.notify_app_data_update(&message);
+                }
+            }
+            Message::EngineSwapRequested => {
+                if self.app_data.get_ac_install_path().is_none() {
+                    self.engine_swap_tab.update_status(String::from("Please set the Assetto Corsa install path in the settings tab"));
+                    return;
+                }
+                if self.engine_swap_tab.current_car.is_none() {
+                    self.engine_swap_tab.update_status(String::from("Please select an Assetto Corsa car"));
+                    return;
+                } else if self.engine_swap_tab.current_mod.is_none() {
+                    self.engine_swap_tab.update_status(String::from("Please select an BeamNG mod"));
+                    return;
+                }
+
+                let new_spec_name = self.engine_swap_tab.current_new_spec_name.as_str();
+                let new_car_path = {
+                    let span = span!(Level::INFO, "Creating new car spec");
+                    let _enter = span.enter();
+                    let ac_install = assetto_corsa::Installation::from_path(
+                        self.app_data.get_ac_install_path().as_ref().unwrap().clone()
+                    );
+                    match assetto_corsa::car::create_new_car_spec(&ac_install,
+                                                                  self.engine_swap_tab.current_car.as_ref().unwrap(),
+                                                                  new_spec_name,
+                                                                  self.engine_swap_tab.unpack_physics_data)
+                    {
+                        Ok(path) => { path }
+                        Err(e) => {
+                            error!("Swap failed: {}", e.to_string());
+                            self.engine_swap_tab.update_status(format!("Swap failed: {}", e.to_string()));
+                            return;
+                        }
+                    }
+                };
+
+                if let Some(mod_path) = self.engine_swap_tab.current_mod.as_ref() {
+                    let span = span!(Level::INFO, "Updating car physics");
+                    let _enter = span.enter();
+                    let current_engine_weight =
+                        if let Some(weight_string) = &self.engine_swap_tab.current_engine_weight {
+                            match weight_string.parse::<u32>() {
+                                Ok(val) => {
+                                    Some(val)
+                                }
+                                Err(_) => {
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                    let mut car_settings = AssettoCorsaCarSettings::default();
+                    car_settings.minimum_physics_level = self.engine_swap_tab.current_minimum_physics;
+                    match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
+                                                                         new_car_path.as_path(),
+                                                                         car_settings,
+                                                                         AdditionalAcCarData::new(current_engine_weight)) {
+                        Ok(_) => {
+                            self.engine_swap_tab.update_status(format!("Created {} successfully", new_car_path.display()));
+                            self.app_data.refresh_available_cars();
+                            self.notify_app_data_update(&message);
+                        }
+                        Err(err_str) => { self.engine_swap_tab.update_status(err_str) }
+                    }
+                } else {
+                    let err_str = "Swap failed: Couldn't get ref to current mod";
+                    error!(err_str);
+                    self.engine_swap_tab.update_status(format!("{}", err_str));
+                    return;
                 }
             }
         }
@@ -444,10 +521,10 @@ impl Sandbox for UIMain {
                 self.engine_swap_tab.tab_label(),
                 self.engine_swap_tab.view(&self.app_data)
             )
-            // .push(
-            //     self.edit_tab.tab_label(),
-            //     self.edit_tab.view(&self.app_data)
-            // )
+            .push(
+                self.edit_tab.tab_label(),
+                self.edit_tab.view(&self.app_data)
+            )
             .push(
                 self.settings_tab.tab_label(),
                 self.settings_tab.view(&self.app_data)
@@ -478,11 +555,9 @@ trait Tab {
             .push(self.content(app_data));
 
         Container::new(column)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Center)
-            .padding(TAB_PADDING)
+            .align_x(Horizontal::Left)
+            .align_y(Vertical::Top)
+            .padding(Padding::from([TAB_PADDING*2, TAB_PADDING, TAB_PADDING, TAB_PADDING]))
             .into()
     }
 

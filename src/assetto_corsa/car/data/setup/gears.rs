@@ -19,13 +19,13 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::cmp::{min, Ordering};
-use std::collections::HashMap;
+use std::cmp::{Ordering};
+use std::collections::{BTreeMap, HashMap};
 use fraction::Bounded;
-use rand::Rng;
+use itertools::Itertools;
 use crate::assetto_corsa::car::data::setup::gears::GearConfig::{GearSets, PerGear};
 use crate::assetto_corsa::car::data::setup::HelpData;
-use crate::assetto_corsa::car::lut_utils::LutType;
+use crate::assetto_corsa::car::lut_utils::{LutFile, LutType};
 use crate::assetto_corsa::ini_utils;
 use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection, OptionalDataSection};
 use crate::assetto_corsa::error::{Error, ErrorKind, Result};
@@ -42,12 +42,13 @@ impl MandatoryDataSection for GearData {
     fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<GearData> where Self: Sized {
         let final_drive = SingleGear::load_from_ini(parent_data,"FINAL_GEAR_RATIO".to_string())?;
         let gear_config = GearConfig::load_from_car_data(parent_data)?;
-        Ok((GearData{ gear_config, final_drive }))
+        Ok(GearData{ gear_config, final_drive })
     }
 }
 
 impl CarDataUpdater for GearData {
     fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        self.clear_existing_config(car_data)?;
         if let Some(gear_config) = &self.gear_config {
             gear_config.update_car_data(car_data)?;
         }
@@ -84,6 +85,27 @@ impl GearData {
     pub fn set_gear_config(&mut self, new_gear_config: Option<GearConfig>) -> Option<GearConfig> {
         std::mem::replace(&mut self.gear_config, new_gear_config)
     }
+
+    pub fn clear_gear_config(&mut self) -> Option<GearConfig> {
+        self.set_gear_config(None)
+    }
+
+    pub fn set_final_drive(&mut self, new_final_drive: Option<SingleGear>) -> Option<SingleGear> {
+        std::mem::replace(&mut self.final_drive, new_final_drive)
+    }
+
+    pub fn clear_final_drive(&mut self) -> Option<SingleGear> {
+        self.set_final_drive(None)
+    }
+
+    fn clear_existing_config(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        SingleGear::delete_all_gears_from_car_data(car_data)?;
+        SingleGear::delete_final_drive_from_car_data(car_data)?;
+        let ini_data = car_data.mut_ini_data();
+        GearSet::delete_all_from_ini(ini_data);
+        ini_data.remove_section("GEARS");
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -93,17 +115,36 @@ pub enum GearConfig {
 }
 
 impl GearConfig {
-    pub fn new_gearset_config(gearset_ratios: &HashMap<String, Vec<f64>>) -> GearConfig {
+    pub fn new_gearset_config_from_btree_map(gearset_ratios: BTreeMap<String, Vec<f64>>) -> GearConfig {
         let mut gearsets: Vec<GearSet> = Vec::new();
         let mut num_gears = 0;
         for (name, gearset_vec) in gearset_ratios {
             if num_gears == 0 {
                 num_gears = gearset_vec.len();
             }
+            if gearset_vec.len() >= num_gears {
+                gearsets.push(GearSet::new(name, gearset_vec[0..num_gears].to_vec()));
+            } else {
+                let mut fixed_ratios = Vec::with_capacity(num_gears);
+                fixed_ratios.fill(1.0);
+                for (idx, g) in gearset_vec.iter().enumerate() {
+                    fixed_ratios[idx] = *g;
+                }
+                gearsets.push(GearSet::new(name, fixed_ratios));
+            }
+        }
+        return GearSets(gearsets)
+    }
 
+    pub fn new_gearset_config_from_map(gearset_ratios: &HashMap<String, Vec<f64>>) -> GearConfig {
+        let mut gearsets: Vec<GearSet> = Vec::new();
+        let mut num_gears = 0;
+        for (name, gearset_vec) in gearset_ratios {
+            if num_gears == 0 {
+                num_gears = gearset_vec.len();
+            }
             if gearset_vec.len() >= num_gears {
                 gearsets.push(GearSet::new(name.clone(), gearset_vec[0..num_gears].to_vec()));
-
             } else {
                 let mut fixed_ratios = Vec::with_capacity(num_gears);
                 fixed_ratios.fill(1.0);
@@ -114,6 +155,14 @@ impl GearConfig {
             }
         }
         return GearSets(gearsets)
+    }
+
+    pub fn new_gears_config(gear_config: Vec<Vec<(String, f64)>>) -> GearConfig {
+        let mut gears: Vec<SingleGear> = Vec::new();
+        for (idx, ratios_vec) in gear_config.into_iter().enumerate() {
+            gears.push(SingleGear::new_gearbox_gear(idx+1, ratios_vec))
+        }
+        PerGear(gears)
     }
 
     pub fn load_from_car_data(parent_data: &dyn CarDataFile) -> Result<Option<GearConfig>> {
@@ -144,16 +193,7 @@ impl GearConfig {
         Ok(None)
     }
 
-    pub fn clear_existing_config(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
-        SingleGear::delete_all_from_car_data(car_data)?;
-        let ini_data = car_data.mut_ini_data();
-        GearSet::delete_all_from_ini(ini_data);
-        ini_data.remove_section("GEARS");
-        Ok(())
-    }
-
-    pub fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
-        self.clear_existing_config(car_data)?;
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
         match &self {
             GearSets(gearset_vec) => {
                 let ini_data = car_data.mut_ini_data();
@@ -174,7 +214,7 @@ impl GearConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SingleGear {
     pub gear_id: String,
     pub ratios_lut: LutProperty<String, f64>,
@@ -185,6 +225,43 @@ pub struct SingleGear {
 }
 
 impl SingleGear {
+    pub fn new_gearbox_gear(gear_num: usize, ratios: Vec<(String, f64)>) -> SingleGear {
+        let section_name = SingleGear::create_gear_key(gear_num);
+        let gear_name = SingleGear::create_gear_name(gear_num);
+        let ratios_lut = LutProperty::new(
+            LutType::File(LutFile::new(format!("{}.rto", gear_name.to_lowercase()), ratios)),
+            section_name.clone(),
+            "RATIOS".to_owned()
+        );
+        let help_data = HelpData::Id("HELP_REAR_GEAR".to_owned());
+        SingleGear{
+            gear_id: section_name,
+            ratios_lut,
+            name: format!("{} Gear", gear_name),
+            menu_pos_x: ((gear_num-1) as f64) * 0.5,
+            menu_pos_y: 0.0,
+            help_data
+        }
+    }
+
+    pub fn new_final_drive(ratios: Vec<(String, f64)>) -> SingleGear {
+        let section_name = "FINAL_GEAR_RATIO".to_owned();
+        let ratios_lut = LutProperty::new(
+            LutType::File(LutFile::new("final.rto".to_owned(), ratios)),
+            section_name.clone(),
+            "RATIOS".to_owned()
+        );
+        let help_data = HelpData::Id("HELP_REAR_GEAR".to_owned());
+        SingleGear{
+            gear_id: section_name,
+            ratios_lut,
+            name: "Final Gear Ratio".to_owned(),
+            menu_pos_x: 0.0,
+            menu_pos_y: 1.0,
+            help_data
+        }
+    }
+
     pub fn load_all_from_car_data(parent_data: &dyn CarDataFile) -> Result<Vec<SingleGear>> {
         let mut gear_vec : Vec<SingleGear> = Vec::new();
         let mut current_index = 1;
@@ -261,7 +338,7 @@ impl SingleGear {
         sort_by_numeric_index(sections)
     }
 
-    pub fn delete_all_from_car_data(car_data: &mut dyn CarDataFile) -> Result<()> {
+    pub fn delete_all_gears_from_car_data(car_data: &mut dyn CarDataFile) -> Result<()> {
         let existing_gear_names : Vec<String>;
         {
             let ini_data = car_data.mut_ini_data();
@@ -280,11 +357,22 @@ impl SingleGear {
         Ok(())
     }
 
-    pub fn create_gear_key(gear_index: i32) -> String {
+    pub fn delete_final_drive_from_car_data(car_data: &mut dyn CarDataFile) -> Result<()> {
+        let ini_data = car_data.mut_ini_data();
+        ini_data.remove_section("FINAL_GEAR_RATIO");
+        Ok(())
+    }
+
+    pub fn get_index(&self) -> std::result::Result<usize, std::num::ParseIntError> {
+        let split = self.gear_id.split_terminator('_').collect_vec();
+        split[1].parse::<usize>()
+    }
+
+    pub fn create_gear_key(gear_index: usize) -> String {
         format!("GEAR_{}", gear_index)
     }
 
-    pub fn create_gear_name(gear_index: u32) -> String {
+    pub fn create_gear_name(gear_index: usize) -> String {
         match gear_index {
             1 => "First".to_string(),
             2 => "Second".to_string(),
@@ -310,7 +398,7 @@ impl SingleGear {
                 match c.to_digit(10) {
                     None => { "Unknown".to_string() }
                     Some(digit) => {
-                        SingleGear::create_gear_name(digit)
+                        SingleGear::create_gear_name(digit as usize)
                     }
                 }
             }
@@ -382,6 +470,10 @@ impl GearSet {
 
     pub fn num_gears(&self) -> usize {
         self.ratios.len()
+    }
+
+    pub fn ratios(&self) -> &Vec<f64> {
+        &self.ratios
     }
 }
 
@@ -640,7 +732,7 @@ mod tests {
     #[test]
     fn update_no_gears_to_gearset() {
         let orig_ratios = vec![2.615, 1.938, 1.526, 1.286, 1.136, 1.043];
-        let updated_ratios = vec![2.615, 1.800, 1.450, 1.200, 1.043, 0.950];
+        let updated_ratios = vec![2.615, 1.800, 1.450, 1.200, 1.136, 0.950];
         {
             let mut car = setup_tmp_car_as("no-customizable-gears");
             let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
@@ -649,7 +741,7 @@ mod tests {
             let mut gearset_map = HashMap::new();
             gearset_map.insert("original".to_string(), orig_ratios.clone());
             gearset_map.insert("updated".to_string(), updated_ratios.clone());
-            gear_data.set_gear_config(Some(GearConfig::new_gearset_config(&gearset_map)));
+            gear_data.set_gear_config(Some(GearConfig::new_gearset_config_from_map(&gearset_map)));
             gear_data.update_car_data(&mut car_setup_data).unwrap();
             car_setup_data.write().unwrap();
         }
@@ -669,5 +761,199 @@ mod tests {
             }
             GearConfig::PerGear(_) => { assert!(false) }
         }
+    }
+
+    #[test]
+    fn update_no_gears_to_multiple_gear_ratios() {
+        let first_ratios = vec![("2.615".to_owned(), 2.615), ("2.595".to_owned(), 2.595), ("2.500".to_owned(), 2.500)];
+        let second_ratios = vec![("1.800".to_owned(), 1.800), ("1.750".to_owned(), 1.750), ("1.700".to_owned(), 1.700)];
+        let third_ratios = vec![("1.526".to_owned(), 1.526), ("1.450".to_owned(), 1.450), ("1.400".to_owned(), 1.400)];
+        let fourth_ratios = vec![("1.286".to_owned(), 1.286), ("1.250".to_owned(), 1.250), ("1.200".to_owned(), 1.200)];
+        let fifth_ratios = vec![("1.136".to_owned(), 1.136), ("1.136".to_owned(), 1.136), ("1.100".to_owned(), 1.100)];
+        let sixth_ratios = vec![("1.043".to_owned(), 1.043), ("0.950".to_owned(), 0.950), ("0.900".to_owned(), 0.900)];
+        {
+            let mut car = setup_tmp_car_as("no-customizable-gears");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            assert!(!car_setup_data.ini_data.contains_section("GEARS"));
+            let mut gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+            let config = GearConfig::new_gears_config(vec![first_ratios.clone(), second_ratios.clone(), third_ratios.clone(), fourth_ratios.clone(), fifth_ratios.clone(), sixth_ratios.clone()]);
+            gear_data.set_gear_config(Some(config));
+            gear_data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        assert!(car_setup_data.ini_data.contains_section("GEARS"));
+        assert_eq!(ini_utils::get_value::<i32>(&car_setup_data.ini_data, "GEARS", "USE_GEARSET").expect("Couldn't get gearset in use parameter"), 0);
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        match gear_data.gear_config.as_ref().expect("GearConfig was None") {
+            GearConfig::GearSets(sets) => { assert!(false) },
+            GearConfig::PerGear(gears) => {
+                assert_eq!(gears.len(), 6);
+                let mut next_gear_num = 1;
+                for (gear, expected_ratios) in gears.iter().zip(vec![&first_ratios, &second_ratios, &third_ratios, &fourth_ratios, &fifth_ratios, &sixth_ratios]) {
+                    assert_eq!(gear.gear_id, format!("GEAR_{}", next_gear_num));
+                    for (actual, expected_pair) in gear.ratios_lut.clone_values().iter().zip(expected_ratios) {
+                        assert_eq!(*actual, expected_pair.1);
+                    }
+                    next_gear_num+=1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn update_gearset_to_multiple_gear_ratios() {
+        let first_ratios = vec![("2.615".to_owned(), 2.615), ("2.595".to_owned(), 2.595), ("2.500".to_owned(), 2.500)];
+        let second_ratios = vec![("1.800".to_owned(), 1.800), ("1.750".to_owned(), 1.750), ("1.700".to_owned(), 1.700)];
+        let third_ratios = vec![("1.526".to_owned(), 1.526), ("1.450".to_owned(), 1.450), ("1.400".to_owned(), 1.400)];
+        let fourth_ratios = vec![("1.286".to_owned(), 1.286), ("1.250".to_owned(), 1.250), ("1.200".to_owned(), 1.200)];
+        let fifth_ratios = vec![("1.136".to_owned(), 1.136), ("1.136".to_owned(), 1.136), ("1.100".to_owned(), 1.100)];
+        let sixth_ratios = vec![("1.043".to_owned(), 1.043), ("0.950".to_owned(), 0.950), ("0.900".to_owned(), 0.900)];
+        {
+            let mut car = setup_tmp_car_as("gearset");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            assert_eq!(GearSet::load_all_from_car_data(&car_setup_data).unwrap().len(), 3);
+            let mut gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+            let config = GearConfig::new_gears_config(vec![first_ratios.clone(), second_ratios.clone(), third_ratios.clone(), fourth_ratios.clone(), fifth_ratios.clone(), sixth_ratios.clone()]);
+            gear_data.set_gear_config(Some(config));
+            gear_data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        assert!(car_setup_data.ini_data.contains_section("GEARS"));
+        assert_eq!(ini_utils::get_value::<i32>(&car_setup_data.ini_data, "GEARS", "USE_GEARSET").expect("Couldn't get gearset in use parameter"), 0);
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        match gear_data.gear_config.as_ref().expect("GearConfig was None") {
+            GearConfig::GearSets(sets) => { assert!(false) },
+            GearConfig::PerGear(gears) => {
+                assert_eq!(gears.len(), 6);
+                let mut next_gear_num = 1;
+                for (gear, expected_ratios) in gears.iter().zip(vec![&first_ratios, &second_ratios, &third_ratios, &fourth_ratios, &fifth_ratios, &sixth_ratios]) {
+                    assert_eq!(gear.gear_id, format!("GEAR_{}", next_gear_num));
+                    for (actual, expected_pair) in gear.ratios_lut.clone_values().iter().zip(expected_ratios) {
+                        assert_eq!(*actual, expected_pair.1);
+                    }
+                    next_gear_num+=1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn update_gears_to_gearset() {
+        let orig_ratios = vec![2.615, 1.938, 1.526, 1.286, 1.136, 1.043];
+        let updated_ratios = vec![2.615, 1.800, 1.450, 1.200, 1.136, 0.950];
+        {
+            let mut car = setup_tmp_car_as("gears-per-gear-ratio-file");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+            let mut gearset_map = HashMap::new();
+            gearset_map.insert("original".to_string(), orig_ratios.clone());
+            gearset_map.insert("updated".to_string(), updated_ratios.clone());
+            gear_data.set_gear_config(Some(GearConfig::new_gearset_config_from_map(&gearset_map)));
+            gear_data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        assert!(car_setup_data.ini_data.contains_section("GEARS"));
+        assert_eq!(ini_utils::get_value::<i32>(&car_setup_data.ini_data, "GEARS", "USE_GEARSET").expect("Couldn't get gearset in use parameter"), 1);
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        match gear_data.gear_config.as_ref().expect("GearConfig was None") {
+            GearConfig::GearSets(sets) => {
+                assert_eq!(sets.len(), 2);
+                assert_eq!(sets[0].name, "original");
+                assert_eq!(sets[0].ratios, orig_ratios);
+                assert_eq!(sets[1].name, "updated");
+                assert_eq!(sets[1].ratios, updated_ratios);
+            }
+            GearConfig::PerGear(_) => { assert!(false) }
+        }
+    }
+
+    #[test]
+    fn clear_customizable_setup() {
+        {
+            let mut car = setup_tmp_car_as("gears-per-gear-ratio-file");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut data = GearData::load_from_parent(&car_setup_data).unwrap();
+            assert!(data.gear_config.is_some());
+            data.clear_gear_config();
+            data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        assert!(!car_setup_data.ini_data.contains_section("GEARS"));
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        assert!(gear_data.gear_config.is_none());
+        assert!(gear_data.final_drive.is_some());
+    }
+
+    #[test]
+    fn update_final_drive() {
+        let final_ratios = vec![("4.500".to_owned(), 4.500), ("4.300".to_owned(), 4.300), ("4.000".to_owned(), 4.000)];
+        {
+            let mut car = setup_tmp_car_as("only-final-drive");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+            let final_gear = SingleGear::new_final_drive(final_ratios.clone());
+            gear_data.set_final_drive(Some(final_gear));
+            gear_data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        assert!(gear_data.gear_config.is_none());
+        let final_drive = gear_data.final_drive.as_ref().unwrap();
+        assert_eq!(final_drive.ratios_lut.num_entries(), 3);
+        for (actual, expected) in final_drive.ratios_lut.to_vec().iter().zip(final_ratios) {
+            assert_eq!(actual.0, expected.0);
+            assert_eq!(actual.1, expected.1);
+        }
+    }
+
+    #[test]
+    fn clear_final_drive() {
+        {
+            let mut car = setup_tmp_car_as("gears-per-gear-ratio-file");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut data = GearData::load_from_parent(&car_setup_data).unwrap();
+            assert!(data.final_drive.is_some());
+            data.clear_final_drive();
+            data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        assert!(gear_data.gear_config.is_some());
+        assert!(gear_data.final_drive.is_none());
+    }
+
+    #[test]
+    fn clear_only_final_drive() {
+        {
+            let mut car = setup_tmp_car_as("only-final-drive");
+            let mut car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+            let mut data = GearData::load_from_parent(&car_setup_data).unwrap();
+            assert!(data.final_drive.is_some());
+            data.clear_final_drive();
+            data.update_car_data(&mut car_setup_data).unwrap();
+            car_setup_data.write().unwrap();
+        }
+
+        let mut car = get_tmp_car();
+        let car_setup_data = Setup::from_car(&mut car).unwrap().unwrap();
+        assert!(!car_setup_data.ini_data.contains_section("GEARS"));
+        let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
+        assert!(gear_data.gear_config.is_none());
+        assert!(gear_data.final_drive.is_none());
     }
 }

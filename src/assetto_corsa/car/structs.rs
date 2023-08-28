@@ -28,7 +28,7 @@ use crate::assetto_corsa::ini_utils::Ini;
 use crate::assetto_corsa::car::lut_utils::LutType;
 use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, DataInterface};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LutProperty<K, V>
     where
         K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
@@ -114,6 +114,14 @@ impl<K,V> LutProperty<K, V>
         match &self.lut {
             LutType::File(lut_file) => { lut_file.to_vec() }
             LutType::Inline(inline_lut) => { inline_lut.to_vec() }
+            LutType::PathOnly(_) => { Vec::new() }
+        }
+    }
+
+    pub fn clone_values(&self) -> Vec<V> {
+        match &self.lut {
+            LutType::File(lut_file) => { lut_file.clone_values() }
+            LutType::Inline(inline_lut) => { inline_lut.clone_values() }
             LutType::PathOnly(_) => { Vec::new() }
         }
     }

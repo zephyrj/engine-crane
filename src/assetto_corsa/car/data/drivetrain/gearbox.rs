@@ -41,17 +41,29 @@ pub struct Gearbox {
 }
 
 impl Gearbox {
-    pub fn update_gears(&mut self, gear_ratios: Vec<f64>, final_drive_ratio: f64) -> Option<(Vec<f64>, f64)> {
-        let old_vec = std::mem::replace(&mut self.gear_ratios, gear_ratios);
-        let old_final_drive = std::mem::replace(&mut self.final_gear_ratio, final_drive_ratio);
-        return match old_vec.len() {
-            0 => None,
-            _ => Some((old_vec, old_final_drive))
-        }
+    pub fn update_gears(&mut self, gear_ratios: Vec<f64>) {
+        self.gear_ratios = gear_ratios;
+        self.gear_count = self.gear_ratios.len() as i32;
+    }
+
+    pub fn num_gears(&self) -> usize {
+        self.gear_ratios.len()
     }
 
     fn create_gear_key(gear_num: i32) -> String {
         format!("GEAR_{}", gear_num)
+    }
+
+    pub fn gear_ratios(&self) -> &Vec<f64> {
+        &self.gear_ratios
+    }
+
+    pub fn final_drive(&self) -> f64 {
+        self.final_gear_ratio
+    }
+
+    pub fn update_final_drive(&mut self, new: f64) {
+        self.final_gear_ratio = new
     }
 }
 

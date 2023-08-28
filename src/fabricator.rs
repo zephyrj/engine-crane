@@ -20,7 +20,6 @@
  */
 
 use std::fmt::{Display, Formatter};
-use std::num::ParseFloatError;
 use std::path::Path;
 use itertools::Itertools;
 use sha2::{Sha256, Digest};
@@ -38,12 +37,10 @@ use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::Engine;
 use crate::assetto_corsa::car::data::engine;
 use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
-use crate::assetto_corsa::car::lut_utils::{InlineLut, LutType};
-use crate::assetto_corsa::car::structs::LutProperty;
 use crate::utils::round_float_to;
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
-use crate::automation::car::{Attribute, AttributeValue, CarFile, Section};
+use crate::automation::car::{CarFile, Section};
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 
 enum ACEngineParameterVersion {

@@ -31,11 +31,11 @@ use tracing::error;
 use crate::assetto_corsa::traits::DataInterface;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LutFile<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
     pub filename: String,
@@ -44,8 +44,8 @@ pub struct LutFile<K, V>
 
 impl<K, V> LutFile<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
     pub fn new(filename: String, data: Vec<(K, V)>) -> LutFile<K, V> {
@@ -87,16 +87,20 @@ impl<K, V> LutFile<K, V>
         self.data.clone()
     }
 
+    pub fn clone_values(&self) -> Vec<V> {
+        self.data.iter().map(|(_, val)|{(*val).clone()}).collect()
+    }
+
     pub fn num_entries(&self) -> usize {
         self.data.len()
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InlineLut<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
     data: Vec<(K,V)>
@@ -104,8 +108,8 @@ pub struct InlineLut<K, V>
 
 impl<K, V> InlineLut<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
     pub fn new() -> InlineLut<K, V> {
@@ -130,6 +134,10 @@ impl<K, V> InlineLut<K, V>
         self.data.clone()
     }
 
+    pub fn clone_values(&self) -> Vec<V> {
+        self.data.iter().map(|(_, val)|{(*val).clone()}).collect()
+    }
+
     pub fn num_entries(&self) -> usize {
         self.data.len()
     }
@@ -137,8 +145,8 @@ impl<K, V> InlineLut<K, V>
 
 impl<K, V> Display for InlineLut<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -149,11 +157,11 @@ impl<K, V> Display for InlineLut<K, V>
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LutType<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
     File(LutFile<K,V>),
@@ -163,8 +171,8 @@ pub enum LutType<K, V>
 
 impl<K, V> LutType<K, V>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
         (K, V): Clone
 {
     pub fn path_only(path: PathBuf) -> LutType<K,V> {
@@ -199,8 +207,8 @@ impl<K, V> LutType<K, V>
 
 pub fn load_lut_from_path<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
 {
     let file = match File::open(lut_path) {
         Ok(file) => { file }
@@ -213,8 +221,8 @@ pub fn load_lut_from_path<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
 
 pub fn load_lut_from_bytes<K, V>(lut_bytes: &Vec<u8>) -> Result<Vec<(K, V)>, String>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
 {
     load_lut_from_reader(Cursor::new(lut_bytes), b'|', Terminator::CRLF)
 }
@@ -222,8 +230,8 @@ pub fn load_lut_from_bytes<K, V>(lut_bytes: &Vec<u8>) -> Result<Vec<(K, V)>, Str
 
 pub fn load_lut_from_reader<K, V, R>(lut_reader: R, delimiter: u8, terminator: Terminator) -> Result<Vec<(K, V)>, String>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug,
         R: io::Read
 {
     let mut lut_data: Vec<(K, V)> = Vec::new();
@@ -247,8 +255,8 @@ fn remove_whitespace(s: &str) -> String {
 
 pub fn load_lut_from_property_value<K, V>(property_value: String, data_source: &dyn DataInterface) -> Result<Vec<(K, V)>, String>
     where
-        K: std::str::FromStr + Display, <K as FromStr>::Err: fmt::Debug,
-        V: std::str::FromStr + Display, <V as FromStr>::Err: fmt::Debug
+        K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
+        V: std::str::FromStr + Display + Clone, <V as FromStr>::Err: fmt::Debug
 {
     return match property_value.starts_with("(") {
         true => {

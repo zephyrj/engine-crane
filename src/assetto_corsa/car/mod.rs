@@ -47,6 +47,7 @@ use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::data_interface::AcdDataInterface;
 use crate::assetto_corsa::car::ui::CarUiData;
 
+pub const ENGINE_CRANE_CAR_TAG: &'static str = "engine crane";
 
 pub fn clone_existing_car(ac_installation: &assetto_corsa::Installation,
                           existing_car_path: &Path,
@@ -238,7 +239,7 @@ pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_n
                 info!("Parent name already set to {}", existing_parent);
             }
         }
-        ui_data.ui_info.add_tag_if_unique("engine crane".to_owned());
+        ui_data.ui_info.add_tag_if_unique(ENGINE_CRANE_CAR_TAG.to_owned());
         ui_data.write()?;
     }
     Ok(())

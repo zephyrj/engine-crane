@@ -21,13 +21,12 @@
 
 use super::{Message, Tab};
 use std::path::{PathBuf};
-use iced::{Alignment, Element, Length};
-use iced::widget::{button, Button, Checkbox, checkbox, Column, Container, pick_list, PickList, Row, Text, text_input, TextInput};
+use iced::{Alignment, Element, Length, Padding, Renderer};
+use iced::widget::{Button, checkbox, Column, Container, pick_list, PickList, Row, Text, TextInput};
 use iced_aw::{TabLabel};
 use iced::alignment::Horizontal;
-use tracing::{span, Level, error};
-use crate::{assetto_corsa, fabricator};
-use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings, AssettoCorsaPhysicsLevel};
+
+use crate::fabricator::{AssettoCorsaPhysicsLevel};
 use crate::ui::{ApplicationData, ListPath};
 
 #[derive(Debug, Clone)]
@@ -38,18 +37,17 @@ pub enum EngineSwapMessage {
     PhysicsLevelSelected(AssettoCorsaPhysicsLevel),
     OldEngineWeightEntered(String),
     UnpackToggled(bool),
-    SwapButtonPressed
 }
 
 #[derive(Default)]
 pub struct EngineSwapTab {
     available_physics: Vec<AssettoCorsaPhysicsLevel>,
-    current_car: Option<PathBuf>,
-    current_mod: Option<PathBuf>,
-    current_new_spec_name: String,
-    current_engine_weight: Option<String>,
-    current_minimum_physics: AssettoCorsaPhysicsLevel,
-    unpack_physics_data: bool,
+    pub(crate) current_car: Option<PathBuf>,
+    pub(crate) current_mod: Option<PathBuf>,
+    pub(crate) current_new_spec_name: String,
+    pub(crate) current_engine_weight: Option<String>,
+    pub(crate) current_minimum_physics: AssettoCorsaPhysicsLevel,
+    pub(crate) unpack_physics_data: bool,
     status_message: String
 }
 
@@ -67,8 +65,12 @@ impl EngineSwapTab {
         }
     }
 
-    pub fn app_data_update(&mut self, app_data: &ApplicationData) {
-        self.refresh();
+    pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
+        match update_event {
+            Message::AcPathSelectPressed | Message::BeamNGModPathSelectPressed => self.refresh(),
+            Message::EngineSwapRequested => {}
+            _ => {}
+        }
     }
 
     pub fn update(&mut self, message: EngineSwapMessage, app_data: &ApplicationData) {
@@ -85,73 +87,6 @@ impl EngineSwapTab {
             },
             EngineSwapMessage::PhysicsLevelSelected(new_physics_level) => {
                 self.current_minimum_physics = new_physics_level;
-            }
-            EngineSwapMessage::SwapButtonPressed => {
-                if app_data.get_ac_install_path().is_none() {
-                    self.status_message = String::from("Please set the Assetto Corsa install path in the settings tab");
-                    return;
-                }
-                if self.current_car.is_none() {
-                    self.status_message = String::from("Please select an Assetto Corsa car");
-                    return;
-                } else if self.current_mod.is_none() {
-                    self.status_message = String::from("Please select an BeamNG mod");
-                    return;
-                }
-
-                let new_spec_name = self.current_new_spec_name.as_str();
-                let new_car_path = {
-                    let span = span!(Level::INFO, "Creating new car spec");
-                    let _enter = span.enter();
-                    let ac_install = assetto_corsa::Installation::from_path(
-                        app_data.get_ac_install_path().as_ref().unwrap().clone()
-                    );
-                    match assetto_corsa::car::create_new_car_spec(&ac_install,
-                                                                  self.current_car.as_ref().unwrap(),
-                                                                  new_spec_name,
-                                                                  self.unpack_physics_data)
-                    {
-                        Ok(path) => { path }
-                        Err(e) => {
-                            error!("Swap failed: {}", e.to_string());
-                            self.status_message = format!("Swap failed: {}", e.to_string());
-                            return;
-                        }
-                    }
-                };
-
-                if let Some(mod_path) = self.current_mod.as_ref() {
-                    let span = span!(Level::INFO, "Updating car physics");
-                    let _enter = span.enter();
-                    let current_engine_weight =
-                        if let Some(weight_string) = &self.current_engine_weight {
-                            match weight_string.parse::<u32>() {
-                                Ok(val) => {
-                                    Some(val)
-                                }
-                                Err(_) => {
-                                    None
-                                }
-                            }
-                        } else {
-                            None
-                        };
-                    let mut car_settings = AssettoCorsaCarSettings::default();
-                    car_settings.minimum_physics_level = self.current_minimum_physics;
-                    match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
-                                                                         new_car_path.as_path(),
-                                                                         car_settings,
-                                                                         AdditionalAcCarData::new(current_engine_weight)) {
-                        Ok(_) => { self.status_message = format!("Created {} successfully", new_car_path.display()) }
-                        Err(err_str) => { self.status_message = err_str }
-                    }
-                } else {
-                    let err_str = "Swap failed: Couldn't get ref to current mod";
-                    error!(err_str);
-                    self.status_message = format!("{}", err_str);
-                    return;
-                }
-
             }
             EngineSwapMessage::OldEngineWeightEntered(old_weight) => {
                 if old_weight.is_empty() {
@@ -174,6 +109,10 @@ impl EngineSwapTab {
         }
     }
 
+    pub fn update_status(&mut self, status: String) {
+        self.status_message = status;
+    }
+
     pub fn refresh(&mut self) {
         self.current_car = None;
         self.current_mod = None;
@@ -191,9 +130,8 @@ impl Tab for EngineSwapTab {
         TabLabel::Text(self.title())
     }
 
-    fn content<'a, 'b>(&'a self,
-                       app_data: &'b ApplicationData ) -> Element<'_, Self::Message>
-    where 'b: 'a
+    fn content<'a, 'b>(&'a self, app_data: &'b ApplicationData ) -> Element<'_, Self::Message, Renderer>
+        where 'b: 'a
     {
         let current_car = match &self.current_car {
             None => { None }
@@ -202,13 +140,12 @@ impl Tab for EngineSwapTab {
             }
         };
         let car_select_container = Column::new()
-            .align_items(Alignment::Center)
-            //.padding(10)
+            //.align_items(Alignment::Center)
             .push(Text::new("Assetto Corsa car"))
             .push(pick_list(
                 &app_data.assetto_corsa_data.available_cars,
                 current_car,
-                EngineSwapMessage::CarSelected,
+                move |val| { Message::EngineSwap(EngineSwapMessage::CarSelected(val)) },
             ));
         let current_mod = match &self.current_mod {
             None => { None }
@@ -217,13 +154,28 @@ impl Tab for EngineSwapTab {
             }
         };
         let mod_select_container = Column::new()
-            .align_items(Alignment::Center)
+            //.align_items(Alignment::Center)
             .push(Text::new("BeamNG mod"))
             .push(PickList::new(
                 &app_data.beam_ng_data.available_mods,
                 current_mod,
-                EngineSwapMessage::ModSelected
+                move |val| { Message::EngineSwap(EngineSwapMessage::ModSelected(val)) }
             ));
+
+        let placeholder = match self.current_new_spec_name.as_str() {
+            "" => { "Enter new spec name" }
+            s => { s }
+        };
+        let new_spec_input = TextInput::new(
+            placeholder,
+            &self.current_new_spec_name,
+            move|val| { Message::EngineSwap(EngineSwapMessage::NameEntered(val)) },
+        ).width(Length::Units(500));
+        let car_name_container = Column::new()
+            //.align_items(Alignment::Center)
+            .push(Text::new("New spec name (this will be appended to the created car)"))
+            .push(new_spec_input);
+
         let current_weight_value = match &self.current_engine_weight {
             None => { "" }
             Some(string) => {
@@ -236,52 +188,34 @@ impl Tab for EngineSwapTab {
             .push(TextInput::new(
                 "",
                 current_weight_value,
-                EngineSwapMessage::OldEngineWeightEntered,
+                move |val| { Message::EngineSwap(EngineSwapMessage::OldEngineWeightEntered(val)) },
             ).width(Length::Units(100)));
         let select_container = Column::new()
             //.align_items(Align::)
-            .padding(10)
+            //.padding(10)
             .spacing(20)
             .push(car_select_container)
             .push(mod_select_container)
+            .push(car_name_container)
             .push(weight_input_container);
-
-        let placeholder = match self.current_new_spec_name.as_str() {
-            "" => { "Enter new spec name" }
-            s => { s }
-        };
-        let input = TextInput::new(
-            placeholder,
-            &self.current_new_spec_name,
-            EngineSwapMessage::NameEntered,
-        ).width(Length::Units(500));
-        let car_name_container = Column::new()
-            .align_items(Alignment::Center)
-            .padding(10)
-            .push(Text::new("New spec name (this will be appended to the created car)"))
-            .push(input);
-        let selection_row = Row::new()
-            .align_items(Alignment::Center)
-            .push(select_container.width(Length::FillPortion(1)))
-            .push(car_name_container.width(Length::FillPortion(1)));
 
         let swap_button = Button::new(Text::new("Swap"))
             .width(Length::Units(60))
-            .on_press(EngineSwapMessage::SwapButtonPressed);
+            .on_press(Message::EngineSwapRequested);
         let physics_pick_list = PickList::new(
             &self.available_physics,
             Some(self.current_minimum_physics),
-            EngineSwapMessage::PhysicsLevelSelected
+            move |val| { Message::EngineSwap(EngineSwapMessage::PhysicsLevelSelected(val)) }
         );
         let unpack_checkbox = checkbox(
             "Unpack physics data".to_string(),
             self.unpack_physics_data,
-            EngineSwapMessage::UnpackToggled
-        );
+            move |val| { Message::EngineSwap(EngineSwapMessage::UnpackToggled(val)) }
+        ).spacing(3);
 
         let control_row = Row::new()
-            .align_items(Alignment::Start)
-            .padding(10)
+            .align_items(Alignment::Center)
+            .padding(Padding::from([10, 0]))
             .spacing(10)
             .push(swap_button)
             .push(physics_pick_list)
@@ -289,9 +223,9 @@ impl Tab for EngineSwapTab {
 
         let mut layout = Column::new().width(Length::Fill)
             .align_items(Alignment::Start)
-            //.padding(10)
+            .padding(Padding::from([0, 10]))
             .spacing(30)
-            .push(selection_row)
+            .push(select_container)
             .push(control_row);
 
         if !self.status_message.is_empty() {
@@ -301,8 +235,7 @@ impl Tab for EngineSwapTab {
                     .push(Text::new(self.status_message.as_str()).horizontal_alignment(Horizontal::Center))
             )
         }
-        let content : Element<'_, EngineSwapMessage> = Container::new(layout).into();
-        content.map(Message::EngineSwap)
+        Container::new(layout).padding(20).into()
     }
 }
 
