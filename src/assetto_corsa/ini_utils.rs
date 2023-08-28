@@ -526,6 +526,8 @@ impl Ini {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             return LineType::Ignore;
+        } else if trimmed.starts_with('=') {
+            return LineType::Ignore;
         }
 
         let comment_opt = self.find_comment_start(trimmed);
@@ -570,7 +572,17 @@ impl Ini {
     }
 
     fn find_key_value_delimiter(&self, line: &str) -> Option<usize> {
-        line.find("=")
+        match line.find("=") {
+            None => None,
+            Some(idx) => {
+                if idx == 0 {
+                    // Can't have a empty Key so we didn't match
+                    None
+                } else {
+                    Some(idx)
+                }
+            }
+        }
     }
 }
 
