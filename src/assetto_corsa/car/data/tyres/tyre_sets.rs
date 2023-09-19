@@ -19,15 +19,22 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod car_ini_data;
-pub mod drivetrain;
-pub mod engine;
-pub mod digital_instruments;
-pub mod ai;
-pub mod setup;
-pub mod tyres;
+#[derive(Debug)]
+pub struct TyreData {
+    name: String,
+    short_name: String,
+    width: f64,
+    radius: f64
+}
 
-pub use car_ini_data::CarIniData;
-pub use engine::Engine;
-pub use drivetrain::Drivetrain;
-pub use digital_instruments::DigitalInstruments;
+#[derive(Debug)]
+pub struct TyreSet {
+    front: TyreData,
+    rear: TyreData
+}
+
+#[derive(Debug)]
+pub struct TyreSets {
+    sets: Vec<TyreSet>,
+    default_set_idx: usize
+}
