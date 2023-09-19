@@ -1,4 +1,4 @@
-use iced::{Color, ContentFit, Theme};
+use iced::{Color, ContentFit};
 use iced::theme;
 use iced::widget::{svg, Svg};
 use iced_native::svg::Handle;

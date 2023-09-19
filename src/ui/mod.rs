@@ -135,7 +135,7 @@ impl GlobalSettings {
     }
 
     fn write(&self) -> std::io::Result<()> {
-        fs::write(format!("{}.toml", GlobalSettings::CONFIG_FILENAME), toml::to_string(&self).map_err(|e|{
+        fs::write(format!("{}.toml", GlobalSettings::CONFIG_FILENAME), toml::to_string(&self).map_err(|_e|{
             std::io::Error::new(std::io::ErrorKind::Other, "Failed to encode settings to toml")
         })?)
     }
@@ -151,7 +151,7 @@ impl ListPath {
         ListPath {full_path: path}
     }
 
-    fn convert_path_vec(mut path_vec: Vec<PathBuf>) -> Vec<ListPath> {
+    fn convert_path_vec(path_vec: Vec<PathBuf>) -> Vec<ListPath> {
         path_vec.into_iter().fuse().map(|path|{
             ListPath::from_path(path)
         }).collect()
@@ -321,7 +321,7 @@ pub struct CustomStyleSheet;
 impl StyleSheet for CustomStyleSheet {
     type Style = Theme;
 
-    fn active(&self, style: &Self::Style, is_active: bool) -> Appearance {
+    fn active(&self, _style: &Self::Style, is_active: bool) -> Appearance {
         Appearance {
             background: None,
             border_color: None,

@@ -263,7 +263,7 @@ impl EditTab {
         match self.modal_state {
             ModalState::Hidden => None,
             ModalState::AfterUpdate => {
-                let f: fn(&Theme) -> container::Appearance = |theme: &Theme| {
+                let f: fn(&Theme) -> container::Appearance = |_theme: &Theme| {
                     container::Appearance{
                         text_color: None,
                         background: Some(Background::Color(WHITE)),
@@ -288,7 +288,7 @@ impl EditTab {
                 Some(modal_contents.into())
             }
             ModalState::AllCarsSelected => {
-                let f: fn(&Theme) -> container::Appearance = |theme: &Theme| {
+                let f: fn(&Theme) -> container::Appearance = |_theme: &Theme| {
                     container::Appearance{
                         text_color: None,
                         background: Some(Background::Color(WHITE)),
@@ -343,7 +343,7 @@ impl Tab for EditTab {
         TabLabel::Text(self.title())
     }
 
-    fn content<'a, 'b>(&'a self, app_data: &'b ApplicationData) -> Element<'_, Self::Message>
+    fn content<'a, 'b>(&'a self, _app_data: &'b ApplicationData) -> Element<'_, Self::Message>
         where 'b: 'a
     {
         let current_car = match &self.current_car_path {

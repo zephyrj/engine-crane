@@ -402,7 +402,7 @@ impl Ini {
 
     pub fn parse(&mut self, input: String) {
         let mut current_section= Section::new(String::from(""));
-        for (num, line) in input.lines().enumerate() {
+        for (_num, line) in input.lines().enumerate() {
             match self.get_expected_line_type(line) {
                 LineType::SectionName => {
                     self.finish_section(current_section);

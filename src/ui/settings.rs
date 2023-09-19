@@ -21,7 +21,7 @@
 
 use super::{Message, Tab};
 use iced::{Alignment,Element, Padding};
-use iced::widget::{button, Button, Column, Container, Row, Text, text_input, TextInput};
+use iced::widget::{Button, Column, Container, Text};
 use iced_aw::{TabLabel};
 use crate::ui::{ApplicationData};
 
@@ -43,11 +43,11 @@ impl SettingsTab {
         }
     }
 
-    pub fn update(&mut self, message: SettingsMessage, app_data: &ApplicationData) {
+    pub fn update(&mut self, message: SettingsMessage, _app_data: &ApplicationData) {
         match message { SettingsMessage::ThingSelected(_) => {} }
     }
 
-    pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
+    pub fn app_data_update(&mut self, _app_data: &ApplicationData, _update_event: &Message) {
     }
 }
 

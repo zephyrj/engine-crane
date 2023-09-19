@@ -93,7 +93,7 @@ pub fn get_mod_list() -> Vec<PathBuf> {
 fn read_mods_in_path(path: &PathBuf) -> Vec<PathBuf> {
     let dir_entries = match fs::read_dir(path) {
         Ok(entry_list) => entry_list,
-        Err(e) => { return Vec::new(); }
+        Err(_e) => { return Vec::new(); }
     };
 
     dir_entries.filter_map(|e| {
@@ -140,7 +140,7 @@ impl ModData {
 
         let mut info_json: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         let mut car_data: Option<Vec<u8>> = None;
-        let mut jbeam_data: serde_hjson::Map<String, serde_hjson::Value> = Map::new();
+        let jbeam_data: serde_hjson::Map<String, serde_hjson::Value> = Map::new();
 
         let mut info_json_path = String::new();
         let mut car_data_path = String::new();
@@ -306,7 +306,7 @@ fn _extract_file_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
 
 fn _extract_jbeam_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
                                     file_path: &str) -> Result<Map<String, Value>, String> {
-    let mut jbeam_data: Vec<u8> = _extract_file_data_from_archive(archive, file_path)?;
+    let jbeam_data: Vec<u8> = _extract_file_data_from_archive(archive, file_path)?;
     jbeam::from_slice(&*jbeam_data).map_err(|e| {
         return e.to_string();
     })
@@ -314,7 +314,7 @@ fn _extract_jbeam_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
 
 fn _extract_json_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
                                    file_path: &str) -> Result<serde_json::Map<String, serde_json::Value>, String> {
-    let mut file_data: Vec<u8> = _extract_file_data_from_archive(archive, file_path)?;
+    let file_data: Vec<u8> = _extract_file_data_from_archive(archive, file_path)?;
     serde_json::from_slice(&*file_data).map_err(|e| {
         return e.to_string();
     })
@@ -322,9 +322,9 @@ fn _extract_json_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
 
 
 mod tests {
-    use std::ffi::OsString;
-    use std::path::PathBuf;
-    use crate::beam_ng::{get_mod_list, get_default_mod_path, load_mod_data};
+    
+    
+    
 
     #[test]
     fn get_beam_ng_mod_path() -> Result<(), String> {
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn load_beam_ng_mod() -> Result<(), String> {
-        let mod_data = load_mod_data("turbo_boy_modifed.zip")?;
+        let _mod_data = load_mod_data("turbo_boy_modifed.zip")?;
         Ok(())
     }
 }

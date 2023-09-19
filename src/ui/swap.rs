@@ -65,7 +65,7 @@ impl EngineSwapTab {
         }
     }
 
-    pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
+    pub fn app_data_update(&mut self, _app_data: &ApplicationData, update_event: &Message) {
         match update_event {
             Message::AcPathSelectPressed | Message::BeamNGModPathSelectPressed => self.refresh(),
             Message::EngineSwapRequested => {}
@@ -73,7 +73,7 @@ impl EngineSwapTab {
         }
     }
 
-    pub fn update(&mut self, message: EngineSwapMessage, app_data: &ApplicationData) {
+    pub fn update(&mut self, message: EngineSwapMessage, _app_data: &ApplicationData) {
         match message {
             EngineSwapMessage::CarSelected(path_ref) => {
                 self.current_car = Some(path_ref.full_path.clone());

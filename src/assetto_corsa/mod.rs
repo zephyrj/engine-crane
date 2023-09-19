@@ -31,7 +31,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use tracing::info;
 use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 use crate::steam;

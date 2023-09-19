@@ -346,7 +346,7 @@ fn get_parent_path_part(full_path: &Path) -> Result<&Path> {
 mod tests {
     use std::fs::File;
     use std::io::Write;
-    use std::path::{Path, PathBuf};
+    use std::path::{Path};
     use crate::assetto_corsa;
     use crate::assetto_corsa::car::{Car, create_new_car_spec};
     use crate::assetto_corsa::car::data::CarIniData;
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(ui_info.brand().unwrap(), "Test");
         assert_eq!(ui_info.class().unwrap(), "street");
         assert_eq!(ui_info.tags().unwrap(), Vec::from(["#Supercars", "awd", "semiautomatic", "street", "turbo", "germany"]));
-        let specs = ui_info.specs().unwrap();
+        let _specs = ui_info.specs().unwrap();
         Ok(())
     }
 

@@ -264,7 +264,7 @@ impl FixedGears {
 
     pub(crate) fn add_editable_gear_list<'a, 'b>(
         &'a self,
-        mut layout: Column<'b, EditMessage>
+        layout: Column<'b, EditMessage>
     ) -> Column<'b, EditMessage>
         where 'b: 'a
     {

@@ -20,14 +20,14 @@
  */
 
 use std::fmt::{Display, Formatter};
-use std::io;
+
 use std::str::FromStr;
-use csv::Terminator;
+
 
 use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, DataInterface};
 use crate::assetto_corsa::error::{Error, ErrorKind, PropertyParseError, Result};
 use crate::assetto_corsa::{Car, ini_utils};
-use crate::assetto_corsa::car::lut_utils;
+
 use crate::assetto_corsa::car::lut_utils::{InlineLut, LutType};
 use crate::assetto_corsa::car::structs::LutProperty;
 use crate::assetto_corsa::ini_utils::Ini;

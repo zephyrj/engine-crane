@@ -26,7 +26,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use csv::Terminator;
-use serde::de::Unexpected::Str;
+
 use tracing::error;
 use crate::assetto_corsa::traits::DataInterface;
 
@@ -152,7 +152,7 @@ impl<K, V> Display for InlineLut<K, V>
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}",
                write_lut_to_property_value(&self.data, b'=', Terminator::Any(b'|')).map_err(
-                   |err| { fmt::Error }
+                   |_err| { fmt::Error }
                )?)
     }
 }

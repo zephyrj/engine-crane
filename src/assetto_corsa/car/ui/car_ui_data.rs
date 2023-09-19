@@ -25,7 +25,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use serde_json::{json, Map, Value};
-use tracing::warn;
+
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 
@@ -280,7 +280,7 @@ impl UiInfo {
                 }
             }
             Some(val) => {
-                if let Some(mut torque_array) = val.as_array_mut() {
+                if let Some(torque_array) = val.as_array_mut() {
                     torque_array.clear();
                     for val in data_vec {
                         torque_array.push(val);

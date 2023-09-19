@@ -327,7 +327,7 @@ pub fn extract_acd(acd_path: &Path,
         current_pos += filename_len as usize;
 
         // The next 4 bytes contain the length of the file content
-        let mut content_length = LengthField::from_le_bytes(packed_buffer[current_pos..(current_pos+mem::size_of::<LengthField>())].try_into().expect("Failed to parse filename length"));
+        let content_length = LengthField::from_le_bytes(packed_buffer[current_pos..(current_pos+mem::size_of::<LengthField>())].try_into().expect("Failed to parse filename length"));
         current_pos += mem::size_of::<LengthField>();
 
         // The file content is spread out such that each byte of content is stored in 4 bytes.

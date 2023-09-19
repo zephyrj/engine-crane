@@ -76,7 +76,7 @@ impl AttributeValue {
         return match self {
             AttributeValue::Blob(_) => { "BLOB" }
             AttributeValue::Text(t) => { t.as_str() }
-            AttributeValue::Number(num) => { "" }
+            AttributeValue::Number(_num) => { "" }
             AttributeValue::False => { "false" }
             AttributeValue::True => { "true" }
         }

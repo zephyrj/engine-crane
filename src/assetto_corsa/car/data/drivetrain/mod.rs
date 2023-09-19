@@ -139,9 +139,9 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
 mod tests {
     use std::path::{Path, PathBuf};
     use crate::assetto_corsa::Car;
-    use crate::assetto_corsa::car::data::drivetrain::{AutoBlip, AutoClutch, AutoShifter, Clutch, Differential, DownshiftProtection, Drivetrain, Gearbox, Traction};
+    use crate::assetto_corsa::car::data::drivetrain::{Drivetrain, Gearbox, Traction};
     use crate::assetto_corsa::car::data::drivetrain::traction::DriveType;
-    use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, extract_mandatory_section, MandatoryDataSection};
+    use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 
     const TEST_DATA_PATH: &'static str = "test_data";
     const TEMP_TEST_CAR_NAME_PREFIX: &'static str = "tmp_car";

@@ -28,8 +28,8 @@ use rusqlite::{Connection, Row};
 use sha2::{Sha256, Digest};
 use tracing::info;
 
-use crate::steam;
-use crate::automation::{STEAM_GAME_ID};
+
+
 use crate::utils::round_float_to;
 
 pub enum SandboxVersion {
@@ -584,8 +584,8 @@ fn sandbox_dir_4_2() -> Vec<&'static str> {
 }
 
 mod tests {
-    use std::path::PathBuf;
-    use crate::automation::sandbox::{get_db_path, get_db_path_4_2, SandboxVersion};
+    
+    
 
     #[test]
     fn get_sandbox_db_path() -> Result<(), String> {

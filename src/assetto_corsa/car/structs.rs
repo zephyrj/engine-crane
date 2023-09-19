@@ -19,7 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fmt, io};
+use std::{fmt};
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;

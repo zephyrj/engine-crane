@@ -31,8 +31,8 @@ use std::env;
 use std::path::PathBuf;
 use tracing_subscriber;
 use tracing_appender;
-use tracing::{info, warn, error};
-use tracing::dispatcher::SetGlobalDefaultError;
+use tracing::{info};
+
 
 // -> Result<(), iced::Error>
 fn main() -> Result<(), iced::Error> {

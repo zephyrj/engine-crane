@@ -37,12 +37,12 @@ use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
-use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearConfiguration, GearUpdateType};
+use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearUpdateType};
 use crate::ui::edit::gears::final_drive::FinalDrive;
 use crate::ui::edit::gears::fixed::FixedGears;
 use crate::ui::edit::gears::gear_sets::GearSets;
 use crate::ui::edit::gears::GearUpdateType::CustomizedGear;
-use crate::ui::edit::gears::ratio_set::{RatioEntry, RatioSet};
+use crate::ui::edit::gears::ratio_set::{RatioSet};
 
 
 #[derive(Debug, Clone, PartialEq)]
@@ -238,7 +238,7 @@ impl CustomizableGears {
     fn add_gear_ratio_entry_row(new_ratio_data: (GearLabel, String, String), name_max_width: u16) -> Row<'static, EditMessage>
     {
         let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
-        let (label, name, ratio) = new_ratio_data;
+        let (_label, name, ratio) = new_ratio_data;
         r = r.push(text_input(
             "",
             &name,
@@ -255,7 +255,7 @@ impl CustomizableGears {
             .width(Length::Units(56))
             .size(14)
         );
-        let mut confirm;
+        let confirm;
         if !ratio.is_empty() {
             confirm = create_add_button(GearUpdate(CustomizedGear(CustomizedGearUpdate::ConfirmNewRatio())));
         } else {
@@ -424,7 +424,7 @@ impl CustomizableGears {
 
     pub fn to_setup_data(&self) -> Vec<Vec<(String, f64)>> {
         self.new_setup_data.iter().map(
-            |(label, set)| {
+            |(_label, set)| {
                 set.entries().iter().map(
                     |s| {
                         (s.name.clone(), s.ratio())

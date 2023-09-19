@@ -23,7 +23,7 @@ pub mod shift_lights;
 
 use crate::assetto_corsa::car::Car;
 use crate::assetto_corsa::ini_utils::Ini;
-use crate::assetto_corsa::error::{Result, Error, ErrorKind};
+use crate::assetto_corsa::error::{Result};
 use crate::assetto_corsa::traits::{CarDataFile, DataInterface};
 
 #[derive(Debug)]

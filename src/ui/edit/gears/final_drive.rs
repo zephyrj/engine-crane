@@ -22,7 +22,7 @@
 use std::cmp::max;
 use fraction::ToPrimitive;
 use iced::{Alignment, Length};
-use iced::alignment::{Horizontal, Vertical};
+
 use iced::widget::{Column, Radio, Row, Text};
 use iced_native::widget::{text, text_input};
 use crate::assetto_corsa::car;
@@ -187,7 +187,7 @@ impl FinalDrive {
                 })
                 .width(Length::Units(56))
                 .size(14));
-        let mut confirm;
+        let confirm;
         if !ratio.is_empty() {
             confirm = create_add_button(EditMessage::FinalDriveUpdate(FinalDriveUpdate::ConfirmNewFinalRatio()));
         } else {

@@ -1074,13 +1074,13 @@ impl<'a, 'b> EngineDataValidator<'a, 'b> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::fs::File;
-    use std::path::{Path, PathBuf};
-    use crate::assetto_corsa::car::create_new_car_spec;
+    
+    
+    use std::path::{PathBuf};
+    
     use crate::{automation, beam_ng};
     use crate::beam_ng::get_mod_list;
-    use crate::fabricator::{AcEngineParameterCalculatorV1, AdditionalAcCarData, AssettoCorsaCarSettings, swap_automation_engine_into_ac_car};
+    use crate::fabricator::{AcEngineParameterCalculatorV1};
 
     #[test]
     fn load_mods() -> Result<(), String> {

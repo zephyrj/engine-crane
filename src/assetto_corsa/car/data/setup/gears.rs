@@ -27,7 +27,7 @@ use crate::assetto_corsa::car::data::setup::gears::GearConfig::{GearSets, PerGea
 use crate::assetto_corsa::car::data::setup::HelpData;
 use crate::assetto_corsa::car::lut_utils::{LutFile, LutType};
 use crate::assetto_corsa::ini_utils;
-use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection, OptionalDataSection};
+use crate::assetto_corsa::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::assetto_corsa::error::{Error, ErrorKind, Result};
 use crate::assetto_corsa::car::structs::LutProperty;
 use crate::assetto_corsa::ini_utils::Ini;
@@ -496,8 +496,8 @@ mod tests {
     use std::path::{Path, PathBuf};
     use rand::thread_rng;
     use rand::seq::SliceRandom;
-    use tracing_subscriber::fmt::format;
-    use crate::assetto_corsa::{Car, car, ini_utils};
+    
+    use crate::assetto_corsa::{Car, ini_utils};
     use crate::assetto_corsa::car::data::setup::gears::{GearConfig, GearData, GearSet, SingleGear, sort_by_numeric_index};
     use crate::assetto_corsa::car::data::setup::Setup;
     use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
@@ -572,7 +572,7 @@ mod tests {
         assert_eq!(sort_by_numeric_index(t2), sorted_vec);
 
         let test_runs = 100;
-        for n in 0..test_runs {
+        for _n in 0..test_runs {
             let mut vec : Vec<usize> = (0..num_gears).collect();
             vec.shuffle(&mut thread_rng());
             let t = create_vec_for_range_from(vec, &sorted_gears);
@@ -787,7 +787,7 @@ mod tests {
         assert_eq!(ini_utils::get_value::<i32>(&car_setup_data.ini_data, "GEARS", "USE_GEARSET").expect("Couldn't get gearset in use parameter"), 0);
         let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
         match gear_data.gear_config.as_ref().expect("GearConfig was None") {
-            GearConfig::GearSets(sets) => { assert!(false) },
+            GearConfig::GearSets(_sets) => { assert!(false) },
             GearConfig::PerGear(gears) => {
                 assert_eq!(gears.len(), 6);
                 let mut next_gear_num = 1;
@@ -826,7 +826,7 @@ mod tests {
         assert_eq!(ini_utils::get_value::<i32>(&car_setup_data.ini_data, "GEARS", "USE_GEARSET").expect("Couldn't get gearset in use parameter"), 0);
         let gear_data = GearData::load_from_parent(&car_setup_data).unwrap();
         match gear_data.gear_config.as_ref().expect("GearConfig was None") {
-            GearConfig::GearSets(sets) => { assert!(false) },
+            GearConfig::GearSets(_sets) => { assert!(false) },
             GearConfig::PerGear(gears) => {
                 assert_eq!(gears.len(), 6);
                 let mut next_gear_num = 1;
