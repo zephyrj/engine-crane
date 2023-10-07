@@ -25,11 +25,16 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use directories::BaseDirs;
-use parselnk::Lnk;
 use serde_hjson::{Map, Value};
 use steam;
 use tracing::{debug, info, warn};
+
+#[cfg(target_os = "windows")]
+use {
+    directories::BaseDirs,
+    parselnk::Lnk
+};
+
 
 pub const STEAM_GAME_NAME: &str = "BeamNG.drive";
 pub const STEAM_GAME_ID: i64 = 284160;
@@ -322,9 +327,8 @@ fn _extract_json_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
 
 
 mod tests {
-    
-    
-    
+    use std::path::PathBuf;
+    use crate::{get_default_mod_path, get_mod_list, load_mod_data};
 
     #[test]
     fn get_beam_ng_mod_path() -> Result<(), String> {
