@@ -21,7 +21,6 @@
 
 use std::cmp::{Ordering};
 use std::collections::{BTreeMap, HashMap};
-use fraction::Bounded;
 use itertools::Itertools;
 use crate::car::data::setup::gears::GearConfig::{GearSets, PerGear};
 use crate::car::data::setup::HelpData;
@@ -63,7 +62,7 @@ impl GearData {
     // TODO finish this
     pub fn auto_space_gear_menu_positions(&mut self) {
         let mut x_pos;
-        let mut start_y_pos = f64::max_value();
+        let mut start_y_pos = f64::MAX;
         if let Some(gear_config) = &mut self.gear_config {
             match gear_config {
                 PerGear(gears) => {

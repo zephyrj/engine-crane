@@ -20,7 +20,6 @@
  */
 
 use std::cmp::max;
-use fraction::ToPrimitive;
 use iced::{Alignment, Length};
 
 use iced::widget::{Column, Radio, Row, Text};
@@ -125,7 +124,7 @@ impl FinalDrive {
                 .width(Length::Shrink)
                 .spacing(5);
         col = col.push(text("Final Drive"));
-        let name_width = (self.new_setup_data.max_name_len() * 10).to_u16().unwrap_or(u16::MAX);
+        let name_width: u16 = (self.new_setup_data.max_name_len() * 10).try_into().unwrap_or(u16::MAX);
         let default_idx = self.new_setup_data.default_idx();
         for ratio_entry in self.new_setup_data.entries() {
             let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
@@ -167,7 +166,7 @@ impl FinalDrive {
     {
         let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
         let (name, ratio) = self.new_ratio_data.as_ref().unwrap();
-        let name_max_width = (max(self.new_setup_data.max_name_len(), name.len()) * 10).to_u16().unwrap_or(u16::MAX);
+        let name_max_width = (max(self.new_setup_data.max_name_len(), name.len()) * 10).try_into().unwrap_or(u16::MAX);
         r = r.push(
             text_input(
                 "",
