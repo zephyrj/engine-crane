@@ -126,6 +126,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "assetto_corsa"
+version = "0.2.0-alpha"
+dependencies = [
+ "config",
+ "csv",
+ "derive-new",
+ "directories",
+ "fraction",
+ "fs_extra",
+ "iced",
+ "iced_aw",
+ "iced_native",
+ "indexmap",
+ "itertools",
+ "parselnk",
+ "rand",
+ "regex",
+ "rfd",
+ "rusqlite",
+ "serde 1.0.152",
+ "serde-hjson",
+ "serde_json",
+ "sha2",
+ "steam",
+ "thiserror",
+ "toml 0.7.2",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "utils",
+ "walkdir",
+ "winit 0.28.1",
+ "winres",
+ "zip",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -155,6 +192,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "automation"
+version = "0.2.0-alpha"
+dependencies = [
+ "config",
+ "csv",
+ "derive-new",
+ "directories",
+ "fraction",
+ "fs_extra",
+ "iced",
+ "iced_aw",
+ "iced_native",
+ "indexmap",
+ "itertools",
+ "parselnk",
+ "rand",
+ "regex",
+ "rfd",
+ "rusqlite",
+ "serde 1.0.152",
+ "serde-hjson",
+ "serde_json",
+ "sha2",
+ "steam",
+ "thiserror",
+ "toml 0.7.2",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "utils",
+ "walkdir",
+ "winit 0.28.1",
+ "winres",
+ "zip",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -165,6 +239,42 @@ name = "base64ct"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b645a089122eccb6111b4f81cbc1a49f5900ac4666bb93ac027feaecf15607bf"
+
+[[package]]
+name = "beam_ng"
+version = "0.2.0-alpha"
+dependencies = [
+ "config",
+ "csv",
+ "derive-new",
+ "directories",
+ "fraction",
+ "fs_extra",
+ "iced",
+ "iced_aw",
+ "iced_native",
+ "indexmap",
+ "itertools",
+ "parselnk",
+ "rand",
+ "regex",
+ "rfd",
+ "rusqlite",
+ "serde 1.0.152",
+ "serde-hjson",
+ "serde_json",
+ "sha2",
+ "steam",
+ "thiserror",
+ "toml 0.7.2",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "walkdir",
+ "winit 0.28.1",
+ "winres",
+ "zip",
+]
 
 [[package]]
 name = "bit-set"
@@ -939,6 +1049,9 @@ dependencies = [
 name = "engine-crane"
 version = "0.2.0-alpha"
 dependencies = [
+ "assetto_corsa",
+ "automation",
+ "beam_ng",
  "config",
  "csv",
  "derive-new",
@@ -959,11 +1072,13 @@ dependencies = [
  "serde-hjson",
  "serde_json",
  "sha2",
+ "steam",
  "thiserror",
  "toml 0.7.2",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "utils",
  "walkdir",
  "winit 0.28.1",
  "winres",
@@ -3527,6 +3642,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "steam"
+version = "0.2.0-alpha"
+dependencies = [
+ "config",
+ "csv",
+ "derive-new",
+ "directories",
+ "fraction",
+ "fs_extra",
+ "iced",
+ "iced_aw",
+ "iced_native",
+ "indexmap",
+ "itertools",
+ "parselnk",
+ "rand",
+ "regex",
+ "rfd",
+ "rusqlite",
+ "serde 1.0.152",
+ "serde-hjson",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "toml 0.7.2",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "walkdir",
+ "winit 0.28.1",
+ "winres",
+ "zip",
+]
+
+[[package]]
 name = "str-buf"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3992,6 +4142,10 @@ dependencies = [
  "unicode-vo",
  "xmlwriter",
 ]
+
+[[package]]
+name = "utils"
+version = "0.2.0-alpha"
 
 [[package]]
 name = "valuable"

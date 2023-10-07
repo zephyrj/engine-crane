@@ -4,6 +4,10 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/assetto_corsa/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/automation/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/beam_ng/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/steam/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/utils/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/assetto_corsa/target" />
     </content>
