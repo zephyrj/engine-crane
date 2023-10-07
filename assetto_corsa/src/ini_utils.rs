@@ -512,7 +512,7 @@ impl Ini {
     }
 
     fn finish_section(&mut self, section: Section) {
-        let mut key = String::new();
+        let key;
         if section.name.is_empty() {
             key = String::from(Ini::TOP_LEVEL);
         } else {

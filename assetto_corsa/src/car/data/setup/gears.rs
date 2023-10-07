@@ -19,7 +19,6 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::cmp::{Ordering};
 use std::collections::{BTreeMap, HashMap};
 use itertools::Itertools;
 use crate::car::data::setup::gears::GearConfig::{GearSets, PerGear};
@@ -60,26 +59,26 @@ impl CarDataUpdater for GearData {
 
 impl GearData {
     // TODO finish this
-    pub fn auto_space_gear_menu_positions(&mut self) {
-        let mut x_pos;
-        let mut start_y_pos = f64::MAX;
-        if let Some(gear_config) = &mut self.gear_config {
-            match gear_config {
-                PerGear(gears) => {
-                    for gear in gears {
-                        x_pos = gear.menu_pos_x;
-                        if let Some(ordering) = gear.menu_pos_y.partial_cmp(&start_y_pos) {
-                            match ordering {
-                                Ordering::Less => { start_y_pos = gear.menu_pos_y}
-                                _ => {}
-                            }
-                        }
-                    }
-                },
-                _ => {}
-            };
-        }
-    }
+    // pub fn auto_space_gear_menu_positions(&mut self) {
+    //     let mut x_pos;
+    //     let mut start_y_pos = f64::MAX;
+    //     if let Some(gear_config) = &mut self.gear_config {
+    //         match gear_config {
+    //             PerGear(gears) => {
+    //                 for gear in gears {
+    //                     x_pos = gear.menu_pos_x;
+    //                     if let Some(ordering) = gear.menu_pos_y.partial_cmp(&start_y_pos) {
+    //                         match ordering {
+    //                             Ordering::Less => { start_y_pos = gear.menu_pos_y}
+    //                             _ => {}
+    //                         }
+    //                     }
+    //                 }
+    //             },
+    //             _ => {}
+    //         };
+    //     }
+    // }
 
     pub fn set_gear_config(&mut self, new_gear_config: Option<GearConfig>) -> Option<GearConfig> {
         std::mem::replace(&mut self.gear_config, new_gear_config)

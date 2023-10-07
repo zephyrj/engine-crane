@@ -212,8 +212,8 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
 
 pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_name: &str) -> Result<()> {
     let mut car = Car::load_from_path(car_path)?;
-    let mut existing_name = String::new();
-    let mut new_name = String::new();
+    let existing_name;
+    let new_name ;
     {
         let mut ini_data = CarIniData::from_car(&mut car)?;
         existing_name = match ini_data.screen_name() {
@@ -238,7 +238,13 @@ pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_n
                 info!("Parent name already set to {}", existing_parent);
             }
         }
-        ui_data.ui_info.add_tag_if_unique(ENGINE_CRANE_CAR_TAG.to_owned());
+        match ui_data.ui_info.add_tag_if_unique(ENGINE_CRANE_CAR_TAG.to_owned()) {
+            Ok(added) => match added {
+                true => info!("Added {} tag", ENGINE_CRANE_CAR_TAG),
+                false => info!("{} already present in tags", ENGINE_CRANE_CAR_TAG)
+            }
+            Err(e) => warn!("Couldn't add {} tag. {}", ENGINE_CRANE_CAR_TAG, e)
+        }
         ui_data.write()?;
     }
     Ok(())
@@ -250,7 +256,7 @@ fn update_car_sfx(ac_installation: &Installation,
     let guids_file_path = car_path.join(PathBuf::from_iter(["sfx", "GUIDs.txt"]));
     let car_name = get_final_path_part(car_path)?;
 
-    let mut updated_lines: Vec<String> = Vec::new();
+    let updated_lines: Vec<String>;
     if guids_file_path.exists() {
         info!("Updating contents of '{}'. Replacing refs to '{}' with '{}'", guids_file_path.display(), name_to_change, &car_name);
         let file = File::open(&guids_file_path)?;

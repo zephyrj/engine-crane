@@ -18,9 +18,6 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
-
-use crate::STEAM_GAME_ID;
-
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
@@ -28,6 +25,12 @@ use std::path::PathBuf;
 use rusqlite::{Connection, Row};
 use sha2::{Sha256, Digest};
 use tracing::info;
+
+#[cfg(target_os = "windows")]
+use directories::{BaseDirs, UserDirs};
+
+#[cfg(target_os = "linux")]
+use crate::STEAM_GAME_ID;
 
 use utils::round_float_to;
 

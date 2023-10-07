@@ -234,7 +234,7 @@ impl UiInfo {
             Some(val) => {
                 match val {
                     Value::String(str) => {
-                        std::mem::replace(str, value);
+                        let _ = std::mem::replace(str, value);
                     }
                     _ => {}
                 }
