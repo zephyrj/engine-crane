@@ -9,39 +9,9 @@ authors = ["zephyrj <zephyrj@protonmail.com>"]
 [dependencies]
 steam = { workspace = true }
 utils = { workspace = true }
-winit = "0.28.1"
-regex = "1.6.0"
-directories = "5.0.1"
-parselnk = "0.1.1"
-derive-new = "0.5"
-serde = {version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde-hjson = { version = "0.9.1", default-features = false }
-iced_native = { version = "0.8" }
-iced = { version = "0.7", default-features = false, features = ["glow", "default_system_font", "image", "svg"] }
-iced_aw = { git = "https://github.com/zephyrj/iced_aw", branch = "tab-custom-styling", default-features = false, features = ["tab_bar", "tabs", "colors"] }
-#iced_aw = { version = "0.2", default-features = false, features = ["tab_bar", "tabs", "colors"] }
-zip = "0.6.2"
-toml = "0.7.1"
-csv = "1.1"
-indexmap = "1.9"
-fs_extra = "1.3.0"
-walkdir = "2.3.2"
-tracing = "0.1"
-tracing-subscriber = "0.3"
-tracing-appender = "0.2"
-thiserror = "1.0"
-itertools = "0.10"
+tracing =  { workspace = true }
 sha2 = "0.10"
-rfd = "0.11.0"
-config = { version="0.13.1", features = ["toml"] }
-fraction = "0.13.0"
-rand = "0.8.5"
-
 
 [dependencies.rusqlite]
 version = "0.29.0"
 features = ["bundled"]
-
-[target.'cfg(windows)'.build-dependencies]
-winres = "0.1"

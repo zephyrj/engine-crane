@@ -129,37 +129,18 @@ dependencies = [
 name = "assetto_corsa"
 version = "0.2.0-alpha"
 dependencies = [
- "config",
  "csv",
- "derive-new",
- "directories",
- "fraction",
  "fs_extra",
- "iced",
- "iced_aw",
- "iced_native",
  "indexmap",
  "itertools",
- "parselnk",
- "rand",
- "regex",
- "rfd",
- "rusqlite",
  "serde 1.0.152",
- "serde-hjson",
  "serde_json",
- "sha2",
  "steam",
  "thiserror",
  "toml 0.7.2",
  "tracing",
- "tracing-appender",
- "tracing-subscriber",
  "utils",
  "walkdir",
- "winit 0.28.1",
- "winres",
- "zip",
 ]
 
 [[package]]
@@ -195,37 +176,11 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 name = "automation"
 version = "0.2.0-alpha"
 dependencies = [
- "config",
- "csv",
- "derive-new",
- "directories",
- "fraction",
- "fs_extra",
- "iced",
- "iced_aw",
- "iced_native",
- "indexmap",
- "itertools",
- "parselnk",
- "rand",
- "regex",
- "rfd",
  "rusqlite",
- "serde 1.0.152",
- "serde-hjson",
- "serde_json",
  "sha2",
  "steam",
- "thiserror",
- "toml 0.7.2",
  "tracing",
- "tracing-appender",
- "tracing-subscriber",
  "utils",
- "walkdir",
- "winit 0.28.1",
- "winres",
- "zip",
 ]
 
 [[package]]
@@ -244,35 +199,13 @@ checksum = "b645a089122eccb6111b4f81cbc1a49f5900ac4666bb93ac027feaecf15607bf"
 name = "beam_ng"
 version = "0.2.0-alpha"
 dependencies = [
- "config",
- "csv",
- "derive-new",
  "directories",
- "fraction",
- "fs_extra",
- "iced",
- "iced_aw",
- "iced_native",
- "indexmap",
- "itertools",
  "parselnk",
- "rand",
- "regex",
- "rfd",
- "rusqlite",
  "serde 1.0.152",
  "serde-hjson",
  "serde_json",
- "sha2",
  "steam",
- "thiserror",
- "toml 0.7.2",
  "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "walkdir",
- "winit 0.28.1",
- "winres",
  "zip",
 ]
 
@@ -903,17 +836,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive-new"
-version = "0.5.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3418329ca0ad70234b9735dc4ceed10af4df60eff9c8e7b06cb5e520d92c3535"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1053,36 +975,23 @@ dependencies = [
  "automation",
  "beam_ng",
  "config",
- "csv",
- "derive-new",
- "directories",
- "fraction",
- "fs_extra",
  "iced",
  "iced_aw",
  "iced_native",
- "indexmap",
  "itertools",
- "parselnk",
- "rand",
- "regex",
  "rfd",
- "rusqlite",
  "serde 1.0.152",
  "serde-hjson",
  "serde_json",
  "sha2",
  "steam",
- "thiserror",
  "toml 0.7.2",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
  "utils",
- "walkdir",
  "winit 0.28.1",
  "winres",
- "zip",
 ]
 
 [[package]]
@@ -1269,16 +1178,6 @@ name = "foreign-types-shared"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
-
-[[package]]
-name = "fraction"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c37ba08fe22fba12a3ada3e479d09a8f7fac6081aa6f5c27f22b78639025031"
-dependencies = [
- "lazy_static",
- "num",
-]
 
 [[package]]
 name = "freetype"
@@ -2468,40 +2367,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
-dependencies = [
- "num-bigint",
- "num-complex",
- "num-integer",
- "num-iter",
- "num-rational",
- "num-traits 0.2.15",
-]
-
-[[package]]
-name = "num-bigint"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
-dependencies = [
- "autocfg",
- "num-integer",
- "num-traits 0.2.15",
-]
-
-[[package]]
-name = "num-complex"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02e0d21255c828d6f128a1e41534206671e8c3ea0c62f32291e808dc82cff17d"
-dependencies = [
- "num-traits 0.2.15",
-]
-
-[[package]]
 name = "num-integer"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2512,24 +2377,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-iter"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d03e6c028c5dc5cac6e2dec0efda81fc887605bb3d884578bb6d6bf7514e252"
-dependencies = [
- "autocfg",
- "num-integer",
- "num-traits 0.2.15",
-]
-
-[[package]]
 name = "num-rational"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0638a1c9d0a3c0914158145bc76cff373a75a627e6ecbfb71cbe6f453a5a19b0"
 dependencies = [
  "autocfg",
- "num-bigint",
  "num-integer",
  "num-traits 0.2.15",
 ]
@@ -3645,35 +3498,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "steam"
 version = "0.2.0-alpha"
 dependencies = [
- "config",
- "csv",
- "derive-new",
  "directories",
- "fraction",
- "fs_extra",
- "iced",
- "iced_aw",
- "iced_native",
- "indexmap",
- "itertools",
- "parselnk",
- "rand",
- "regex",
- "rfd",
- "rusqlite",
- "serde 1.0.152",
- "serde-hjson",
- "serde_json",
- "sha2",
- "thiserror",
- "toml 0.7.2",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "walkdir",
- "winit 0.28.1",
- "winres",
- "zip",
 ]
 
 [[package]]
