@@ -1,0 +1,19 @@
+[package]
+name = "beam_ng"
+version = "0.2.0-alpha"
+edition = "2021"
+authors = ["zephyrj <zephyrj@protonmail.com>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[target.'cfg(target_os = "windows")'.dependencies]
+directories = "5.0.1"
+parselnk = "0.1.1"
+
+[dependencies]
+steam = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde-hjson = { workspace = true }
+zip = "0.6.2"

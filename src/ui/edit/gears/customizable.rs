@@ -22,7 +22,6 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use fraction::ToPrimitive;
 use iced::{Alignment, Length, Padding};
 use iced::alignment::{Horizontal, Vertical};
 use iced::theme::Button;
@@ -194,7 +193,7 @@ impl CustomizableGears {
             .padding(Padding::from([0, 10, 12, 10]));
         col = col.push(text(gear_idx));
         let default_idx = ratio_set.default_idx();
-        let name_width = (ratio_set.max_name_len() * 10).to_u16().unwrap_or(u16::MAX);
+        let name_width = (ratio_set.max_name_len() * 10).try_into().unwrap_or(u16::MAX);
         for ratio_entry in ratio_set.entries() {
             let mut name_label = Text::new(ratio_entry.name.clone()).width(Length::Units(name_width));
             name_label = name_label.size(14);
@@ -384,7 +383,7 @@ impl CustomizableGears {
             if let Some((adding_gear_label, ratio_name, ratio)) = &self.new_ratio_data {
                 if adding_gear_label == gear_idx {
                     let max_len = max(ratio_set.max_name_len(), ratio_name.len());
-                    let name_width = (max_len * 10).to_u16().unwrap_or(100);
+                    let name_width = (max_len * 10).try_into().unwrap_or(100);
                     gear_col = gear_col.push(Self::add_gear_ratio_entry_row((adding_gear_label.clone(), ratio_name.clone(), ratio.clone()), name_width))
                 } else {
                     gear_col = gear_col.push(Self::add_gear_ratio_button(gear_idx.clone()));
