@@ -1,6 +1,6 @@
 [package]
 name = "automation"
-version = "0.2.0-alpha"
+version = "0.2.1-alpha"
 edition = "2021"
 authors = ["zephyrj <zephyrj@protonmail.com>"]
 
@@ -10,10 +10,10 @@ authors = ["zephyrj <zephyrj@protonmail.com>"]
 steam = { workspace = true }
 utils = { workspace = true }
 tracing =  { workspace = true }
-sha2 = "0.10"
+sha2 = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-directories = "5.0.1"
+directories = { workspace = true }
 
 [dependencies.rusqlite]
 version = "0.29.0"
