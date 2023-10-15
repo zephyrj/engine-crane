@@ -21,12 +21,14 @@
 
 use std::cell::RefCell;
 use std::{error, fs, io};
+use std::cmp::max;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::rc::Weak;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
+use std::num::ParseIntError;
 use std::path::Path;
 use indexmap::IndexMap;
 use crate::error::{Error, ErrorKind};
@@ -105,6 +107,32 @@ impl From<MissingMandatoryProperty> for Error {
     }
 }
 
+#[derive(Debug)]
+pub struct MissingSection {
+    pub section_name: String
+}
+
+impl MissingSection {
+    pub fn new(section_name: String) -> MissingSection {
+        MissingSection { section_name }
+    }
+}
+
+impl Display for MissingSection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Section {} is missing",
+               &self.section_name)
+    }
+}
+
+impl error::Error for MissingSection {}
+
+impl From<MissingSection> for Error {
+    fn from(err: MissingSection) -> Self {
+        Error::new(ErrorKind::IniParseError, err.to_string() )
+    }
+}
+
 pub fn get_value_from_weak_ref<T: std::str::FromStr>(ini_data: &Weak<RefCell<Ini>>,
                                                      section: &str,
                                                      key: &str) -> Option<T> {
@@ -142,6 +170,13 @@ pub fn set_float(ini: &mut Ini, section: &str, key: &str, val: f64, precision: u
     ini.set_value(section,
                   key,
                   format!("{number:.prec$}", number=val, prec=precision))
+}
+
+pub fn validate_section_exists(ini: &Ini, section_name: &str) -> Result<(), MissingSection> {
+    match ini.contains_section(section_name) {
+        true => Ok(()),
+        false => Err(MissingSection::new(section_name.to_string()))
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
@@ -498,6 +533,29 @@ impl Ini {
         }).collect()
     }
 
+    pub fn get_max_idx_for_section_with_prefix(&self, section_prefix: &str) -> Option<usize> {
+        let mut current_max  = None;
+        for name in self.get_section_names_starting_with(section_prefix) {
+            if let Some(idx) = section_name_to_idx(section_prefix, name) {
+                current_max = match current_max {
+                    None => Some(idx),
+                    Some(current) => Some(max(current, idx))
+                };
+            }
+        }
+        current_max
+    }
+
+    pub fn get_section_names_with_prefix(&self, section_prefix: &str) -> BTreeMap<usize, &str> {
+        let mut section_map = BTreeMap::new();
+        for name in self.get_section_names_starting_with(section_prefix) {
+            if let Some(idx) = section_name_to_idx(section_prefix, name) {
+                section_map.insert(idx, name);
+            }
+        }
+        section_map
+    }
+
     pub fn contains_section(&self, name: &str) -> bool {
         self.sections.contains_key(name)
     }
@@ -600,5 +658,44 @@ impl Display for Ini {
         out += &section_strings.join("\n\n");
         out += "\n";
         write!(f, "{}", out)
+    }
+}
+
+fn section_name_to_idx(section_prefix: &str, name: &str) -> Option<usize> {
+    match name.strip_prefix(section_prefix) {
+        None => None,
+        Some(remaining) => {
+            let digits: String = remaining.chars().filter(|c| c.is_digit(10)).collect();
+            if digits.is_empty() {
+                Some(0)
+            } else {
+                match digits.parse::<usize>() {
+                    Ok(val) => Some(val),
+                    Err(_) => None
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ini_utils::section_name_to_idx;
+
+    #[test]
+    fn section_name_idx_extraction() {
+        assert_eq!(section_name_to_idx("FRONT","FRONT"), Some(0));
+        assert_eq!(section_name_to_idx("REAR","REAR"), Some(0));
+        assert_eq!(section_name_to_idx("GEAR_","GEAR_0"), Some(0));
+        assert_eq!(section_name_to_idx("REAR","REAR_1"), Some(1));
+        assert_eq!(section_name_to_idx("REAR","REAR_5"), Some(5));
+        assert_eq!(section_name_to_idx("REAR","REAR_9"), Some(9));
+        assert_eq!(section_name_to_idx("REAR","REAR_10"), Some(10));
+        assert_eq!(section_name_to_idx("REAR","REAR_11"), Some(11));
+        assert_eq!(section_name_to_idx("REAR","REAR_99"), Some(99));
+        assert_eq!(section_name_to_idx("REAR","REAR_100"), Some(100));
+        assert_eq!(section_name_to_idx("REAR","REAR_101"), Some(101));
+        assert_eq!(section_name_to_idx("REAR","THERMAL_REAR"), None);
+        assert_eq!(section_name_to_idx("REAR","THERMAL_REAR_1"), None);
     }
 }

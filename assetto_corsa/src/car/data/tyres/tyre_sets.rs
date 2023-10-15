@@ -19,12 +19,66 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::{BTreeMap};
+use tracing::warn;
+use crate::error::{Error, ErrorKind, Result};
+use crate::ini_utils;
+use crate::ini_utils::Ini;
+use crate::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
+
+
 #[derive(Debug)]
 pub struct TyreData {
+    section_name: String,
     name: String,
     short_name: String,
     width: f64,
-    radius: f64
+    radius: f64,
+    rim_radius: f64
+}
+
+impl TyreData {
+    pub fn from_ini(section_name: String, ini_data: &Ini) -> Result<TyreData> {
+        ini_utils::validate_section_exists(ini_data, &section_name)?;
+        let name = ini_utils::get_value(ini_data, &section_name, "NAME").unwrap_or(section_name.clone());
+        let short_name = match ini_utils::get_value(ini_data, &section_name, "SHORT_NAME") {
+            None => section_name.chars().next().unwrap().to_string(),
+            Some(n) => n
+        };
+        let width = ini_utils::get_mandatory_property(ini_data, &section_name, "WIDTH")?;
+        let radius = ini_utils::get_mandatory_property(ini_data, &section_name, "RADIUS")?;
+        let rim_radius = ini_utils::get_mandatory_property(ini_data, &section_name, "RIM_RADIUS")?;
+
+        Ok(TyreData {
+            section_name,
+            name,
+            short_name,
+            width,
+            radius,
+            rim_radius
+        })
+    }
+}
+
+enum TyreType {
+    FRONT,
+    REAR
+}
+
+impl TyreType {
+    pub fn idx_to_section_name(&self, idx: usize) -> String {
+        match idx {
+            0 => self.ini_section_prefix().to_string(),
+            _ => format!("{}_{}", self.ini_section_prefix(), idx)
+        }
+    }
+
+    pub fn ini_section_prefix(&self) -> &'static str {
+        match self {
+            TyreType::FRONT => "FRONT",
+            TyreType::REAR => "REAR"
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -33,8 +87,61 @@ pub struct TyreSet {
     rear: TyreData
 }
 
+impl TyreSet {
+    pub fn from_ini_data(front_section_name: String,
+                         rear_section_name: String,
+                         ini_data: &Ini) -> Result<TyreSet>
+    {
+        Ok(TyreSet {
+            front: TyreData::from_ini(front_section_name, ini_data)?,
+            rear: TyreData::from_ini(rear_section_name, ini_data)?
+        })
+    }
+}
+
 #[derive(Debug)]
-pub struct TyreSets {
-    sets: Vec<TyreSet>,
-    default_set_idx: usize
+pub struct TyreCompounds {
+    sets: BTreeMap<usize, TyreSet>,
+    default_set_idx: Option<usize>
+}
+
+impl TyreCompounds {
+    pub fn new() -> TyreCompounds {
+        TyreCompounds { sets: BTreeMap::new(), default_set_idx: None }
+    }
+
+    pub fn from_ini_data(ini_data: &Ini) -> TyreCompounds {
+        let mut compounds = TyreCompounds::new();
+        let front_tyre_map = ini_data.get_section_names_with_prefix(TyreType::FRONT.ini_section_prefix());
+        let rear_tyre_map = ini_data.get_section_names_with_prefix(TyreType::REAR.ini_section_prefix());
+        for idx in front_tyre_map.keys() {
+            let front_name = front_tyre_map.get(idx);
+            let rear_name = rear_tyre_map.get(idx);
+            if front_name.is_none() || rear_name.is_none() {
+                continue
+            }
+            match TyreSet::from_ini_data(front_name.unwrap().to_string(),
+                                         rear_name.unwrap().to_string(),
+                                         ini_data) {
+                Err(e) => {
+                    warn!("Couldn't parse tyre set. {}", e.to_string());
+                    continue
+                },
+                Ok(set) => compounds.sets.insert(*idx, set)
+            };
+        }
+        compounds
+    }
+}
+
+impl MandatoryDataSection for TyreCompounds {
+    fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<TyreCompounds> where Self: Sized {
+        Ok(TyreCompounds::from_ini_data(parent_data.ini_data()))
+    }
+}
+
+impl CarDataUpdater for TyreCompounds {
+    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+        Ok(())
+    }
 }

@@ -25,6 +25,7 @@ pub mod data;
 pub mod acd_utils;
 pub mod lut_utils;
 pub(crate) mod structs;
+mod max_speed_est;
 
 pub use data_interface::DataFolderInterface;
 
@@ -346,6 +347,8 @@ fn get_parent_path_part(full_path: &Path) -> Result<&Path> {
         }
     }
 }
+
+
 
 #[cfg(test)]
 mod tests {
