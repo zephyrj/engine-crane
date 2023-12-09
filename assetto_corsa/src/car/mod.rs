@@ -26,6 +26,7 @@ pub mod acd_utils;
 pub mod lut_utils;
 pub(crate) mod structs;
 mod max_speed_est;
+mod model;
 
 pub use data_interface::DataFolderInterface;
 
