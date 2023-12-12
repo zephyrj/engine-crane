@@ -91,3 +91,26 @@ fn mandatory_field_error(section: &str, key: &str) -> Error {
         format!("Missing {}.{} in {}", section, key, Tyres::INI_FILENAME)
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::car::data::tyres::tyre_sets::TyreCompounds;
+    use crate::car::data::tyres::Tyres;
+    use crate::error::{Error, ErrorKind};
+    use crate::{Car, Installation};
+    use crate::traits::MandatoryDataSection;
+    use crate::Result;
+
+    #[test]
+    fn load_tyres() {
+        let car_folder_name = "abarth500";
+        let ac_install = Installation::new();
+        let car_folder_root = ac_install.get_installed_car_path();
+        let car_folder_path = car_folder_root.join(car_folder_name);
+        let mut car = Car::load_from_path(&car_folder_path).unwrap();
+        let tyres = Tyres::from_car(&mut car).unwrap();
+        let tyre_compound = TyreCompounds::load_from_parent(&tyres).unwrap();
+        let x = 0;
+        //let tyre_set = tyre_compound.get_default_set().expect("Couldn't find default tyre set");
+    }
+}

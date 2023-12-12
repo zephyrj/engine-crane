@@ -20,6 +20,7 @@
  */
 
 use std::collections::{BTreeMap};
+use std::num::ParseIntError;
 use tracing::warn;
 use crate::error::{Error, ErrorKind, Result};
 use crate::ini_utils;
@@ -57,6 +58,10 @@ impl TyreData {
             radius,
             rim_radius
         })
+    }
+
+    pub fn radius(&self) -> f64 {
+        self.radius
     }
 }
 
@@ -97,6 +102,14 @@ impl TyreSet {
             rear: TyreData::from_ini(rear_section_name, ini_data)?
         })
     }
+
+    pub fn front_data(&self) -> &TyreData {
+        &self.front
+    }
+
+    pub fn rear_data(&self) -> &TyreData {
+        &self.rear
+    }
 }
 
 #[derive(Debug)]
@@ -130,7 +143,31 @@ impl TyreCompounds {
                 Ok(set) => compounds.sets.insert(*idx, set)
             };
         }
+        if let Some(idx_str) = ini_data.get_value("COMPOUND_DEFAULT", "INDEX") {
+            match idx_str.parse::<usize>() {
+                Ok(idx) => {
+                    if compounds.sets.len() > idx {
+                        compounds.default_set_idx = Some(idx)
+                    }
+                },
+                Err(_) => {}
+            }
+        }
         compounds
+    }
+
+    pub fn get_default_set(&self) -> Option<&TyreSet> {
+        if self.sets.is_empty() {
+            return None;
+        }
+        match self.default_set_idx {
+            None => {
+                self.sets.get(&0)
+            }
+            Some(idx) => {
+                self.sets.get(&idx)
+            }
+        }
     }
 }
 
@@ -145,3 +182,4 @@ impl CarDataUpdater for TyreCompounds {
         Ok(())
     }
 }
+

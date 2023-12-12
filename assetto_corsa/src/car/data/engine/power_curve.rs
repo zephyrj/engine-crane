@@ -19,6 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::BTreeMap;
 use crate::car::structs::LutProperty;
 use crate::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::error::{Result, Error, ErrorKind};
@@ -31,6 +32,11 @@ pub struct PowerCurve {
 impl PowerCurve {
     pub fn update(&mut self, power_vec: Vec<(i32, f64)>) -> Result<Vec<(i32, f64)>> {
         Ok(self.power_lut.update(power_vec))
+    }
+
+    pub fn get_curve_data(&self) -> BTreeMap<i32, f64> {
+        let lut_data = self.power_lut.to_vec();
+        lut_data.into_iter().collect()
     }
 }
 
