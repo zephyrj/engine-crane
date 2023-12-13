@@ -100,6 +100,56 @@ impl GearingCalculator {
         self.gear_ratios.len() - 1
     }
 
+    /// Get the max possible speed (KM/H) the provided gear
+    /// could reach
+    ///
+    /// - `gear_idx`: The index of the gear (indexed from 0)
+    pub fn max_speed_for_gear(&self, gear_idx: usize) -> f64 {
+        self.engine_rpm_to_wheel_speed(self.max_rpm(), gear_idx) * 3.6
+    }
+
+    /// Get the max possible speed (KM/H) the provided gear
+    /// ratio reach
+    ///
+    /// - `ratio`: The ratio of the gear expressed as a decimal number
+    pub fn max_speed_for_ratio(&self, ratio: f64) -> f64 {
+        ((self.max_rpm() as f64 * 2.0 * std::f64::consts::PI * self.drive_wheel_radius) /
+            (60.0 * ratio * self.final_drive)) * 3.6
+    }
+
+    pub fn max_speed(&self) -> f64 {
+        let mut max_speed: f64 = 0.0;
+        self.gear_ratios.iter().for_each(|ratio|{
+            max_speed = max_speed.max(self.max_speed_for_ratio(*ratio));
+        });
+        max_speed
+    }
+
+    pub fn calculate_speed_plot_for_gear(&self, gear_idx: usize, rpm_increments: Option<i32>) -> Vec<(f64, f64)> {
+        let mut plot_data: Vec<(f64, f64)> = Vec::new();
+        if gear_idx >= self.gear_ratios.len() {
+            return plot_data;
+        }
+        let increment = rpm_increments.unwrap_or( 100);
+        let mut engine_rpm = self.min_rpm();
+        loop {
+            if engine_rpm > self.max_rpm() {
+                break;
+            }
+            plot_data.push((self.engine_rpm_to_wheel_speed(engine_rpm, gear_idx)  *3.6, engine_rpm as f64));
+            engine_rpm += increment;
+        }
+        plot_data
+    }
+
+    pub fn calculate_speed_plot(&self, rpm_increments: Option<i32>) -> Vec<Vec<(f64, f64)>> {
+        let mut plot_data: Vec<Vec<(f64, f64)>> = Vec::new();
+        for gear_idx in 0..self.gear_ratios.len() {
+            plot_data.push(self.calculate_speed_plot_for_gear(gear_idx, rpm_increments))
+        }
+        plot_data
+    }
+
     pub fn wheel_torque_at(&self, rpm: i32, gear_index: usize) -> f64 {
         let engine_torque_at_rpm = self.interpolate_engine_torque(rpm);
         let wheel_torque = (engine_torque_at_rpm * self.gear_ratios[gear_index] * self.final_drive) / self.drive_wheel_radius;
