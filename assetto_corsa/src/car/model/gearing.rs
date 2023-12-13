@@ -25,13 +25,15 @@ use crate::{Result, Error, ErrorKind};
 use crate::car::data::{Drivetrain, Engine};
 use crate::car::data::drivetrain::{Gearbox, Traction};
 use crate::car::data::drivetrain::traction::DriveType;
-use crate::car::data::engine::PowerCurve;
+use crate::car::data::engine::{EngineData, PowerCurve};
 use crate::car::data::tyres::tyre_sets::TyreCompounds;
 use crate::car::data::tyres::Tyres;
 use crate::traits::MandatoryDataSection;
 
 pub struct GearingCalculator {
     power_curve_data: BTreeMap<i32, f64>,
+    idle_rpm: i32,
+    rpm_limit: i32,
     gear_ratios: Vec<f64>,
     final_drive: f64,
     drive_wheel_radius: f64,
@@ -40,6 +42,8 @@ pub struct GearingCalculator {
 impl GearingCalculator {
     pub fn from_car(car: &mut Car) -> Result<GearingCalculator> {
         let power_curve_data: BTreeMap<i32, f64>;
+        let idle_rpm: i32;
+        let rpm_limit: i32;
         let gear_ratios: Vec<f64>;
         let final_drive: f64;
         let drivetype;
@@ -49,6 +53,9 @@ impl GearingCalculator {
             let engine = Engine::from_car(car)?;
             let power_curve = PowerCurve::load_from_parent(&engine)?;
             power_curve_data = power_curve.get_curve_data();
+            let engine_data = EngineData::load_from_parent(&engine)?;
+            idle_rpm = engine_data.minimum;
+            rpm_limit = engine_data.limiter;
         }
 
         {
@@ -77,16 +84,16 @@ impl GearingCalculator {
         }
 
         Ok( GearingCalculator {
-            power_curve_data, gear_ratios, final_drive, drive_wheel_radius
+            power_curve_data, idle_rpm, rpm_limit, gear_ratios, final_drive, drive_wheel_radius
         })
     }
 
     pub fn min_rpm(&self) -> i32 {
-        *self.power_curve_data.first_key_value().unwrap().0
+        self.idle_rpm
     }
 
     pub fn max_rpm(&self) -> i32 {
-        *self.power_curve_data.last_key_value().unwrap().0
+        self.rpm_limit
     }
 
     pub fn max_gear_idx(&self) -> usize {

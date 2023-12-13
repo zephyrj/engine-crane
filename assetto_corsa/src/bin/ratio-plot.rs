@@ -23,7 +23,7 @@ use plotters::chart::{ChartBuilder, LabelAreaPosition};
 use plotters::drawing::IntoDrawingArea;
 use plotters::element::PathElement;
 use plotters::prelude::{BitMapBackend, BLACK, CYAN, FontDesc, FontFamily, FontStyle, LineSeries, WHITE};
-use plotters::style::Color;
+use plotters::style::{Color, TextStyle, YELLOW};
 use assetto_corsa::car::model::GearingCalculator;
 use assetto_corsa::{Car, Installation};
 
@@ -73,17 +73,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .margin(15)
         .caption("Ratios Graph", x.color(&WHITE))
         .set_label_area_size(LabelAreaPosition::Bottom, 40)
-        .set_label_area_size(LabelAreaPosition::Left, 40)
+        .set_label_area_size(LabelAreaPosition::Left, 50)
         .build_cartesian_2d(0f64..x_axis_limit,
                             y_axis_start..y_axis_limit)?;
 
     // Create lines
     context
         .configure_mesh()
-        .x_labels(10)
         .x_label_formatter(&as_usize)
         .x_desc("Speed (Km/H)")
-        .y_labels(20)
         .y_label_formatter(&as_usize)
         .y_desc("Engine RPM")
         .label_style(&WHITE)
@@ -95,19 +93,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if data.is_empty() {
             continue;
         }
-        context
-            .draw_series(LineSeries::new(data, &CYAN))?
-            .label(format!("Gear {} Theoretical", idx + 1))
-            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &CYAN));
+        let max_gear_speed = data.last().unwrap().0 as usize;
+        let mut last_point = context.backend_coord(&data.last().unwrap());
+        last_point.0 += 5;
+        last_point.1 -= 5;
+        let mut series_anno = context.draw_series(LineSeries::new(data, &YELLOW))?;
+        series_anno = series_anno.label(format!("Gear {}", idx + 1));
+        series_anno = series_anno.legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &YELLOW));
+        let mut text_style = TextStyle::from(("sans-serif", 12));
+        text_style = text_style.color(&WHITE);
+        root.draw_text(&*max_gear_speed.to_string(),
+                       &text_style,
+                       last_point);
     }
 
     // Configure the legend
-    context
-        .configure_series_labels()
-        .label_font(&WHITE)
-        .background_style(&BLACK.mix(0.8))
-        .border_style(&WHITE)
-        .draw()?;
+    // context
+    //     //.configure_series_labels()
+    //     //.label_font(&WHITE)
+    //     //.background_style(&BLACK.mix(0.8))
+    //     //.border_style(&WHITE)
+    //     .draw()?;
 
     Ok(())
 }
