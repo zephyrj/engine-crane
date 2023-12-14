@@ -34,7 +34,7 @@ use crate::ui::button::{create_add_button, create_delete_button, create_disabled
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::{FinalDrive, FinalDriveUpdate};
-use crate::ui::edit::gears::{GearConfigType, GearUpdateType};
+use crate::ui::edit::gears::{create_max_ratio_speed_element, GearConfigType, GearUpdateType};
 use crate::ui::edit::gears::customizable::CustomizableGears;
 use crate::ui::edit::gears::gear_sets::GearSets;
 use crate::ui::edit::gears::GearUpdateType::Fixed;
@@ -205,31 +205,13 @@ impl FixedGears {
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
             if let Some(calc) = &self.gearing_calculator {
-                let c;
+                let ratio_str;
                 if new_ratio.is_empty() {
-                    c = placeholder;
+                    ratio_str = placeholder;
                 } else {
-                    c = new_ratio;
+                    ratio_str = new_ratio;
                 }
-                match c.parse::<f64>() {
-                    Ok(ratio) => {
-                        let mut speed_row = Row::new()
-                            .width(Length::Shrink)
-                            .align_items(Alignment::End);
-                        speed_row = speed_row.push(
-                            Text::new(format!("{}", calc.max_speed_for_ratio(ratio).round()))
-                                .vertical_alignment(Vertical::Bottom)
-                                .size(12)
-                        );
-                        speed_row = speed_row.push(
-                            Text::new("km/h")
-                                .vertical_alignment(Vertical::Bottom)
-                                .size(10)
-                        );
-                        gear_row = gear_row.push(speed_row);
-                    }
-                    Err(_) => {}
-                }
+                gear_row = gear_row.push(create_max_ratio_speed_element(ratio_str, calc));
             }
             gear_list = gear_list.push(gear_row);
             max_gear_idx = gear_idx;
