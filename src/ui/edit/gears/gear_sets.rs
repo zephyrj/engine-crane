@@ -24,7 +24,7 @@ use std::fmt::{Display, Formatter};
 use iced::{Alignment, Length, Padding, theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, Radio, Row, Text};
-use iced_native::widget::{text, text_input, vertical_rule};
+use iced_native::widget::{column, text, text_input, vertical_rule};
 use assetto_corsa::car::model::GearingCalculator;
 use crate::assetto_corsa::car;
 
@@ -35,7 +35,7 @@ use crate::ui::button::{create_add_button, create_delete_button, create_disabled
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::FinalDrive;
-use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearUpdateType};
+use crate::ui::edit::gears::{create_max_ratio_speed_element, FinalDriveUpdate, GearConfigType, GearUpdateType};
 use crate::ui::edit::gears::customizable::CustomizableGears;
 use crate::ui::edit::gears::fixed::FixedGears;
 use crate::ui::edit::gears::GearsetUpdate::DefaultGearsetSelected;
@@ -356,31 +356,13 @@ impl GearSetContainer {
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
             if let Some(calc) = &self.gearing_calculator {
-                let c;
+                let ratio_str;
                 if new_ratio.is_empty() {
-                    c = placeholder;
+                    ratio_str = placeholder;
                 } else {
-                    c = new_ratio;
+                    ratio_str = new_ratio;
                 }
-                match c.parse::<f64>() {
-                    Ok(ratio) => {
-                        let mut speed_row = Row::new()
-                            .width(Length::Shrink)
-                            .align_items(Alignment::End);
-                        speed_row = speed_row.push(
-                            Text::new(format!("{}", calc.max_speed_for_ratio(ratio).round()))
-                                .vertical_alignment(Vertical::Bottom)
-                                .size(12)
-                        );
-                        speed_row = speed_row.push(
-                            Text::new("km/h")
-                                .vertical_alignment(Vertical::Bottom)
-                                .size(10)
-                        );
-                        gear_row = gear_row.push(speed_row);
-                    }
-                    Err(_) => {}
-                }
+                gear_row = gear_row.push(create_max_ratio_speed_element(ratio_str, calc));
             }
             gear_list = gear_list.push(gear_row);
         }
@@ -388,19 +370,19 @@ impl GearSetContainer {
             None => None,
             Some(label) => Some(label.idx)
         };
+
         let delete_button = match self.entries.len() > 1 {
             true => create_delete_button(GearUpdate(Gearset(GearsetUpdate::RemoveGearset(gearset_label.clone())))),
             false => create_disabled_delete_button()
         };
 
-        gear_list = gear_list.push(
-            Radio::new(
-                gearset_label.idx(),
-                "Default",
-                selected,
-                move |_| { GearUpdate(Gearset(DefaultGearsetSelected(gearset_label.clone()))) }
-            ).size(10).text_size(14).spacing(5)
-        );
+        let aux_element = Container::new( Radio::new(
+            gearset_label.idx(),
+            "Default",
+            selected,
+            move |_| { GearUpdate(Gearset(DefaultGearsetSelected(gearset_label.clone()))) }
+        ).size(10).text_size(14).spacing(5)).align_x(Horizontal::Center);
+        gear_list = gear_list.push(aux_element);
         gear_list.push(delete_button)
     }
 }
