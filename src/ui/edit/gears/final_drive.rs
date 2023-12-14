@@ -74,7 +74,7 @@ impl FinalDrive {
 
     pub fn get_default_ratio_val(&self) -> f64 {
         match self.new_setup_data.default_ratio() {
-            None => match self.new_setup_data.default_ratio() {
+            None => match self.new_setup_data.first_ratio() {
                 None => 3.0f64,
                 Some(entry) => entry.ratio()
             }
