@@ -24,6 +24,7 @@ use iced::{Alignment, Length, Padding};
 use iced::alignment::{Vertical};
 use iced::widget::{Column, Container, Row, Text};
 use iced_native::widget::{text_input, vertical_rule};
+use assetto_corsa::car::model::GearingCalculator;
 use crate::assetto_corsa::car;
 use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::setup::gears::{GearConfig, GearData};
@@ -49,7 +50,8 @@ pub struct FixedGears {
     original_drivetrain_data: Vec<f64>,
     original_setup_data: Option<GearConfig>,
     updated_drivetrain_data: BTreeMap<usize, Option<String>>,
-    final_drive_data: FinalDrive
+    final_drive_data: FinalDrive,
+    gearing_calculator: Option<GearingCalculator>
 }
 
 impl From<GearSets> for FixedGears {
@@ -74,12 +76,10 @@ impl From<GearSets> for FixedGears {
                     }
                 }
             }).collect();
-        FixedGears {
-            original_drivetrain_data,
-            original_setup_data: value.extract_original_setup_data(),
-            updated_drivetrain_data,
-            final_drive_data: value.extract_final_drive_data()
-        }
+        FixedGears::new(original_drivetrain_data,
+                        value.extract_original_setup_data(),
+                        updated_drivetrain_data,
+                        value.extract_final_drive_data())
     }
 }
 
@@ -105,16 +105,28 @@ impl From<CustomizableGears> for FixedGears {
                     }
                 }
             }).collect();
-        FixedGears {
-            original_drivetrain_data,
-            original_setup_data: value.extract_original_setup_data(),
-            updated_drivetrain_data,
-            final_drive_data: value.extract_final_drive_data()
-        }
+        FixedGears::new(original_drivetrain_data,
+                        value.extract_original_setup_data(),
+                        updated_drivetrain_data,
+                        value.extract_final_drive_data())
     }
 }
 
 impl FixedGears {
+    pub fn new(original_drivetrain_data: Vec<f64>,
+               original_setup_data: Option<GearConfig>,
+               updated_drivetrain_data: BTreeMap<usize, Option<String>>,
+               final_drive_data: FinalDrive,) -> FixedGears
+    {
+        FixedGears {
+            original_drivetrain_data,
+            original_setup_data,
+            updated_drivetrain_data,
+            final_drive_data,
+            gearing_calculator: None
+        }
+    }
+
     pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>,
                                  drivetrain_setup_data: Option<GearConfig>,
                                  final_drive_data: FinalDrive)
@@ -122,12 +134,7 @@ impl FixedGears {
     {
         let updated_drivetrain_data =
             drivetrain_data.iter().enumerate().map(|(idx, _)| (idx, None)).collect();
-        FixedGears {
-            original_drivetrain_data: drivetrain_data,
-            original_setup_data: drivetrain_setup_data,
-            updated_drivetrain_data,
-            final_drive_data
-        }
+        FixedGears::new(drivetrain_data, drivetrain_setup_data, updated_drivetrain_data, final_drive_data)
     }
 
     fn create_gear_ratio_column(row_vals: Vec<(String, String)>) -> Column<'static, EditMessage>

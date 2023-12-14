@@ -25,6 +25,7 @@ use iced::{Alignment, Length, Padding, theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{text, text_input, vertical_rule};
+use assetto_corsa::car::model::GearingCalculator;
 use crate::assetto_corsa::car;
 
 use crate::assetto_corsa::car::data::{Drivetrain, setup};
@@ -56,10 +57,24 @@ pub struct GearSetContainer {
     num_gears: usize,
     default: Option<GearsetLabel>,
     entries: BTreeMap<GearsetLabel, BTreeMap<usize, Option<String>>>,
-    original_values: BTreeMap<GearsetLabel, BTreeMap<usize, String>>
+    original_values: BTreeMap<GearsetLabel, BTreeMap<usize, String>>,
+    gearing_calculator: Option<GearingCalculator>
 }
 
 impl GearSetContainer {
+    fn new(num_gears: usize,
+           default: Option<GearsetLabel>,
+           entries: BTreeMap<GearsetLabel, BTreeMap<usize, Option<String>>>,
+           original_values: BTreeMap<GearsetLabel, BTreeMap<usize, String>>,) -> GearSetContainer {
+        let next_idx = match entries.last_key_value() {
+            None => 0,
+            Some((label, _)) => label.idx + 1
+        };
+        GearSetContainer {
+            next_idx, num_gears, default, entries, original_values, gearing_calculator: None
+        }
+    }
+
     fn from_setup_data(drivetrain_data: &Vec<f64>,
                        drivetrain_setup_data: &Option<setup::gears::GearConfig>) -> Self
     {
@@ -110,7 +125,7 @@ impl GearSetContainer {
             Some((label, _)) => label.idx + 1
         };
         GearSetContainer {
-            next_idx, num_gears, default, entries, original_values
+            next_idx, num_gears, default, entries, original_values, gearing_calculator: None
         }
     }
 

@@ -29,6 +29,7 @@ use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{scrollable, text, text_input, vertical_rule};
 use iced_native::widget::scrollable::Properties;
 use itertools::Itertools;
+use assetto_corsa::car::model::GearingCalculator;
 use crate::assetto_corsa::car;
 use crate::assetto_corsa::car::data::{Drivetrain, setup};
 use crate::assetto_corsa::car::data::setup::gears::{GearConfig, SingleGear};
@@ -62,7 +63,8 @@ pub struct CustomizableGears {
     original_setup_data: Option<GearConfig>,
     new_setup_data: BTreeMap<GearLabel, RatioSet>,
     new_ratio_data: Option<(GearLabel, String, String)>,
-    final_drive_data: FinalDrive
+    final_drive_data: FinalDrive,
+    gearing_calculator: Option<GearingCalculator>
 }
 
 impl From<FixedGears> for CustomizableGears {
@@ -91,13 +93,13 @@ impl From<FixedGears> for CustomizableGears {
                 new_setup_data.insert((idx+1).into(), ratio_set);
             }
         }
-        CustomizableGears {
+        CustomizableGears::new(
             original_drivetrain_data,
             original_setup_data,
             new_setup_data,
-            new_ratio_data: None,
-            final_drive_data: fixed_gears.extract_final_drive_data()
-        }
+            None,
+            fixed_gears.extract_final_drive_data()
+        )
     }
 }
 
@@ -132,29 +134,37 @@ impl From<GearSets> for CustomizableGears {
                 new_setup_data.insert((gear_idx+1).into(), ratio_set);
             }
         }
-        CustomizableGears {
-            original_drivetrain_data,
-            original_setup_data,
-            new_setup_data,
-            new_ratio_data: None,
-            final_drive_data: value.extract_final_drive_data()
-        }
+        CustomizableGears::new(
+            original_drivetrain_data, original_setup_data, new_setup_data, None, value.extract_final_drive_data()
+        )
     }
 }
 
 impl CustomizableGears {
+    pub fn new(original_drivetrain_data: Vec<f64>,
+               original_setup_data: Option<GearConfig>,
+               new_setup_data: BTreeMap<GearLabel, RatioSet>,
+               new_ratio_data: Option<(GearLabel, String, String)>,
+               final_drive_data: FinalDrive) -> CustomizableGears
+    {
+        CustomizableGears {
+            original_drivetrain_data,
+            original_setup_data,
+            new_setup_data,
+            new_ratio_data,
+            final_drive_data,
+            gearing_calculator: None
+        }
+    }
+
     pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>,
                                  drivetrain_setup_data: Option<GearConfig>,
                                  final_drive_data: FinalDrive) -> CustomizableGears
     {
         let new_setup_data = Self::load_from_setup_data(&drivetrain_data, &drivetrain_setup_data);
-        CustomizableGears {
-            original_drivetrain_data: drivetrain_data,
-            original_setup_data: drivetrain_setup_data,
-            new_setup_data,
-            new_ratio_data: None,
-            final_drive_data
-        }
+        CustomizableGears::new(
+            drivetrain_data, drivetrain_setup_data, new_setup_data, None, final_drive_data
+        )
     }
 
     fn load_from_setup_data(drivetrain_data: &Vec<f64>, drivetrain_setup_data: &Option<GearConfig>) -> BTreeMap<GearLabel, RatioSet> {
