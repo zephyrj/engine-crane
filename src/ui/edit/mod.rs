@@ -390,7 +390,7 @@ impl Tab for EditTab {
         let mut layout = Column::new()
             .align_items(Alignment::Fill)
             //.padding(10)
-            .spacing(30)
+            .spacing(20)
             .push(select_container);
             //.push(horizontal_rule(3));
 

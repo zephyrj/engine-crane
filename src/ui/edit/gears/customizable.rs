@@ -226,7 +226,7 @@ impl CustomizableGears {
             .height(Length::Shrink)
             .width(Length::Shrink)
             .spacing(5)
-            .padding(Padding::from([0, 10, 12, 10]));
+            .padding(Padding::from([5, 10, 12, 10]));
         inner_col = inner_col.push(text(gear_idx));
         let default_idx = ratio_set.default_idx();
         let name_width = (ratio_set.max_name_len() * 10).try_into().unwrap_or(u16::MAX);
