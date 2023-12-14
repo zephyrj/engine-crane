@@ -22,10 +22,10 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use iced::{Alignment, Length, Padding};
+use iced::{Alignment, Color, Length, Padding, theme, Theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::theme::Button;
-use iced::widget::{Column, Container, Radio, Row, Text};
+use iced::widget::{Column, Container, container, Radio, Row, svg, Text};
 use iced_native::widget::{scrollable, text, text_input, vertical_rule};
 use iced_native::widget::scrollable::Properties;
 use itertools::Itertools;
@@ -221,12 +221,13 @@ impl CustomizableGears {
 
     fn create_gear_ratio_column(&self, gear_idx: &GearLabel, ratio_set: &RatioSet ) -> Column<'static, EditMessage>
     {
-        let mut col = Column::new()
+        let mut inner_col = Column::new()
             .align_items(Alignment::Center)
+            .height(Length::Shrink)
             .width(Length::Shrink)
             .spacing(5)
             .padding(Padding::from([0, 10, 12, 10]));
-        col = col.push(text(gear_idx));
+        inner_col = inner_col.push(text(gear_idx));
         let default_idx = ratio_set.default_idx();
         let name_width = (ratio_set.max_name_len() * 10).try_into().unwrap_or(u16::MAX);
         for ratio_entry in ratio_set.entries() {
@@ -261,9 +262,9 @@ impl CustomizableGears {
                 false => create_disabled_delete_button()
             };
             r = r.push(del_but.height(Length::Units(15)).width(Length::Units(15)));
-            col = col.push(r);
+            inner_col = inner_col.push(r);
         }
-        col
+        inner_col
     }
 
     fn add_gear_ratio_button(label: GearLabel) -> iced::widget::Button<'static, EditMessage> {
@@ -440,7 +441,31 @@ impl CustomizableGears {
             } else {
                 gear_col = gear_col.push(Self::add_gear_ratio_button(gear_idx.clone()));
             }
-            gearset_roe = gearset_roe.push(gear_col);
+            let style_fn: fn(&Theme) -> container::Appearance = match gear_idx.idx % 2 == 0 {
+                true => {
+                    |_| {
+                        container::Appearance {
+                            text_color: None,
+                            background: Some(iced::Background::Color(Color::new(0.9, 0.9, 0.9, 1.0))),
+                            border_radius: 0.0,
+                            border_width: 0.0,
+                            border_color: Default::default()
+                        }
+                    }
+                }
+                false => {
+                    |_| {
+                        container::Appearance {
+                            text_color: None,
+                            background: Some(iced::Background::Color(Color::WHITE)),
+                            border_radius: 0.0,
+                            border_width: 0.0,
+                            border_color: Default::default()
+                        }
+                    }
+                }
+            };
+            gearset_roe = gearset_roe.push(Container::new(gear_col).style(style_fn).height(Length::Shrink));
         }
         gearset_roe = gearset_roe.push(vertical_rule(5));
         gearset_roe = gearset_roe.push(
