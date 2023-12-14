@@ -88,6 +88,14 @@ impl GearingCalculator {
         })
     }
 
+    pub fn set_gear_ratios(&mut self, ratios: Vec<f64>) {
+        self.gear_ratios = ratios
+    }
+
+    pub fn set_final_drive(&mut self, ratio: f64) {
+        self.final_drive = ratio
+    }
+
     pub fn min_rpm(&self) -> i32 {
         self.idle_rpm
     }

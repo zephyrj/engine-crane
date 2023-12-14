@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use iced::widget::{Column};
 
 use tracing::{error, info, warn};
+use assetto_corsa::car::model::GearingCalculator;
 
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
@@ -259,7 +260,12 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<GearConfig, S
     let final_drive_data = FinalDrive::from_gear_data(current_final_drive, final_drive_setup);
     return match gear_config_type {
         GearConfigType::Fixed => {
-            Ok(GearConfig::Fixed(FixedGears::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data)))
+            let mut config = FixedGears::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data);
+            match GearingCalculator::from_car(&mut car) {
+                Ok(calc) => config.set_gearing_calculator(calc),
+                Err(e) => warn!("Failed to setup gear calculator for {}. {}", ac_car_path.display(), e.to_string())
+            }
+            Ok(GearConfig::Fixed(config))
         }
         GearConfigType::GearSets => {
             Ok(GearConfig::GearSets(GearSets::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data)))

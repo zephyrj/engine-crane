@@ -141,6 +141,13 @@ impl RatioSet {
         }
     }
 
+    pub fn first_ratio(&self) -> Option<&RatioEntry> {
+        match self.entries.first_key_value() {
+            None => None,
+            Some(entry) => Some(entry.1)
+        }
+    }
+
     pub fn set_default(&mut self, idx: usize) -> Result<(), String> {
         if !self.entries.contains_key(&idx) {
             return Err(format!("Index {} doesn't exist", idx));
