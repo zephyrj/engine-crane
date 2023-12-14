@@ -199,11 +199,20 @@ impl FixedGears {
                 }
                 match c.parse::<f64>() {
                     Ok(ratio) => {
-                        gear_row = gear_row.push(
-                            Text::new(format!("{} KM/H", calc.max_speed_for_ratio(ratio).round()))
+                        let mut speed_row = Row::new()
+                            .width(Length::Shrink)
+                            .align_items(Alignment::End);
+                        speed_row = speed_row.push(
+                            Text::new(format!("{}", calc.max_speed_for_ratio(ratio).round()))
                                 .vertical_alignment(Vertical::Bottom)
                                 .size(12)
                         );
+                        speed_row = speed_row.push(
+                            Text::new("km/h")
+                                .vertical_alignment(Vertical::Bottom)
+                                .size(10)
+                        );
+                        gear_row = gear_row.push(speed_row);
                     }
                     Err(_) => {}
                 }
