@@ -129,6 +129,24 @@ impl GearSetContainer {
         }
     }
 
+    pub fn final_drive_updated(&mut self, ratio: f64) {
+        if let Some(gear_calc) = &mut self.gearing_calculator {
+            gear_calc.set_final_drive(ratio)
+        }
+    }
+
+    pub(crate) fn set_gearing_calculator(&mut self, calculator: GearingCalculator) {
+        self.gearing_calculator = Some(calculator)
+    }
+
+    pub(crate) fn extract_gearing_calculator(&mut self) -> Option<GearingCalculator> {
+        self.gearing_calculator.take()
+    }
+
+    pub(crate) fn clear_gearing_calculator(&mut self) {
+        self.gearing_calculator = None
+    }
+
     fn num_gearsets(&self) -> usize {
         self.entries.len()
     }
@@ -337,6 +355,33 @@ impl GearSetContainer {
                 }
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
+            if let Some(calc) = &self.gearing_calculator {
+                let c;
+                if new_ratio.is_empty() {
+                    c = placeholder;
+                } else {
+                    c = new_ratio;
+                }
+                match c.parse::<f64>() {
+                    Ok(ratio) => {
+                        let mut speed_row = Row::new()
+                            .width(Length::Shrink)
+                            .align_items(Alignment::End);
+                        speed_row = speed_row.push(
+                            Text::new(format!("{}", calc.max_speed_for_ratio(ratio).round()))
+                                .vertical_alignment(Vertical::Bottom)
+                                .size(12)
+                        );
+                        speed_row = speed_row.push(
+                            Text::new("km/h")
+                                .vertical_alignment(Vertical::Bottom)
+                                .size(10)
+                        );
+                        gear_row = gear_row.push(speed_row);
+                    }
+                    Err(_) => {}
+                }
+            }
             gear_list = gear_list.push(gear_row);
         }
         let selected = match &self.default {
@@ -364,7 +409,8 @@ pub struct GearSets {
     original_drivetrain_data: Vec<f64>,
     original_setup_data: Option<setup::gears::GearConfig>,
     updated_gearsets: GearSetContainer,
-    final_drive_data: FinalDrive
+    final_drive_data: FinalDrive,
+    gearing_calculator: Option<GearingCalculator>
 }
 
 impl From<FixedGears> for GearSets {
@@ -407,13 +453,15 @@ impl From<FixedGears> for GearSets {
                 }
             }
         }
-
-        GearSets {
-            original_drivetrain_data,
-            original_setup_data,
-            updated_gearsets,
-            final_drive_data: value.extract_final_drive_data(),
+        let mut config =
+            GearSets::new(original_drivetrain_data,
+                          original_setup_data,
+                          updated_gearsets,
+                          value.extract_final_drive_data());
+        if let Some(gear_calc) = value.extract_gearing_calculator() {
+            config.set_gearing_calculator(gear_calc);
         }
+        config
     }
 }
 
@@ -444,27 +492,51 @@ impl From<CustomizableGears> for GearSets {
             }
             updated_gearsets.set_default_gearset(&label);
         }
-        GearSets {
-            original_drivetrain_data,
-            original_setup_data,
-            updated_gearsets,
-            final_drive_data: value.extract_final_drive_data(),
+        let mut config =
+            GearSets::new(original_drivetrain_data,
+                          original_setup_data,
+                          updated_gearsets,
+                          value.extract_final_drive_data());
+        if let Some(gear_calc) = value.extract_gearing_calculator() {
+            config.set_gearing_calculator(gear_calc);
         }
+        config
     }
 }
 
 impl GearSets {
+    pub fn new(original_drivetrain_data: Vec<f64>,
+               original_setup_data: Option<setup::gears::GearConfig>,
+               updated_gearsets: GearSetContainer,
+               final_drive_data: FinalDrive,) -> GearSets {
+        GearSets {
+            original_drivetrain_data,
+            original_setup_data,
+            updated_gearsets,
+            final_drive_data,
+            gearing_calculator: None
+        }
+    }
+
     pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>,
                                  setup_data: Option<setup::gears::GearConfig>,
                                  final_drive_data: FinalDrive) -> GearSets
     {
         let updated_gearsets = GearSetContainer::from_setup_data(&drivetrain_data, &setup_data);
-        GearSets {
-            original_drivetrain_data: drivetrain_data,
-            original_setup_data: setup_data,
-            updated_gearsets,
-            final_drive_data
-        }
+        GearSets::new(drivetrain_data, setup_data, updated_gearsets, final_drive_data)
+    }
+
+    pub(crate) fn set_gearing_calculator(&mut self, mut calculator: GearingCalculator) {
+        calculator.set_final_drive(self.final_drive_data.get_default_ratio_val());
+        self.updated_gearsets.set_gearing_calculator(calculator);
+    }
+
+    pub(crate) fn extract_gearing_calculator(&mut self) -> Option<GearingCalculator> {
+        self.updated_gearsets.extract_gearing_calculator()
+    }
+
+    pub(crate) fn clear_gearing_calculator(&mut self) {
+        self.updated_gearsets.clear_gearing_calculator()
     }
 
     pub(crate) fn extract_original_drivetrain_data(&mut self) -> Vec<f64> {
@@ -522,7 +594,8 @@ impl GearSets {
     }
 
     pub(crate) fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
-        self.final_drive_data.handle_update(update_type)
+        self.final_drive_data.handle_update(update_type);
+        self.updated_gearsets.final_drive_updated(self.final_drive_data.get_default_ratio_val())
     }
 
     pub(crate) fn add_editable_gear_list<'a, 'b>(

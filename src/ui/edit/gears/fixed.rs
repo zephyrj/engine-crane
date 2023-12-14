@@ -77,10 +77,15 @@ impl From<GearSets> for FixedGears {
                     }
                 }
             }).collect();
-        FixedGears::new(original_drivetrain_data,
-                        value.extract_original_setup_data(),
-                        updated_drivetrain_data,
-                        value.extract_final_drive_data())
+        let mut config =
+            FixedGears::new(original_drivetrain_data,
+                            value.extract_original_setup_data(),
+                            updated_drivetrain_data,
+                            value.extract_final_drive_data());
+        if let Some(gear_calc) = value.extract_gearing_calculator() {
+            config.set_gearing_calculator(gear_calc);
+        }
+        config
     }
 }
 
@@ -106,10 +111,15 @@ impl From<CustomizableGears> for FixedGears {
                     }
                 }
             }).collect();
-        FixedGears::new(original_drivetrain_data,
-                        value.extract_original_setup_data(),
-                        updated_drivetrain_data,
-                        value.extract_final_drive_data())
+        let mut config =
+            FixedGears::new(original_drivetrain_data,
+                            value.extract_original_setup_data(),
+                            updated_drivetrain_data,
+                            value.extract_final_drive_data());
+        if let Some(gear_calc) = value.extract_gearing_calculator() {
+            config.set_gearing_calculator(gear_calc);
+        }
+        config
     }
 }
 
@@ -142,6 +152,10 @@ impl FixedGears {
         calculator.set_gear_ratios(self.get_updated_gear_values());
         calculator.set_final_drive(self.final_drive_data.get_default_ratio_val());
         self.gearing_calculator = Some(calculator)
+    }
+
+    pub(crate) fn extract_gearing_calculator(&mut self) -> Option<GearingCalculator> {
+        self.gearing_calculator.take()
     }
 
     pub(crate) fn clear_gearing_calculator(&mut self) {

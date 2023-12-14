@@ -93,13 +93,16 @@ impl From<FixedGears> for CustomizableGears {
                 new_setup_data.insert((idx+1).into(), ratio_set);
             }
         }
-        CustomizableGears::new(
-            original_drivetrain_data,
-            original_setup_data,
-            new_setup_data,
-            None,
-            fixed_gears.extract_final_drive_data()
-        )
+        let mut config =
+            CustomizableGears::new(original_drivetrain_data,
+                                   original_setup_data,
+                                   new_setup_data,
+                                   None,
+                                   fixed_gears.extract_final_drive_data());
+        if let Some(gear_calc) = fixed_gears.extract_gearing_calculator() {
+            config.set_gearing_calculator(gear_calc);
+        }
+        config
     }
 }
 
@@ -125,7 +128,7 @@ impl From<GearSets> for CustomizableGears {
                             };
                             let idx = ratio_set.insert(ratio, val);
                             if is_default {
-                                ratio_set.set_default(idx);
+                                let _ = ratio_set.set_default(idx);
                             }
                         }
                         Err(_) => {}
@@ -134,9 +137,18 @@ impl From<GearSets> for CustomizableGears {
                 new_setup_data.insert((gear_idx+1).into(), ratio_set);
             }
         }
-        CustomizableGears::new(
-            original_drivetrain_data, original_setup_data, new_setup_data, None, value.extract_final_drive_data()
-        )
+        let mut config =
+            CustomizableGears::new(
+                original_drivetrain_data,
+                original_setup_data,
+                new_setup_data,
+                None,
+                value.extract_final_drive_data()
+            );
+        if let Some(gear_calc) = value.extract_gearing_calculator() {
+            config.set_gearing_calculator(gear_calc);
+        }
+        config
     }
 }
 
@@ -192,6 +204,20 @@ impl CustomizableGears {
                                   ratio_set);
         }
         new_setup_data
+    }
+
+    pub(crate) fn set_gearing_calculator(&mut self, mut calculator: GearingCalculator) {
+        //calculator.set_gear_ratios(self.get_updated_gear_values());
+        calculator.set_final_drive(self.final_drive_data.get_default_ratio_val());
+        self.gearing_calculator = Some(calculator)
+    }
+
+    pub(crate) fn extract_gearing_calculator(&mut self) -> Option<GearingCalculator> {
+        self.gearing_calculator.take()
+    }
+
+    pub(crate) fn clear_gearing_calculator(&mut self) {
+        self.gearing_calculator = None
     }
 
     fn create_gear_ratio_column(gear_idx: &GearLabel, ratio_set: &RatioSet ) -> Column<'static, EditMessage>

@@ -167,16 +167,13 @@ impl EditTab {
                 }
 
                 self.gear_configuration = Some(
-                    match convert_gear_configuration(
+                    convert_gear_configuration(
                         std::mem::take(&mut self.gear_configuration).unwrap(),
                         choice
-                    ) {
-                        Ok(new_config) => new_config,
-                        Err((old_config, error)) => {
-                            self.status_message = error;
-                            old_config
-                        }
-                    }
+                    ).unwrap_or_else(|(old_config, error)| {
+                        self.status_message = error;
+                        old_config
+                    })
                 )
             }
             EditMessage::GearUpdate(update_type) => {
