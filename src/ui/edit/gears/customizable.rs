@@ -37,7 +37,7 @@ use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
-use crate::ui::edit::gears::{FinalDriveUpdate, GearConfigType, GearUpdateType};
+use crate::ui::edit::gears::{create_max_ratio_speed_element, FinalDriveUpdate, GearConfigType, GearUpdateType};
 use crate::ui::edit::gears::final_drive::FinalDrive;
 use crate::ui::edit::gears::fixed::FixedGears;
 use crate::ui::edit::gears::gear_sets::GearSets;
@@ -207,7 +207,6 @@ impl CustomizableGears {
     }
 
     pub(crate) fn set_gearing_calculator(&mut self, mut calculator: GearingCalculator) {
-        //calculator.set_gear_ratios(self.get_updated_gear_values());
         calculator.set_final_drive(self.final_drive_data.get_default_ratio_val());
         self.gearing_calculator = Some(calculator)
     }
@@ -220,7 +219,7 @@ impl CustomizableGears {
         self.gearing_calculator = None
     }
 
-    fn create_gear_ratio_column(gear_idx: &GearLabel, ratio_set: &RatioSet ) -> Column<'static, EditMessage>
+    fn create_gear_ratio_column(&self, gear_idx: &GearLabel, ratio_set: &RatioSet ) -> Column<'static, EditMessage>
     {
         let mut col = Column::new()
             .align_items(Alignment::Center)
@@ -239,6 +238,9 @@ impl CustomizableGears {
             let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
             r = r.push(name_label);
             r = r.push(ratio_input);
+            if let Some(calc) = &self.gearing_calculator {
+                r = r.push(create_max_ratio_speed_element(&ratio_entry.ratio_as_string(), calc));
+            }
             r = r.push(
                 Radio::new(
                     ratio_entry.idx,
@@ -270,8 +272,9 @@ impl CustomizableGears {
             .height(Length::Units(30))
     }
 
-    fn add_gear_ratio_entry_row(new_ratio_data: (GearLabel, String, String), name_max_width: u16) -> Row<'static, EditMessage>
+    fn add_gear_ratio_entry_row(&self, new_ratio_data: (GearLabel, String, String), name_max_width: u16) -> Column<'static, EditMessage>
     {
+        let mut holder = Column::new().spacing(5).align_items(Alignment::Center);
         let mut r = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
         let (_label, name, ratio) = new_ratio_data;
         r = r.push(text_input(
@@ -290,19 +293,25 @@ impl CustomizableGears {
             .width(Length::Units(56))
             .size(14)
         );
+        if let Some(calc) = &self.gearing_calculator {
+            r = r.push(create_max_ratio_speed_element(&ratio, calc));
+        }
+        holder = holder.push(r);
+
+        let mut r2 = Row::new().spacing(5).width(Length::Shrink).align_items(Alignment::Center);
         let confirm;
         if !ratio.is_empty() {
             confirm = create_add_button(GearUpdate(CustomizedGear(CustomizedGearUpdate::ConfirmNewRatio())));
         } else {
             confirm = create_disabled_add_button().height(Length::Units(20)).width(Length::Units(20));
         }
-        r = r.push(confirm.height(Length::Units(20)).width(Length::Units(20)));
-        r = r.push(
+        r2 = r2.push(confirm.height(Length::Units(20)).width(Length::Units(20)));
+        r2 = r2.push(
             create_delete_button(GearUpdate(CustomizedGear(CustomizedGearUpdate::DiscardNewRatio())))
                 .height(Length::Units(20))
                 .width(Length::Units(20))
         );
-        r
+        holder.push(r2)
     }
 
     pub(crate) fn get_default_gear_ratios(&self) -> Vec<Option<f64>> {
@@ -403,7 +412,11 @@ impl CustomizableGears {
     }
 
     pub(crate) fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
-        self.final_drive_data.handle_update(update_type)
+        self.final_drive_data.handle_update(update_type);
+        let new_ratio = self.final_drive_data.get_default_ratio_val();
+        if let Some(calc) = &mut self.gearing_calculator {
+            calc.set_final_drive(new_ratio)
+        }
     }
 
     pub(crate) fn add_editable_gear_list<'a, 'b>(&'a self, mut layout: Column<'b, EditMessage>) -> Column<'b, EditMessage>
@@ -415,12 +428,12 @@ impl CustomizableGears {
             .width(Length::Shrink)
             .align_items(Alignment::Fill);
         for (gear_idx, ratio_set) in &self.new_setup_data {
-            let mut gear_col = Self::create_gear_ratio_column(gear_idx, ratio_set);
+            let mut gear_col = self.create_gear_ratio_column(gear_idx, ratio_set);
             if let Some((adding_gear_label, ratio_name, ratio)) = &self.new_ratio_data {
                 if adding_gear_label == gear_idx {
                     let max_len = max(ratio_set.max_name_len(), ratio_name.len());
                     let name_width = (max_len * 10).try_into().unwrap_or(100);
-                    gear_col = gear_col.push(Self::add_gear_ratio_entry_row((adding_gear_label.clone(), ratio_name.clone(), ratio.clone()), name_width))
+                    gear_col = gear_col.push(self.add_gear_ratio_entry_row((adding_gear_label.clone(), ratio_name.clone(), ratio.clone()), name_width))
                 } else {
                     gear_col = gear_col.push(Self::add_gear_ratio_button(gear_idx.clone()));
                 }
