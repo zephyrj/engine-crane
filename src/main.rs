@@ -68,6 +68,9 @@ fn main() -> Result<(), iced::Error> {
     if let Some(db_path) = automation::sandbox::get_db_path_4_2() {
         info!("Automation sandbox.db for game version >= 4.2 found at {}", PathBuf::from(db_path).display())
     }
+    if let Some(db_path) = automation::sandbox::get_db_path_ellisbury() {
+        info!("Automation sandbox.db for game version >= 4.3 found at {}", PathBuf::from(db_path).display())
+    }
 
     info!("Launching UI");
     ui::launch()

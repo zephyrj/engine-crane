@@ -1,6 +1,6 @@
 [package]
 name = "automation"
-version = "0.2.1-alpha"
+version = "0.2.2-alpha"
 edition = "2021"
 authors = ["zephyrj <zephyrj@protonmail.com>"]
 

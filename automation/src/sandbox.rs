@@ -33,24 +33,29 @@ use directories::{BaseDirs, UserDirs};
 use crate::STEAM_GAME_ID;
 
 use utils::round_float_to;
+use crate::STEAM_GAME_ID;
 
 pub enum SandboxVersion {
     Legacy,
-    FourDotTwo
+    FourDotTwo,
+    Ellisbury
 }
 
 impl SandboxVersion {
     pub fn from_version_number(version_num: u64) -> SandboxVersion {
         if version_num < 2111220000 {
             return SandboxVersion::Legacy;
+        } else if version_num <= 2212240000 {
+            return SandboxVersion::FourDotTwo;
         }
-        return SandboxVersion::FourDotTwo;
+        return SandboxVersion::Ellisbury;
     }
 
     pub fn get_path(&self) -> Option<OsString> {
         return match self {
             SandboxVersion::Legacy => { get_db_path() }
             SandboxVersion::FourDotTwo => { get_db_path_4_2() }
+            SandboxVersion::Ellisbury => { get_db_path_ellisbury()}
         }
     }
 
@@ -58,6 +63,7 @@ impl SandboxVersion {
         match self {
             SandboxVersion::Legacy => { "pre 4.2" }
             SandboxVersion::FourDotTwo => { "post 4.2" }
+            SandboxVersion::Ellisbury => { "4.3 Ellisbury" }
         }
     }
 }
@@ -531,6 +537,15 @@ pub fn get_db_path_4_2() -> Option<OsString> {
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn get_db_path_ellisbury() -> Option<OsString> {
+    let sandbox_path = BaseDirs::new()?.cache_dir().join(PathBuf::from_iter(sandbox_dir_ellisbury()));
+    match sandbox_path.is_file() {
+        true => Some(sandbox_path.into_os_string()),
+        false => None
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub fn get_db_path() -> Option<OsString> {
     let sandbox_path = steam::get_wine_documents_dir(STEAM_GAME_ID).join(PathBuf::from_iter(legacy_sandbox_path()));
@@ -543,6 +558,15 @@ pub fn get_db_path() -> Option<OsString> {
 #[cfg(target_os = "linux")]
 pub fn get_db_path_4_2() -> Option<OsString> {
     let sandbox_path = steam::get_wine_appdata_local_dir(STEAM_GAME_ID).join(PathBuf::from_iter(sandbox_dir_4_2()));
+    match sandbox_path.is_file() {
+        true => Some(sandbox_path.into_os_string()),
+        false => None
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_db_path_ellisbury() -> Option<OsString> {
+    let sandbox_path = steam::get_wine_appdata_local_dir(STEAM_GAME_ID).join(PathBuf::from_iter(sandbox_dir_ellisbury()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
         false => None
@@ -585,15 +609,19 @@ fn sandbox_dir_4_2() -> Vec<&'static str> {
     vec!["AutomationGame", "Saved", "UserData", "Sandbox_211122.db"]
 }
 
+fn sandbox_dir_ellisbury() -> Vec<&'static str> {
+    vec!["AutomationGame", "Saved", "UserData", "Sandbox_230915.db"]
+}
+
 mod tests {
-    
-    
+    use std::path::PathBuf;
+    use crate::sandbox::{get_db_path, get_db_path_4_2, SandboxVersion};
 
     #[test]
     fn get_sandbox_db_path() -> Result<(), String> {
         let path = PathBuf::from(get_db_path_4_2().unwrap());
         println!("Sandbox path is {}", path.display());
-        let engine_data = crate::automation::sandbox::load_engine_by_uuid("7F98B2EA4A9E928278F355860DF3B4DF", SandboxVersion::FourDotTwo)?;
+        let engine_data = crate::sandbox::load_engine_by_uuid("7F98B2EA4A9E928278F355860DF3B4DF", SandboxVersion::FourDotTwo)?;
         if let Some(engine) = engine_data {
             println!("Econ data {:?}", engine.econ_eff_curve);
         }
