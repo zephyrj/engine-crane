@@ -34,6 +34,7 @@ use iced_native::widget::scrollable::Properties;
 use iced_native::widget::{button, checkbox, container, Svg, text};
 use iced_native::svg::Handle;
 use tracing::{error, info};
+use assetto_corsa::car::model::GearingCalculator;
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;
@@ -50,6 +51,7 @@ pub struct EditTab {
     editable_car_paths: Vec<ListPath>,
     current_car_path: Option<PathBuf>,
     gear_configuration: Option<GearConfig>,
+    gear_calculator: Option<GearingCalculator>,
     update_successful: bool,
     modal_state: ModalState,
     show_all_cars: bool
@@ -84,6 +86,7 @@ impl EditTab {
             editable_car_paths: Vec::new(),
             current_car_path: None,
             gear_configuration: None,
+            gear_calculator: None,
             update_successful: true,
             modal_state: ModalState::Hidden,
             show_all_cars: false
@@ -164,16 +167,13 @@ impl EditTab {
                 }
 
                 self.gear_configuration = Some(
-                    match convert_gear_configuration(
+                    convert_gear_configuration(
                         std::mem::take(&mut self.gear_configuration).unwrap(),
                         choice
-                    ) {
-                        Ok(new_config) => new_config,
-                        Err((old_config, error)) => {
-                            self.status_message = error;
-                            old_config
-                        }
-                    }
+                    ).unwrap_or_else(|(old_config, error)| {
+                        self.status_message = error;
+                        old_config
+                    })
                 )
             }
             EditMessage::GearUpdate(update_type) => {
@@ -390,7 +390,7 @@ impl Tab for EditTab {
         let mut layout = Column::new()
             .align_items(Alignment::Fill)
             //.padding(10)
-            .spacing(30)
+            .spacing(20)
             .push(select_container);
             //.push(horizontal_rule(3));
 

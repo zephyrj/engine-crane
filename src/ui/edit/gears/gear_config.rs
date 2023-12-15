@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use iced::widget::{Column};
 
 use tracing::{error, info, warn};
+use assetto_corsa::car::model::GearingCalculator;
 
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
@@ -73,6 +74,7 @@ pub trait GearConfiguration {
     {
         layout
     }
+    fn set_gearing_calculator(&mut self, calc: GearingCalculator);
     fn write_to_car(&self, car_path: &Path) -> Result<(), String>;
 }
 
@@ -112,6 +114,14 @@ impl GearConfiguration for GearConfig {
             GearConfig::Fixed(f) => f.add_editable_gear_list(layout),
             GearConfig::GearSets(g) => g.add_editable_gear_list(layout),
             GearConfig::Customizable(c) => c.add_editable_gear_list(layout)
+        }
+    }
+
+    fn set_gearing_calculator(&mut self, calc: GearingCalculator) {
+        match self {
+            GearConfig::Fixed(f) => f.set_gearing_calculator(calc),
+            GearConfig::GearSets(g) => g.set_gearing_calculator(calc),
+            GearConfig::Customizable(c) => c.set_gearing_calculator(calc)
         }
     }
 
@@ -257,19 +267,26 @@ pub fn gear_configuration_builder(ac_car_path: &PathBuf) -> Result<GearConfig, S
         }
     };
     let final_drive_data = FinalDrive::from_gear_data(current_final_drive, final_drive_setup);
-    return match gear_config_type {
+    let mut config = match gear_config_type {
         GearConfigType::Fixed => {
-            Ok(GearConfig::Fixed(FixedGears::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data)))
+            GearConfig::Fixed(FixedGears::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data))
         }
         GearConfigType::GearSets => {
-            Ok(GearConfig::GearSets(GearSets::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data)))
+            GearConfig::GearSets(GearSets::from_gear_data(drivetrain_data, drivetrain_gear_setup, final_drive_data))
         }
         GearConfigType::PerGearConfig => {
-            Ok(GearConfig::Customizable(CustomizableGears::from_gear_data(drivetrain_data,
+            GearConfig::Customizable(CustomizableGears::from_gear_data(drivetrain_data,
                                                                           drivetrain_gear_setup,
-                                                                          final_drive_data)))
+                                                                          final_drive_data))
         }
-    }
+    };
+    match GearingCalculator::from_car(&mut car) {
+        Ok(calc) => config.set_gearing_calculator(calc),
+        Err(e) => {
+            warn!("Failed to setup gear calculator for {}. {}", ac_car_path.display(), e.to_string());
+        }
+    };
+    Ok(config)
 }
 
 pub fn convert_gear_configuration(from: GearConfig, to: GearConfigType)

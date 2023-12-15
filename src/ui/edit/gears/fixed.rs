@@ -20,10 +20,12 @@
  */
 
 use std::collections::BTreeMap;
+use std::num::ParseFloatError;
 use iced::{Alignment, Length, Padding};
 use iced::alignment::{Vertical};
 use iced::widget::{Column, Container, Row, Text};
 use iced_native::widget::{text_input, vertical_rule};
+use assetto_corsa::car::model::GearingCalculator;
 use crate::assetto_corsa::car;
 use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::setup::gears::{GearConfig, GearData};
@@ -32,7 +34,7 @@ use crate::ui::button::{create_add_button, create_delete_button, create_disabled
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;
 use crate::ui::edit::gears::final_drive::{FinalDrive, FinalDriveUpdate};
-use crate::ui::edit::gears::{GearConfigType, GearUpdateType};
+use crate::ui::edit::gears::{create_max_ratio_speed_element, GearConfigType, GearUpdateType};
 use crate::ui::edit::gears::customizable::CustomizableGears;
 use crate::ui::edit::gears::gear_sets::GearSets;
 use crate::ui::edit::gears::GearUpdateType::Fixed;
@@ -49,7 +51,8 @@ pub struct FixedGears {
     original_drivetrain_data: Vec<f64>,
     original_setup_data: Option<GearConfig>,
     updated_drivetrain_data: BTreeMap<usize, Option<String>>,
-    final_drive_data: FinalDrive
+    final_drive_data: FinalDrive,
+    gearing_calculator: Option<GearingCalculator>
 }
 
 impl From<GearSets> for FixedGears {
@@ -74,12 +77,15 @@ impl From<GearSets> for FixedGears {
                     }
                 }
             }).collect();
-        FixedGears {
-            original_drivetrain_data,
-            original_setup_data: value.extract_original_setup_data(),
-            updated_drivetrain_data,
-            final_drive_data: value.extract_final_drive_data()
+        let mut config =
+            FixedGears::new(original_drivetrain_data,
+                            value.extract_original_setup_data(),
+                            updated_drivetrain_data,
+                            value.extract_final_drive_data());
+        if let Some(gear_calc) = value.extract_gearing_calculator() {
+            config.set_gearing_calculator(gear_calc);
         }
+        config
     }
 }
 
@@ -105,16 +111,33 @@ impl From<CustomizableGears> for FixedGears {
                     }
                 }
             }).collect();
-        FixedGears {
-            original_drivetrain_data,
-            original_setup_data: value.extract_original_setup_data(),
-            updated_drivetrain_data,
-            final_drive_data: value.extract_final_drive_data()
+        let mut config =
+            FixedGears::new(original_drivetrain_data,
+                            value.extract_original_setup_data(),
+                            updated_drivetrain_data,
+                            value.extract_final_drive_data());
+        if let Some(gear_calc) = value.extract_gearing_calculator() {
+            config.set_gearing_calculator(gear_calc);
         }
+        config
     }
 }
 
 impl FixedGears {
+    pub fn new(original_drivetrain_data: Vec<f64>,
+               original_setup_data: Option<GearConfig>,
+               updated_drivetrain_data: BTreeMap<usize, Option<String>>,
+               final_drive_data: FinalDrive,) -> FixedGears
+    {
+        FixedGears {
+            original_drivetrain_data,
+            original_setup_data,
+            updated_drivetrain_data,
+            final_drive_data,
+            gearing_calculator: None
+        }
+    }
+
     pub(crate) fn from_gear_data(drivetrain_data: Vec<f64>,
                                  drivetrain_setup_data: Option<GearConfig>,
                                  final_drive_data: FinalDrive)
@@ -122,16 +145,44 @@ impl FixedGears {
     {
         let updated_drivetrain_data =
             drivetrain_data.iter().enumerate().map(|(idx, _)| (idx, None)).collect();
-        FixedGears {
-            original_drivetrain_data: drivetrain_data,
-            original_setup_data: drivetrain_setup_data,
-            updated_drivetrain_data,
-            final_drive_data
-        }
+        FixedGears::new(drivetrain_data, drivetrain_setup_data, updated_drivetrain_data, final_drive_data)
     }
 
-    fn create_gear_ratio_column(row_vals: Vec<(String, String)>) -> Column<'static, EditMessage>
+    pub(crate) fn set_gearing_calculator(&mut self, mut calculator: GearingCalculator) {
+        calculator.set_gear_ratios(self.get_updated_gear_values());
+        calculator.set_final_drive(self.final_drive_data.get_default_ratio_val());
+        self.gearing_calculator = Some(calculator)
+    }
+
+    pub(crate) fn extract_gearing_calculator(&mut self) -> Option<GearingCalculator> {
+        self.gearing_calculator.take()
+    }
+
+    pub(crate) fn clear_gearing_calculator(&mut self) {
+        self.gearing_calculator = None
+    }
+
+    fn create_gear_ratio_column(&self) -> Column<'static, EditMessage>
     {
+        let mut row_vals = Vec::new();
+        for (gear_idx, ratio) in self.updated_drivetrain_data.iter() {
+            let current_val = match ratio {
+                None => {
+                    ""
+                }
+                Some(ratio) => {
+                    ratio
+                }
+            };
+
+            let placeholder = match self.original_drivetrain_data.get(*gear_idx) {
+                None => { "".to_string() }
+                Some(ratio) => { ratio.to_string() }
+            };
+
+            row_vals.push((placeholder, current_val.to_string()));
+        }
+
         let mut gear_list =
             Column::new()
                 .align_items(Alignment::Fill)
@@ -153,6 +204,15 @@ impl FixedGears {
                 }
             ).width(Length::Units(84));
             gear_row = gear_row.push(l).push(t);
+            if let Some(calc) = &self.gearing_calculator {
+                let ratio_str;
+                if new_ratio.is_empty() {
+                    ratio_str = placeholder;
+                } else {
+                    ratio_str = new_ratio;
+                }
+                gear_row = gear_row.push(create_max_ratio_speed_element(ratio_str, calc));
+            }
             gear_list = gear_list.push(gear_row);
             max_gear_idx = gear_idx;
         }
@@ -235,31 +295,41 @@ impl FixedGears {
     // TODO return a Result so errors can be passed somewhere for viewing
     pub(crate) fn handle_gear_update(&mut self, update_type: GearUpdateType) {
         match update_type {
-            Fixed(update) => { match update {
-                FixedGearUpdate::AddGear() => {
-                    let gear_idx: usize = match self.updated_drivetrain_data.last_key_value() {
-                        None => { 0 }
-                        Some((max_gear_idx, _)) => { max_gear_idx+1 }
-                    };
-                    self.updated_drivetrain_data.insert(gear_idx, None);
-                }
-                FixedGearUpdate::RemoveGear() => {
-                    self.updated_drivetrain_data.pop_last();
-                }
-                FixedGearUpdate::UpdateRatio(gear_idx, ratio) => {
-                    if ratio.is_empty() {
+            Fixed(update) => {
+                match update {
+                    FixedGearUpdate::AddGear() => {
+                        let gear_idx: usize = match self.updated_drivetrain_data.last_key_value() {
+                            None => { 0 }
+                            Some((max_gear_idx, _)) => { max_gear_idx+1 }
+                        };
                         self.updated_drivetrain_data.insert(gear_idx, None);
-                    } else if is_valid_ratio(&ratio) {
-                        self.updated_drivetrain_data.insert(gear_idx, Some(ratio));
+                    }
+                    FixedGearUpdate::RemoveGear() => {
+                        self.updated_drivetrain_data.pop_last();
+                    }
+                    FixedGearUpdate::UpdateRatio(gear_idx, ratio) => {
+                        if ratio.is_empty() {
+                            self.updated_drivetrain_data.insert(gear_idx, None);
+                        } else if is_valid_ratio(&ratio) {
+                            self.updated_drivetrain_data.insert(gear_idx, Some(ratio));
+                        }
                     }
                 }
-            }}
+                if self.gearing_calculator.is_some() {
+                    let updated_ratios = self.get_updated_gear_values();
+                    self.gearing_calculator.as_mut().unwrap().set_gear_ratios(updated_ratios);
+                }
+            }
             _ => {}
         }
     }
 
     pub(crate) fn handle_final_drive_update(&mut self, update_type: FinalDriveUpdate) {
-        self.final_drive_data.handle_update(update_type)
+        self.final_drive_data.handle_update(update_type);
+        if self.gearing_calculator.is_some() {
+            let updated_final_drive = self.final_drive_data.get_default_ratio_val();
+            self.gearing_calculator.as_mut().unwrap().set_final_drive(updated_final_drive);
+        }
     }
 
     pub(crate) fn add_editable_gear_list<'a, 'b>(
@@ -268,26 +338,8 @@ impl FixedGears {
     ) -> Column<'b, EditMessage>
         where 'b: 'a
     {
-        let mut displayed_ratios = Vec::new();
-        for (gear_idx, ratio) in self.updated_drivetrain_data.iter() {
-            let current_val = match ratio {
-                None => {
-                    ""
-                }
-                Some(ratio) => {
-                    ratio
-                }
-            };
-
-            let placeholder = match self.original_drivetrain_data.get(*gear_idx) {
-                None => { "".to_string() }
-                Some(ratio) => { ratio.to_string() }
-            };
-
-            displayed_ratios.push((placeholder, current_val.to_string()));
-        }
         let mut holder = Row::new().width(Length::Shrink).spacing(10).align_items(Alignment::Fill);
-        holder = holder.push(Self::create_gear_ratio_column(displayed_ratios));
+        holder = holder.push(self.create_gear_ratio_column());
         holder = holder.push(vertical_rule(5));
         holder = holder.push(
             self.final_drive_data.create_final_drive_column().padding(Padding::from([0, 10, 12, 10]))

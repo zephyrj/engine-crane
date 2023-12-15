@@ -31,7 +31,7 @@ use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::gears::final_drive::FinalDriveUpdate::RemoveRatioPressed;
-use crate::ui::edit::gears::ratio_set::{RatioSet};
+use crate::ui::edit::gears::ratio_set::{RatioEntry, RatioSet};
 
 
 #[derive(Debug, Clone)]
@@ -47,7 +47,6 @@ pub enum FinalDriveUpdate {
 
 #[derive(Debug, Default)]
 pub struct FinalDrive {
-    current_final_drive: f64,
     setup_data: Option<SingleGear>,
     new_setup_data: RatioSet,
     new_ratio_data: Option<(String, String)>
@@ -70,7 +69,17 @@ impl FinalDrive {
                 });
             }
         };
-        FinalDrive { current_final_drive, setup_data, new_setup_data, new_ratio_data: None }
+        FinalDrive { setup_data, new_setup_data, new_ratio_data: None }
+    }
+
+    pub fn get_default_ratio_val(&self) -> f64 {
+        match self.new_setup_data.default_ratio() {
+            None => match self.new_setup_data.first_ratio() {
+                None => 3.0f64,
+                Some(entry) => entry.ratio()
+            }
+            Some(ratio_entry) => ratio_entry.ratio()
+        }
     }
 
     pub fn handle_update(&mut self, update: FinalDriveUpdate) {

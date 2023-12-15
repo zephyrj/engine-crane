@@ -26,6 +26,10 @@ mod gear_sets;
 mod customizable;
 mod ratio_set;
 
+use iced::{Alignment, Length};
+use iced::alignment::Vertical;
+use iced::widget::{Row, Text};
+use assetto_corsa::car::model::GearingCalculator;
 pub use gear_config::{gear_configuration_builder,
                       convert_gear_configuration,
                       GearConfig,
@@ -36,8 +40,35 @@ pub use final_drive::FinalDriveUpdate;
 pub use fixed::FixedGearUpdate;
 pub use gear_sets::GearsetUpdate;
 pub use customizable::CustomizedGearUpdate;
+use crate::ui::edit::EditMessage;
 
-
+fn create_max_ratio_speed_element(ratio: &str, gear_calc: &GearingCalculator) -> Row<'static, EditMessage> {
+    let mut speed_row = Row::new()
+        .width(Length::Units(50))
+        .align_items(Alignment::End);
+    match ratio.parse::<f64>() {
+        Ok(ratio) => {
+            speed_row = speed_row.push(
+                Text::new(format!("{}", gear_calc.max_speed_for_ratio(ratio).round()))
+                    .vertical_alignment(Vertical::Bottom)
+                    .size(12)
+            );
+            speed_row = speed_row.push(
+                Text::new("km/h")
+                    .vertical_alignment(Vertical::Bottom)
+                    .size(10)
+            );
+        }
+        Err(_) => {
+            speed_row = speed_row.push(
+                Text::new("n/a")
+                    .vertical_alignment(Vertical::Bottom)
+                    .size(12)
+            );
+        }
+    };
+    speed_row
+}
 // #[derive(Clone, Copy, Debug)]
 // pub struct DeleteButtonStyle;
 //

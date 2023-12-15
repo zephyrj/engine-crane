@@ -98,6 +98,7 @@ pub enum ErrorKind {
     AcdError,
     UpdateError,
     ArgumentError,
+    IniParseError,
     Uncategorized
 }
 
@@ -114,6 +115,7 @@ impl ErrorKind {
             ErrorKind::TomlDecodeError => "toml decode error",
             ErrorKind::AcdError => "acd decode error",
             ErrorKind::ArgumentError => "argument error",
+            ErrorKind::IniParseError => "ini parse error",
             ErrorKind::Uncategorized => "uncategorized error",
             ErrorKind::UpdateError => "update error"
         }
