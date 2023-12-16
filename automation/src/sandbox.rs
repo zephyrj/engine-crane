@@ -43,12 +43,12 @@ pub enum SandboxVersion {
 
 impl SandboxVersion {
     pub fn from_version_number(version_num: u64) -> SandboxVersion {
-        if version_num < 2111220000 {
+        if version_num >= 2312150000 {
+            return SandboxVersion::Ellisbury;
+        } else if version_num < 2111220000 {
             return SandboxVersion::Legacy;
-        } else if version_num <= 2212240000 {
-            return SandboxVersion::FourDotTwo;
         }
-        return SandboxVersion::Ellisbury;
+        return SandboxVersion::FourDotTwo;
     }
 
     pub fn get_path(&self) -> Option<OsString> {
@@ -172,7 +172,7 @@ pub struct EngineV1 {
     pub peak_boost_rpm: Option<f64>,
     pub performance_index: f64,
     pub ron: f64,
-    pub reliability_post_engineering: f64,
+    pub reliability_post_engineering: Option<f64>,
     pub responsiveness: f64,
     pub service_cost: f64,
     pub smoothness: f64,
@@ -285,7 +285,7 @@ impl EngineV1 {
             peak_boost_rpm: row.get("PeakBoostRPM").unwrap_or(None),
             performance_index: row.get("PerformanceIndex")?,
             ron: row.get("RON")?,
-            reliability_post_engineering: row.get("ReliabilityPostEngineering")?,
+            reliability_post_engineering: row.get("ReliabilityPostEngineering").unwrap_or(None),
             responsiveness: row.get("Responsiveness")?,
             service_cost: row.get("ServiceCost")?,
             smoothness: row.get("Smoothness")?,
@@ -421,7 +421,9 @@ impl EngineV1 {
         hasher.update(&self.peak_boost.to_string().as_bytes());
         hasher.update(&self.performance_index.to_string().as_bytes());
         hasher.update(&self.ron.to_string().as_bytes());
-        hasher.update(&self.reliability_post_engineering.to_string().as_bytes());
+        if let Some(reliability) = &self.reliability_post_engineering {
+            hasher.update(reliability.to_string().as_bytes());
+        }
         hasher.update(&self.responsiveness.to_string().as_bytes());
         hasher.update(&self.service_cost.to_string().as_bytes());
         hasher.update(&self.smoothness.to_string().as_bytes());
