@@ -1115,10 +1115,10 @@ mod tests {
         //let path = PathBuf::from("/home/josykes/.steam/debian-installation/steamapps/compatdata/293760/pfx/drive_c/users/steamuser/AppData/Local/BeamNG.drive/mods/");
         let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods");
         // C:\Users\zephy\AppData\Local\BeamNG.drive\mods\dae1.zip
-        let mod_data = beam_ng::ModData::from_path(&path.join("v8_test.zip"))?;
+        let mod_data = beam_ng::ModData::from_path(&path.join("dawnv6.zip"))?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or("Couldn't find car data")?.clone())?;
         //println!("{:#?}", automation_car_file);
-        for version in automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("GameVersion") {
+        if let Some(version) = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("GameVersion") {
             println!("{}", version);
         }
         //fs::write(Path::new("car_temp.toml"), format!("{}", automation_car_file));
