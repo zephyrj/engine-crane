@@ -503,7 +503,10 @@ impl Sandbox for UIMain {
                             self.app_data.refresh_available_cars();
                             self.notify_app_data_update(&message);
                         }
-                        Err(err_str) => { self.engine_swap_tab.update_status(err_str) }
+                        Err(err_str) => {
+                            error!("{}", &err_str);
+                            self.engine_swap_tab.update_status(err_str)
+                        }
                     }
                 } else {
                     let err_str = "Swap failed: Couldn't get ref to current mod";
