@@ -149,10 +149,11 @@ impl AcEngineParameterCalculatorV1 {
         let version = SandboxVersion::from_version_number(version_num as u64);
         info!("Deduced as {}", version);
 
-        let engine_jbeam_data = mod_data.get_engine_jbeam_data().map_err(|e|{
+        let uid = variant_info.get_attribute("UID").unwrap().value.as_str();
+        let expected_key = &uid[0..5];
+        let engine_jbeam_data = mod_data.get_engine_jbeam_data(Some(expected_key)).map_err(|e|{
             format!("Couldn't load engine data from {}. {}", beam_ng_mod_path.display(), &e)
         })?;
-        let uid = variant_info.get_attribute("UID").unwrap().value.as_str();
 
         info!("Engine uuid: {}", uid);
         let engine_sqlite_data = match load_engine_by_uuid(uid, version)? {

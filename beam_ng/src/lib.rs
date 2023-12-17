@@ -231,37 +231,33 @@ impl ModData {
         Err(format!("Couldn't find key"))
     }
 
-    pub fn get_engine_jbeam_data(&mut self) -> Result<Map<String, Value>, String> {
-        // let mut engine_object_name = match self.find_jbeam_engine_key() {
-        //     Ok(engine_key) => { Some(engine_key) }
-        //     Err(e) => {
-        //         warn!("Couldn't deduce engine key. {}", e);
-        //         None
-        //     }
-        // };
-
-        // if let Some(engine_key) = engine_object_name {
-        //     match self.jbeam_data.get(&engine_key) {
-        //         None => {
-        //             warn!("Couldn't find engine key {} in jbeam data", &engine_key);
-        //         }
-        //         Some(engine_val) => {
-        //             if let Some(engine_object) = engine_val.as_object() {
-        //                 return Some(engine_object);
-        //             }
-        //         }
-        //     }
-        // }
-
+    pub fn get_engine_jbeam_data(&mut self, expected_eng_key: Option<&str>) -> Result<Map<String, Value>, String> {
+        let mut expected_filename: Option<String> = None;
         let mut found_filename : Option<String> = None;
+        if let Some(key) = expected_eng_key {
+            expected_filename = Some(format!("camso_engine_{}.jbeam", &key));
+            info!("Expect to find engine data in {}", expected_filename.as_ref().unwrap());
+        }
+
         for filename in self.archive_data.file_names() {
+            if let Some(expected_name) = &expected_eng_key {
+                if filename.ends_with(expected_name) {
+                    found_filename = Some(filename.to_string());
+                    info!("Found expected engine.jbeam file at {}", filename);
+                    break;
+                }
+            }
             if filename.ends_with("camso_engine.jbeam") {
                 found_filename = Some(filename.to_string());
+                info!("Found legacy engine.jbeam file at {}", filename);
                 break;
             }
             if filename.contains("camso_engine_") {
-                if !filename.contains("structure") && !filename.contains("internals") {
+                if !filename.contains("structure") &&
+                    !filename.contains("internals") &&
+                    !filename.contains("balancing") {
                     found_filename = Some(filename.to_string());
+                    info!("Found engine.jbeam file at {}", filename);
                     break;
                 }
             }
@@ -277,7 +273,7 @@ impl ModData {
                 }
             }
         }
-        Err(format!("Couldn't find engine file"))
+        Err("Couldn't find engine file".to_string())
     }
 }
 
