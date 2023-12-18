@@ -38,6 +38,7 @@ use crate::assetto_corsa::car::data::Engine;
 use crate::assetto_corsa::car::data::engine;
 use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
 use crate::utils::round_float_to;
+use crate::data::{CrateEngine, AutomationSandboxCrossChecker};
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
 use crate::automation::car::{CarFile, Section};
@@ -138,6 +139,11 @@ struct AcEngineParameterCalculatorV1 {
 }
 
 impl AcEngineParameterCalculatorV1 {
+    pub fn from_crate_engine(eng: CrateEngine) -> Result<AcEngineParameterCalculatorV1, String> {
+        //info!("Creating AC parameter calculator for {}", beam_ng_mod_path.to_path_buf().display());
+        Err("Not Implemented".to_string())
+    }
+
     pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<AcEngineParameterCalculatorV1, String> {
         info!("Creating AC parameter calculator for {}", beam_ng_mod_path.to_path_buf().display());
         let mut mod_data = beam_ng::ModData::from_path(beam_ng_mod_path)?;
@@ -154,7 +160,6 @@ impl AcEngineParameterCalculatorV1 {
         let engine_jbeam_data = mod_data.get_engine_jbeam_data(Some(expected_key)).map_err(|e|{
             format!("Couldn't load engine data from {}. {}", beam_ng_mod_path.display(), &e)
         })?;
-
         info!("Engine uuid: {}", uid);
         let engine_sqlite_data = match load_engine_by_uuid(uid, version)? {
             None => {
@@ -163,7 +168,7 @@ impl AcEngineParameterCalculatorV1 {
             Some(eng) => { eng }
         };
         {
-            EngineDataValidator::new(&automation_car_file, &engine_sqlite_data).validate().map_err(|err|{
+            AutomationSandboxCrossChecker::new(&automation_car_file, &engine_sqlite_data).validate().map_err(|err|{
                 format!("{}. The BeamNG mod may be out-of-date; try recreating a mod with the latest engine version", err)
             })?;
         }
@@ -760,323 +765,8 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
     Ok(())
 }
 
-struct Checksummer {
-    car_file_hasher: Sha256,
-    sandbox_hasher: Sha256
-}
-
-impl Checksummer {
-    pub fn new() -> Checksummer {
-        Checksummer {
-            car_file_hasher: Sha256::new(),
-            sandbox_hasher: Sha256::new()
-        }
-    }
-}
-
-fn checksum_engine_data_v1(car_file: &CarFile, sandbox_data: &EngineV1) -> Result<(), String> {
-    let mut car_file_hasher = Sha256::new();
-    let get_mandatory_attribute_bytes = |section: &Section, attr: &str| {
-        match section.get_attribute(attr) {
-            None => { Err(format!("Car file section {} is missing attribute {}", section.name(), attr))}
-            Some(attribute) => Ok(attribute.value.checksum_bytes())
-        }
-    };
-    let get_optional_attribute_bytes = |section: &Section, attr: &str| {
-        match section.get_attribute(attr) {
-            None => { None }
-            Some(attribute) => Some(attribute.value.checksum_bytes())
-        }
-    };
-
-    let family_data = car_file.get_section("Car").unwrap().get_section("Family").unwrap();
-    for key in ["GameVersion", "UID", "Name", "InternalDays", "QualityFamily", "BlockConfig", "BlockMaterial",
-                      "BlockType", "Head", "HeadMaterial", "Valves", "Stroke", "Bore"] {
-        car_file_hasher.update(get_mandatory_attribute_bytes(family_data, key)?);
-    }
-
-    let mut car_file_family_hash = String::new();
-    for byte in car_file_hasher.finalize() {
-        car_file_family_hash += &format!("{:X?}", byte);
-    }
-
-    let sandbox_family_hash = sandbox_data.family_data_checksum();
-    if car_file_family_hash != sandbox_family_hash {
-        return Err(format!("Family checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_family_hash, car_file_family_hash));
-    }
-    info!("Family checksum match: {}", sandbox_family_hash);
-
-    let mut car_file_hasher = Sha256::new();
-    let variant_data = car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-    for key in ["GameVersion", "FUID", "UID", "Name", "InternalDays", "VVL", "Crank", "Conrods", "Pistons", "VVT",
-                      "AspirationType", "IntercoolerSetting", "FuelSystemType", "FuelSystem", ] {
-        car_file_hasher.update(get_mandatory_attribute_bytes(variant_data, key)?);
-    }
-    for key in ["FuelType", "FuelLeaded"] {
-        if let Some(bytes) = get_optional_attribute_bytes(variant_data, key) {
-            car_file_hasher.update(bytes);
-        }
-    }
-    for key in ["IntakeManifold", "Intake", "Headers", "ExhaustCount", "ExhaustBypassValves", "Cat", "Muffler1",
-                      "Muffler2", "Bore", "Stroke", "Capacity", "Compression", "CamProfileSetting", "VVLCamProfileSetting",
-                      "AFR", "AFRLean", "RPMLimit", "IgnitionTimingSetting", "ExhaustDiameter", "QualityBottomEnd",
-                      "QualityTopEnd", "QualityAspiration", "QualityFuelSystem", "QualityExhaust"] {
-        car_file_hasher.update(get_mandatory_attribute_bytes(variant_data, key)?);
-    }
-    for key in ["BalanceShaft", "SpringStiffnessSetting", "ListedOctane", "TuneOctaneOffset", "AspirationSetup",
-                      "AspirationItemOption_1", "AspirationItemOption_2", "AspirationItemSubOption_1", "AspirationItemSubOption_2",
-                      "AspirationBoostControl", "ChargerSize_1", "ChargerSize_2", "ChargerTune_1", "ChargerTune_2", "ChargerMaxBoost_1",
-                      "ChargerMaxBoost_2", "TurbineSize_1", "TurbineSize_2"] {
-        if let Some(bytes) = get_optional_attribute_bytes(variant_data, key) {
-            car_file_hasher.update(bytes);
-        }
-    }
-    let mut car_file_variant_hash = String::new();
-    for byte in car_file_hasher.finalize() {
-        car_file_variant_hash += &format!("{:X?}", byte);
-    }
-    let sandbox_variant_hash = sandbox_data.variant_data_checksum();
-    if car_file_variant_hash != sandbox_variant_hash {
-        return Err(format!("Variant checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_variant_hash, car_file_variant_hash));
-    }
-    info!("Variant checksum match: {}", sandbox_variant_hash);
-    Ok(())
-}
-
-struct EngineDataValidator<'a, 'b> {
-    car_file: &'a CarFile,
-    sandbox_data: &'b EngineV1,
-    float_precision: u32
-}
-
-impl<'a, 'b> EngineDataValidator<'a, 'b> {
-    fn new(car_file: &'a CarFile,
-           sandbox_data: &'b EngineV1) -> EngineDataValidator<'a, 'b> {
-        EngineDataValidator {car_file, sandbox_data, float_precision: 10}
-    }
-
-    fn validate(&self) -> Result<(), String> {
-        let version = self.car_file.get_section("Car").unwrap().get_attribute("Version");
-        if let Some(attribute) = version {
-            if (attribute.value.as_num()?.round() as u64) < 2200000000 {
-                self.validate_legacy_family()?;
-                self.validate_legacy_variant()?;
-                return Ok(());
-            }
-        }
-        self.validate_family()?;
-        self.validate_variant()?;
-        Ok(())
-    }
-
-    fn validate_legacy_family(&self) -> Result<(), String> {
-        let family_data = self.car_file.get_section("Car").unwrap().get_section("Family").unwrap();
-        self.validate_u64( *&self.sandbox_data.family_version, family_data, "GameVersion")?;
-        self.validate_strings(&self.sandbox_data.family_uuid, family_data,"UID")?;
-        self.validate_strings(&self.sandbox_data.family_name, family_data,"Name")?;
-        self.validate_i32(*&self.sandbox_data.family_game_days, family_data,"InternalDays")?;
-        self.validate_strings(&self.sandbox_data.block_config, family_data,"BlockConfig")?;
-        self.validate_strings(&self.sandbox_data.block_material, family_data,"BlockMaterial")?;
-        self.validate_strings(&self.sandbox_data.block_type, family_data,"BlockType")?;
-        self.validate_strings(&self.sandbox_data.head_type, family_data,"Head")?;
-        self.validate_strings(&self.sandbox_data.head_material, family_data,"HeadMaterial")?;
-        self.validate_strings(&self.sandbox_data.vvl, family_data,"VVL")?;
-        self.validate_strings(&self.sandbox_data.valves, family_data,"Valves")?;
-        self.validate_floats(*&self.sandbox_data.max_stroke, family_data,"Stroke")?;
-        self.validate_floats(*&self.sandbox_data.max_bore, family_data,"Bore")?;
-        Ok(())
-    }
-
-    fn validate_family(&self) -> Result<(), String> {
-        let family_data = self.car_file.get_section("Car").unwrap().get_section("Family").unwrap();
-        self.validate_u64( *&self.sandbox_data.family_version, family_data, "GameVersion")?;
-        self.validate_strings(&self.sandbox_data.family_uuid, family_data,"UID")?;
-        self.validate_strings(&self.sandbox_data.family_name, family_data,"Name")?;
-        self.validate_i32(*&self.sandbox_data.family_game_days, family_data,"InternalDays")?;
-        self.validate_i32(*&self.sandbox_data.family_quality, family_data,"QualityFamily")?;
-        self.validate_strings(&self.sandbox_data.block_config, family_data,"BlockConfig")?;
-        self.validate_strings(&self.sandbox_data.block_material, family_data,"BlockMaterial")?;
-        self.validate_strings(&self.sandbox_data.block_type, family_data,"BlockType")?;
-        self.validate_strings(&self.sandbox_data.head_type, family_data,"Head")?;
-        self.validate_strings(&self.sandbox_data.head_material, family_data,"HeadMaterial")?;
-        self.validate_strings(&self.sandbox_data.valves, family_data,"Valves")?;
-        self.validate_floats(*&self.sandbox_data.max_stroke, family_data,"Stroke")?;
-        self.validate_floats(*&self.sandbox_data.max_bore, family_data,"Bore")?;
-        Ok(())
-    }
-
-    fn validate_legacy_variant(&self) -> Result<(), String> {
-        let variant_data = self.car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-        self.validate_u64( *&self.sandbox_data.variant_version, variant_data, "GameVersion")?;
-        self.validate_strings(&self.sandbox_data.family_uuid, variant_data,"FUID")?;
-        self.validate_strings(&self.sandbox_data.uuid, variant_data,"UID")?;
-        self.validate_strings(&self.sandbox_data.variant_name, variant_data,"Name")?;
-        self.validate_i32(*&self.sandbox_data.variant_game_days, variant_data,"InternalDays")?;
-        self.validate_strings(&self.sandbox_data.crank, variant_data,"Crank")?;
-        self.validate_strings(&self.sandbox_data.conrods, variant_data,"Conrods")?;
-        self.validate_strings(&self.sandbox_data.pistons, variant_data,"Pistons")?;
-        self.validate_strings(&self.sandbox_data.vvt, variant_data,"VVT")?;
-        self.validate_strings(&self.sandbox_data.aspiration, variant_data,"AspirationType")?;
-        self.validate_floats(*&self.sandbox_data.intercooler_setting, variant_data,"IntercoolerSetting")?;
-        self.validate_strings(&self.sandbox_data.fuel_system_type, variant_data,"FuelSystemType")?;
-        self.validate_strings(&self.sandbox_data.fuel_system, variant_data,"FuelSystem")?;
-        if let Some(fuel_type) = &self.sandbox_data.fuel_type { self.validate_strings(fuel_type, variant_data,"FuelType")?; }
-        self.validate_strings(&self.sandbox_data.intake_manifold, variant_data,"IntakeManifold")?;
-        self.validate_strings(&self.sandbox_data.intake, variant_data,"Intake")?;
-        self.validate_strings(&self.sandbox_data.headers, variant_data,"Headers")?;
-        self.validate_strings(&self.sandbox_data.exhaust_count, variant_data,"ExhaustCount")?;
-        self.validate_strings(&self.sandbox_data.exhaust_bypass_valves, variant_data,"ExhaustBypassValves")?;
-        self.validate_strings(&self.sandbox_data.cat, variant_data,"Cat")?;
-        self.validate_strings(&self.sandbox_data.muffler_1, variant_data,"Muffler1")?;
-        self.validate_strings(&self.sandbox_data.muffler_2, variant_data,"Muffler2")?;
-        self.validate_floats(*&self.sandbox_data.bore, variant_data,"Bore")?;
-        self.validate_floats(*&self.sandbox_data.stroke, variant_data,"Stroke")?;
-        self.validate_floats(*&self.sandbox_data.capacity, variant_data,"Capacity")?;
-        self.validate_floats(*&self.sandbox_data.compression, variant_data,"Compression")?;
-        self.validate_floats(*&self.sandbox_data.cam_profile_setting, variant_data,"CamProfileSetting")?;
-        self.validate_floats(*&self.sandbox_data.vvl_cam_profile_setting, variant_data,"VVLCamProfileSetting")?;
-        if let Some(afr) = &self.sandbox_data.afr { self.validate_floats(*afr, variant_data,"AFR")?; }
-        if let Some(afr_lean) = &self.sandbox_data.afr_lean {self.validate_floats(*afr_lean, variant_data,"AFRLean")?; }
-        self.validate_floats(*&self.sandbox_data.rpm_limit, variant_data,"RPMLimit")?;
-        self.validate_floats(*&self.sandbox_data.ignition_timing_setting, variant_data,"IgnitionTimingSetting")?;
-        self.validate_floats(*&self.sandbox_data.exhaust_diameter, variant_data,"ExhaustDiameter")?;
-        self.validate_i32(*&self.sandbox_data.quality_bottom_end, variant_data,"QualityBottomEnd")?;
-        self.validate_i32(*&self.sandbox_data.quality_top_end, variant_data,"QualityTopEnd")?;
-        self.validate_i32(*&self.sandbox_data.quality_aspiration, variant_data,"QualityAspiration")?;
-        self.validate_i32(*&self.sandbox_data.quality_fuel_system, variant_data,"QualityFuelSystem")?;
-        self.validate_i32(*&self.sandbox_data.quality_exhaust, variant_data,"QualityExhaust")?;
-        Ok(())
-    }
-
-    fn validate_variant(&self) -> Result<(), String> {
-        let variant_data = self.car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-        self.validate_u64( *&self.sandbox_data.variant_version, variant_data, "GameVersion")?;
-        self.validate_strings(&self.sandbox_data.family_uuid, variant_data,"FUID")?;
-        self.validate_strings(&self.sandbox_data.uuid, variant_data,"UID")?;
-        self.validate_strings(&self.sandbox_data.variant_name, variant_data,"Name")?;
-        self.validate_i32(*&self.sandbox_data.variant_game_days, variant_data,"InternalDays")?;
-        self.validate_strings(&self.sandbox_data.vvl, variant_data,"VVL")?;
-        self.validate_strings(&self.sandbox_data.crank, variant_data,"Crank")?;
-        self.validate_strings(&self.sandbox_data.conrods, variant_data,"Conrods")?;
-        self.validate_strings(&self.sandbox_data.pistons, variant_data,"Pistons")?;
-        self.validate_strings(&self.sandbox_data.vvt, variant_data,"VVT")?;
-        self.validate_strings(&self.sandbox_data.aspiration, variant_data,"AspirationType")?;
-        self.validate_floats(*&self.sandbox_data.intercooler_setting, variant_data,"IntercoolerSetting")?;
-        self.validate_strings(&self.sandbox_data.fuel_system_type, variant_data,"FuelSystemType")?;
-        self.validate_strings(&self.sandbox_data.fuel_system, variant_data,"FuelSystem")?;
-        if let Some(fuel_type) = &self.sandbox_data.fuel_type { self.validate_strings(fuel_type, variant_data,"FuelType")?; }
-        if let Some(fuel_leaded) = &self.sandbox_data.fuel_leaded { self.validate_i32(*fuel_leaded, variant_data,"FuelLeaded")?; }
-        self.validate_strings(&self.sandbox_data.intake_manifold, variant_data,"IntakeManifold")?;
-        self.validate_strings(&self.sandbox_data.intake, variant_data,"Intake")?;
-        self.validate_strings(&self.sandbox_data.headers, variant_data,"Headers")?;
-        self.validate_strings(&self.sandbox_data.exhaust_count, variant_data,"ExhaustCount")?;
-        self.validate_strings(&self.sandbox_data.exhaust_bypass_valves, variant_data,"ExhaustBypassValves")?;
-        self.validate_strings(&self.sandbox_data.cat, variant_data,"Cat")?;
-        self.validate_strings(&self.sandbox_data.muffler_1, variant_data,"Muffler1")?;
-        self.validate_strings(&self.sandbox_data.muffler_2, variant_data,"Muffler2")?;
-        self.validate_floats(*&self.sandbox_data.bore, variant_data,"Bore")?;
-        self.validate_floats(*&self.sandbox_data.stroke, variant_data,"Stroke")?;
-        self.validate_floats(*&self.sandbox_data.capacity, variant_data,"Capacity")?;
-        self.validate_floats(*&self.sandbox_data.compression, variant_data,"Compression")?;
-        self.validate_floats(*&self.sandbox_data.cam_profile_setting, variant_data,"CamProfileSetting")?;
-        self.validate_floats(*&self.sandbox_data.vvl_cam_profile_setting, variant_data,"VVLCamProfileSetting")?;
-        if let Some(afr) = &self.sandbox_data.afr { self.validate_floats(*afr, variant_data,"AFR")?; }
-        if let Some(afr_lean) = &self.sandbox_data.afr_lean {self.validate_floats(*afr_lean, variant_data,"AFRLean")?; }
-        self.validate_floats(*&self.sandbox_data.rpm_limit, variant_data,"RPMLimit")?;
-        self.validate_floats(*&self.sandbox_data.ignition_timing_setting, variant_data,"IgnitionTimingSetting")?;
-        self.validate_floats(*&self.sandbox_data.exhaust_diameter, variant_data,"ExhaustDiameter")?;
-        self.validate_i32(*&self.sandbox_data.quality_bottom_end, variant_data,"QualityBottomEnd")?;
-        self.validate_i32(*&self.sandbox_data.quality_top_end, variant_data,"QualityTopEnd")?;
-        self.validate_i32(*&self.sandbox_data.quality_aspiration, variant_data,"QualityAspiration")?;
-        self.validate_i32(*&self.sandbox_data.quality_fuel_system, variant_data,"QualityFuelSystem")?;
-        self.validate_i32(*&self.sandbox_data.quality_exhaust, variant_data,"QualityExhaust")?;
-        if let Some(val) = &self.sandbox_data.balance_shaft { self.validate_strings(val, variant_data, "BalanceShaft")?; }
-        if let Some(val) = &self.sandbox_data.spring_stiffness { self.validate_floats(*val, variant_data, "SpringStiffnessSetting")?; }
-        if let Some(val) = &self.sandbox_data.listed_octane { self.validate_i32(*val, variant_data, "ListedOctane")?; }
-        if let Some(val) = &self.sandbox_data.tune_octane_offset { self.validate_i32(*val, variant_data, "TuneOctaneOffset")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_setup { self.validate_strings(val, variant_data, "AspirationSetup")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_item_1 { self.validate_strings(val, variant_data, "AspirationItemOption_1")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_item_2 { self.validate_strings(val, variant_data, "AspirationItemOption_2")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_item_suboption_1 { self.validate_strings(val, variant_data, "AspirationItemSubOption_1")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_item_suboption_2 { self.validate_strings(val, variant_data, "AspirationItemSubOption_2")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_boost_control { self.validate_strings(val, variant_data, "AspirationBoostControl")?; }
-        if let Some(val) = &self.sandbox_data.charger_size_1 { self.validate_floats(*val, variant_data, "ChargerSize_1")?; }
-        if let Some(val) = &self.sandbox_data.charger_size_2 { self.validate_floats(*val, variant_data, "ChargerSize_2")?; }
-        if let Some(val) = &self.sandbox_data.charger_tune_1 { self.validate_floats(*val, variant_data, "ChargerTune_1")?; }
-        if let Some(val) = &self.sandbox_data.charger_tune_2 { self.validate_floats(*val, variant_data, "ChargerTune_2")?; }
-        if let Some(val) = &self.sandbox_data.charger_max_boost_1 { self.validate_floats(*val, variant_data, "ChargerMaxBoost_1")?; }
-        if let Some(val) = &self.sandbox_data.charger_max_boost_2 { self.validate_floats(*val, variant_data, "ChargerMaxBoost_2")?; }
-        if let Some(val) = &self.sandbox_data.turbine_size_1 { self.validate_floats(*val, variant_data, "TurbineSize_1")?; }
-        if let Some(val) = &self.sandbox_data.turbine_size_2 { self.validate_floats(*val, variant_data, "TurbineSize_2")?; }
-        Ok(())
-    }
-
-    fn validate_strings(&self,
-                        sandbox_value: &str,
-                        car_file_section: &Section,
-                        car_file_key: &str) -> Result<(), String> {
-        let attr = match car_file_section.get_attribute(car_file_key) {
-            None => { Err(format!("Car file section {} is missing attribute {}", car_file_section.name(), car_file_key))}
-            Some(attribute) => Ok(attribute.value.as_str())
-        }?;
-        info!("Checking {}", car_file_key);
-        if sandbox_value != attr {
-            return Err(format!("{}: {} != {}", car_file_key, sandbox_value, attr))
-        }
-        Ok(())
-    }
-
-    fn validate_u64(&self,
-                    sandbox_value: u64,
-                    car_file_section: &Section,
-                    car_file_key: &str) -> Result<(), String> {
-        let attr = match car_file_section.get_attribute(car_file_key) {
-            None => { Err(format!("Car file section {} is missing attribute {}", car_file_section.name(), car_file_key))}
-            Some(attribute) => Ok(attribute.value.as_num()?.round() as u64)
-        }?;
-        info!("Checking {}", car_file_key);
-        if sandbox_value != attr {
-            return Err(format!("{}: {} != {}", car_file_key, sandbox_value, attr))
-        }
-        Ok(())
-    }
-
-    fn validate_i32(&self,
-                     sandbox_value: i32,
-                     car_file_section: &Section,
-                     car_file_key: &str) -> Result<(), String> {
-        let attr = match car_file_section.get_attribute(car_file_key) {
-            None => { Err(format!("Car file section {} is missing attribute {}", car_file_section.name(), car_file_key))}
-            Some(attribute) => Ok(attribute.value.as_num()?.round() as i32)
-        }?;
-        info!("Checking {}", car_file_key);
-        if sandbox_value != attr {
-            return Err(format!("{}: {} != {}", car_file_key, sandbox_value, attr))
-        }
-        Ok(())
-    }
-
-    fn validate_floats(&self,
-                       sandbox_value: f64,
-                       car_file_section: &Section,
-                       car_file_key: &str) -> Result<(), String> {
-        let attr = match car_file_section.get_attribute(car_file_key) {
-            None => { Err(format!("Car file section {} is missing attribute {}", car_file_section.name(), car_file_key))}
-            Some(attribute) => Ok(attribute.value.as_num()?)
-        }?;
-        info!("Checking {}", car_file_key);
-        if round_float_to(sandbox_value, self.float_precision) !=
-           round_float_to(attr, self.float_precision) {
-            return Err(format!("{}: {} != {}", car_file_key, sandbox_value, attr))
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    
-    
     use std::path::{PathBuf};
     
     use crate::{automation, beam_ng};
@@ -1118,7 +808,7 @@ mod tests {
         // C:\Users\zephy\AppData\Local\BeamNG.drive\mods\dae1.zip
         let mod_data = beam_ng::ModData::from_path(&path.join("dawnv6.zip"))?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or("Couldn't find car data")?.clone())?;
-        //println!("{:#?}", automation_car_file);
+        println!("{:#?}", automation_car_file);
         if let Some(version) = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("GameVersion") {
             println!("{}", version);
         }

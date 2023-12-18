@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use rusqlite::{Connection, Row};
 use sha2::{Sha256, Digest};
 use tracing::info;
+use serde::{Serialize,Deserialize};
 
 #[cfg(target_os = "windows")]
 use directories::{BaseDirs, UserDirs};
@@ -80,7 +81,7 @@ impl Display for SandboxVersion {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct EngineV1 {
     pub uuid: String,
     pub family_version: u64,

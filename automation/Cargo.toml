@@ -11,6 +11,8 @@ steam = { workspace = true }
 utils = { workspace = true }
 tracing =  { workspace = true }
 sha2 = { workspace = true }
+bincode = { workspace = true }
+serde = { version = "1.0.152", features = ["derive"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 directories = { workspace = true }

@@ -224,8 +224,10 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 name = "automation"
 version = "0.2.3-alpha"
 dependencies = [
+ "bincode",
  "directories",
  "rusqlite",
+ "serde 1.0.152",
  "sha2",
  "steam",
  "tracing",
@@ -271,6 +273,15 @@ dependencies = [
  "steam",
  "tracing",
  "zip",
+]
+
+[[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde 1.0.152",
 ]
 
 [[package]]
@@ -1134,6 +1145,7 @@ dependencies = [
  "assetto_corsa",
  "automation",
  "beam_ng",
+ "bincode",
  "config",
  "iced",
  "iced_aw",
@@ -1152,6 +1164,7 @@ dependencies = [
  "utils",
  "winit 0.28.1",
  "winres",
+ "zip",
 ]
 
 [[package]]

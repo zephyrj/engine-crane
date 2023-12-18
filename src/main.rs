@@ -24,6 +24,7 @@
 mod ui;
 
 mod fabricator;
+mod data;
 
 
 use std::env;
