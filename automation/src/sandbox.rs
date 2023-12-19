@@ -311,8 +311,7 @@ impl EngineV1 {
         format!("{} - {}", self.family_name, self.variant_name)
     }
 
-    pub fn family_data_checksum(&self) -> String {
-        let mut hash = String::new();
+    pub fn family_data_checksum_data(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
         hasher.update(&self.family_version.to_string().as_bytes());
         hasher.update(&self.family_uuid.as_bytes());
@@ -327,14 +326,14 @@ impl EngineV1 {
         hasher.update(&self.valves.as_bytes());
         hasher.update(&round_float_to(self.max_stroke, 10).to_string().as_bytes());
         hasher.update(&round_float_to(self.max_bore, 10).to_string().as_bytes());
-        for byte in hasher.finalize() {
-            hash += &format!("{:X?}", byte);
-        }
-        hash
+        hasher.finalize().iter().map(|b| *b).collect()
     }
 
-    pub fn variant_data_checksum(&self) -> String {
-        let mut hash = String::new();
+    pub fn family_data_checksum(&self) -> String {
+        _sha256_data_to_string(self.family_data_checksum_data())
+    }
+
+    pub fn variant_data_checksum_data(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
         hasher.update(&self.variant_version.to_string().as_bytes());
         hasher.update(&self.family_uuid.as_bytes());
@@ -394,14 +393,14 @@ impl EngineV1 {
         if let Some(str) = &self.charger_max_boost_2 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
         if let Some(str) = &self.turbine_size_1 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
         if let Some(str) = &self.turbine_size_2 { hasher.update(round_float_to(*str, 10).to_string().as_bytes()); }
-        for byte in hasher.finalize() {
-            hash += &format!("{:X?}", byte);
-        }
-        hash
+        hasher.finalize().iter().map(|b| *b).collect()
     }
 
-    pub fn result_data_checksum(&self) -> String {
-        let mut hash = String::new();
+    pub fn variant_data_checksum(&self) -> String {
+        _sha256_data_to_string(self.variant_data_checksum_data())
+    }
+
+    pub fn result_data_checksum_data(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
         hasher.update(&self.adjusted_afr.to_string().as_bytes());
         hasher.update(&self.average_cruise_econ.to_string().as_bytes());
@@ -440,11 +439,11 @@ impl EngineV1 {
         if let Some(peak_boost_rpm) = &self.peak_boost_rpm {
             hasher.update(peak_boost_rpm.to_string().as_bytes());
         }
+        hasher.finalize().iter().map(|b| *b).collect()
+    }
 
-        for byte in hasher.finalize() {
-            hash += &format!("{:X?}", byte);
-        }
-        hash
+    pub fn result_data_checksum(&self) -> String {
+        _sha256_data_to_string(self.result_data_checksum_data())
     }
 
     fn decode_graph_data(row: &Row, graph_row_name: &str) -> rusqlite::Result<Vec<f64>> {
@@ -461,6 +460,14 @@ impl EngineV1 {
         }
         Ok(out_vec)
     }
+}
+
+fn _sha256_data_to_string(data: Vec<u8>) -> String {
+    let mut hash = String::new();
+    for byte in data {
+        hash += &format!("{:X?}", byte);
+    }
+    hash
 }
 
 impl std::fmt::Display for EngineV1 {
