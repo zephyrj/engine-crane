@@ -81,7 +81,7 @@ impl Display for SandboxVersion {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EngineV1 {
     pub uuid: String,
     pub family_version: u64,

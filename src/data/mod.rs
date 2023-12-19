@@ -92,6 +92,18 @@ impl CrateEngine {
     pub fn version(&self) -> DataVersion {
         self.metadata.data_version().unwrap()
     }
+
+    pub fn get_automation_car_file_data(&self) -> &Vec<u8> {
+        self.data.get_automation_car_file_data()
+    }
+
+    pub fn get_automation_engine_data(&self) -> &EngineV1 {
+        self.data.get_automation_engine_data()
+    }
+
+    pub fn get_engine_jbeam_data(&self) -> Option<&Vec<u8>> {
+        self.data.get_engine_jbeam_data()
+    }
 }
 
 pub enum CrateEngineMetadata {
@@ -211,6 +223,30 @@ impl CrateEngineData {
         match self {
             CrateEngineData::DataV1(d) => {
                 serialize_into(writer, d)
+            }
+        }
+    }
+
+    pub fn get_automation_car_file_data(&self) -> &Vec<u8> {
+        match self {
+            CrateEngineData::DataV1(d) => {
+                &d.car_file_data
+            }
+        }
+    }
+
+    pub fn get_automation_engine_data(&self) -> &EngineV1 {
+        match self {
+            CrateEngineData::DataV1(d) => {
+                &d.automation_variant_data
+            }
+        }
+    }
+
+    pub fn get_engine_jbeam_data(&self) -> Option<&Vec<u8>> {
+        match self {
+            CrateEngineData::DataV1(d) => {
+                d.jbeam_file_data.get(&d.main_engine_jbeam_filename)
             }
         }
     }
@@ -389,6 +425,7 @@ fn create_crate_engine() -> Result<(), String> {
     let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods/dawnv6.zip");
     let eng = CrateEngine::from_beamng_mod_zip(&path, CreationOptions::default())?;
     println!("Loaded {} from mod", eng.name());
+    let crate_path = PathBuf::from(format!("{}.eng", eng.name()));
     {
         let mut file = File::create(format!("{}.eng", eng.name())).expect("Failed to open file");
         match eng.serialize_to(&mut file) {
@@ -400,14 +437,10 @@ fn create_crate_engine() -> Result<(), String> {
     }
 
     {
-        let mut file = File::open(format!("{}.eng", eng.name())).expect("Failed to open file");
-        let loaded = match CrateEngine::deserialize_from(&mut file) {
-            Ok(c) => Ok(c),
-            Err(e) => {
-                Err(e.to_string())
-            }
-        }?;
-        println!("Loaded {} from eng file", loaded.name());
+        let calc = crate::fabricator::AcEngineParameterCalculatorV1::from_crate_engine(&crate_path)?;
+        println!("Limiter {}", calc.limiter());
+        println!("Torque {}", calc.peak_torque());
+        println!("BHP {}", calc.peak_bhp());
     }
     Ok(())
 }

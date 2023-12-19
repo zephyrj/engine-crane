@@ -20,6 +20,7 @@
  */
 
 use std::fmt::{Display, Formatter};
+use std::fs::File;
 use std::path::Path;
 use itertools::Itertools;
 use sha2::{Sha256, Digest};
@@ -38,7 +39,7 @@ use crate::assetto_corsa::car::data::Engine;
 use crate::assetto_corsa::car::data::engine;
 use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
 use crate::utils::round_float_to;
-use crate::data::{CrateEngine, AutomationSandboxCrossChecker};
+use crate::data::{AutomationSandboxCrossChecker, CrateEngine};
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
 use crate::automation::car::{CarFile, Section};
@@ -132,16 +133,37 @@ pub fn kw_to_bhp(power_kw: f64) -> f64 {
 }
 
 #[derive(Debug)]
-struct AcEngineParameterCalculatorV1 {
+pub(crate) struct AcEngineParameterCalculatorV1 {
     automation_car_file: CarFile,
     engine_jbeam_data: serde_hjson::Map<String, serde_hjson::Value>,
     engine_sqlite_data: EngineV1
 }
 
 impl AcEngineParameterCalculatorV1 {
-    pub fn from_crate_engine(eng: CrateEngine) -> Result<AcEngineParameterCalculatorV1, String> {
-        //info!("Creating AC parameter calculator for {}", beam_ng_mod_path.to_path_buf().display());
-        Err("Not Implemented".to_string())
+    pub fn from_crate_engine(crate_eng_path: &Path) -> Result<AcEngineParameterCalculatorV1, String> {
+        info!("Creating AC parameter calculator for crate engine {}", crate_eng_path.display());
+        let mut file = File::open(crate_eng_path).map_err(|e| {
+            format!("Failed to open {}. {}", crate_eng_path.display(), e.to_string())
+        })?;
+        let crate_eng = CrateEngine::deserialize_from(&mut file)?;
+        info!("Loaded {} from eng file", crate_eng.name());
+
+        let automation_car_file_data = crate_eng.get_automation_car_file_data().clone();
+        let automation_car_file = automation::car::CarFile::from_bytes(automation_car_file_data)?;
+        let engine_jbeam_data = match crate_eng.get_engine_jbeam_data() {
+            None => return Err(format!("Engine jbeam data missing from crate engine {}", crate_eng.name())),
+            Some(d) => {
+                serde_hjson::from_slice(d).map_err(|e|{
+                   format!("Failed to decode engine jbeam from crate engine {}", crate_eng.name())
+                })?
+            }
+        };
+        let engine_sqlite_data = crate_eng.get_automation_engine_data().clone();
+        Ok(AcEngineParameterCalculatorV1 {
+            automation_car_file,
+            engine_jbeam_data,
+            engine_sqlite_data
+        })
     }
 
     pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<AcEngineParameterCalculatorV1, String> {
