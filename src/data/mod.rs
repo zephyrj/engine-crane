@@ -21,33 +21,161 @@
 mod validation;
 
 use std::collections::HashMap;
-use std::{fs, io};
+use std::{fs, io, mem};
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 
-use bincode::{deserialize, serialize, serialize_into};
+use bincode::{deserialize, deserialize_from, serialize, serialize_into};
 use serde::{Deserialize, Serialize};
 use serde_hjson::{Map, Value};
+use sha2::{Digest, Sha256};
 use tracing::{debug, error, info, warn};
-use tracing_subscriber::fmt::format;
 use beam_ng::jbeam;
 pub use crate::data::validation::AutomationSandboxCrossChecker;
 
 
+pub struct CrateEngine {
+    metadata: CrateEngineMetadata,
+    data: CrateEngineData
+}
+
+impl CrateEngine {
+    pub fn from_beamng_mod_zip(mod_path: &Path, options: CreationOptions) -> Result<CrateEngine, String> {
+        let data = DataV1::from_beamng_mod_zip(mod_path, options)?;
+        let engine_data = data.jbeam_file_data.get(&data.main_engine_jbeam_filename).unwrap();
+        let name =
+            _get_name_from_jbeam_data(engine_data).unwrap_or_else(
+                || {
+                    let m = mod_path.file_name().unwrap_or("unknown".as_ref()).to_str().unwrap_or("unknown");
+                    m.strip_suffix(".zip").unwrap_or(m).to_string()
+                });
+
+        let mut auto_hash = Sha256::new();
+        auto_hash.update(&data.automation_variant_data.family_data_checksum_data());
+        auto_hash.update(&data.automation_variant_data.variant_data_checksum_data());
+        auto_hash.update(&data.automation_variant_data.result_data_checksum_data());
+        let data_hash: Vec<u8> = auto_hash.finalize().iter().map(|b| *b).collect();
+        let automation_data_hash = data_hash.try_into().unwrap();
+        let engine_jbeam_hash = [0u8; 32];
+        let metadata = MetadataV1 {
+            data_version: DataVersion::V1.as_u16(),
+            name,
+            automation_data_hash,
+            engine_jbeam_hash
+        };
+
+        Ok(CrateEngine{
+            metadata: CrateEngineMetadata::MetadataV1(metadata),
+            data: CrateEngineData::DataV1(data)
+        })
+    }
+
+    pub fn deserialize_from(reader: &mut impl Read) -> Result<CrateEngine, String> {
+        let metadata = CrateEngineMetadata::from_reader(reader)?;
+        let data = CrateEngineData::from_reader(&metadata, reader)?;
+        Ok(CrateEngine { metadata, data })
+    }
+
+    pub fn serialize_to(&self, writer: &mut impl Write) -> bincode::Result<()> {
+        writer.write(&1_u16.to_le_bytes())?;
+        self.metadata.serialize_into(writer)?;
+        self.data.serialize_into(writer)
+    }
+
+    pub fn name(&self) -> &str {
+        self.metadata.name()
+    }
+
+    pub fn version(&self) -> DataVersion {
+        self.metadata.data_version().unwrap()
+    }
+}
+
+pub enum CrateEngineMetadata {
+    MetadataV1(MetadataV1)
+}
+
+impl CrateEngineMetadata {
+    pub fn from_reader(reader: &mut impl Read) -> Result<CrateEngineMetadata, String> {
+        let mut buf = [0u8; mem::size_of::<u16>()];
+        reader.read_exact(&mut buf).map_err(|e| format!("Failed to read metadata. {}", e.to_string()))?;
+        let metadata_version = u16::from_le_bytes(buf);
+        match metadata_version {
+            1 => {
+                let internal_type: MetadataV1 =
+                    deserialize_from(reader)
+                        .map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
+                Ok(CrateEngineMetadata::MetadataV1(internal_type))
+            },
+            _ => Err(format!("Unknown metadata version {}", metadata_version))
+        }
+    }
+
+    pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => {
+                serialize_into(writer, &m)
+            }
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            CrateEngineMetadata::MetadataV1(d) => { &d.name }
+        }
+    }
+
+    pub fn data_version(&self) -> Result<DataVersion, String> {
+        let val = match self {
+            CrateEngineMetadata::MetadataV1(d) => { &d.data_version }
+        };
+        DataVersion::from_u16(*val)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
-pub enum CrateEngineVersion {
+pub struct MetadataV1 {
+    data_version: u16,
+    name: String,
+    engine_jbeam_hash: [u8; 32],
+    automation_data_hash: [u8; 32]
+}
+
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum DataVersion {
     V1
 }
 
-impl CrateEngineVersion {
+impl DataVersion {
     pub const VERSION_1_STRING: &'static str = "v1";
+
+    pub fn from_u16(val: u16) -> Result<DataVersion, String> {
+        match val {
+            1 => Ok(DataVersion::V1),
+            _ => Err(format!("Unknown data version {}", val))
+        }
+    }
+
+    pub fn as_u16(&self) -> u16 {
+        match self {
+            DataVersion::V1 => 1
+        }
+    }
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            CrateEngineVersion::V1 => CrateEngineVersion::VERSION_1_STRING
+            DataVersion::V1 => DataVersion::VERSION_1_STRING
         }
+    }
+}
+
+impl Display for DataVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.as_str())
     }
 }
 
@@ -62,11 +190,35 @@ impl CreationOptions {
     }
 }
 
+pub enum CrateEngineData {
+    DataV1(DataV1)
+}
+
+impl CrateEngineData {
+    pub fn from_reader(metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<CrateEngineData, String> {
+        match metadata.data_version()? {
+            DataVersion::V1 => {
+                let internal_data =
+                    deserialize_from(reader).map_err(|e| {
+                        format!("Failed to deserialise {} crate engine. {}", DataVersion::V1, e.to_string())
+                })?;
+                Ok(CrateEngineData::DataV1(internal_data))
+            }
+        }
+    }
+
+    pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
+        match self {
+            CrateEngineData::DataV1(d) => {
+                serialize_into(writer, d)
+            }
+        }
+    }
+}
+
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct CrateEngine {
-    version: CrateEngineVersion,
-    name: String,
+pub struct DataV1 {
     mod_info_json_data: Option<Vec<u8>>,
     main_engine_jbeam_filename: String,
     jbeam_file_data: HashMap<String, Vec<u8>>,
@@ -75,8 +227,8 @@ pub struct CrateEngine {
     license_data: Option<Vec<u8>>
 }
 
-impl CrateEngine {
-    pub fn from_beamng_mod_zip(mod_path: &Path, options: CreationOptions) -> Result<CrateEngine, String> {
+impl DataV1 {
+    pub fn from_beamng_mod_zip(mod_path: &Path, options: CreationOptions) -> Result<DataV1, String> {
         info!("Opening {}", mod_path.display());
         let zipfile = fs::File::open(mod_path).map_err(|err| {
             format!("Failed to open {}. {}", mod_path.display(), err.to_string())
@@ -153,11 +305,6 @@ impl CrateEngine {
         }
         let main_engine_jbeam_filename =
             main_engine_data_file.ok_or("Failed to find the main engine data".to_string())?;
-        let engine_data = jbeam_file_data.get(&main_engine_jbeam_filename).unwrap();
-        let name = _get_name_from_jbeam_data(engine_data).unwrap_or_else(|| {
-            let m = mod_path.file_name().unwrap_or("unknown".as_ref()).to_str().unwrap_or("unknown");
-            m.strip_suffix(".zip").unwrap_or(m).to_string()
-        });
 
         let version = _get_engine_version_from_car_file(&automation_car_file)?;
         info!("Engine version number: {}", version);
@@ -201,9 +348,7 @@ impl CrateEngine {
             };
         }
 
-        Ok(CrateEngine {
-            version: CrateEngineVersion::V1,
-            name,
+        Ok(DataV1 {
             mod_info_json_data,
             main_engine_jbeam_filename,
             jbeam_file_data,
@@ -213,15 +358,11 @@ impl CrateEngine {
         })
     }
 
-    pub fn from_eng_file(file_path: &Path) -> bincode::Result<CrateEngine> {
+    pub fn from_eng_file(file_path: &Path) -> bincode::Result<DataV1> {
         let mut file = File::open(file_path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
         deserialize(&buffer)
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn write_to_file(&self, file: &mut File) -> bincode::Result<()> {
@@ -317,7 +458,7 @@ fn create_crate_engine() -> Result<(), String> {
     let eng = CrateEngine::from_beamng_mod_zip(&path, CreationOptions::default())?;
     println!("Loaded {}", eng.name());
     let mut file = File::create(format!("{}.eng", eng.name())).expect("Failed to open file");
-    match eng.write_to_file(&mut file) {
+    match eng.serialize_to(&mut file) {
         Ok(_) => Ok(()),
         Err(e) => {
             Err(e.to_string())
