@@ -229,44 +229,10 @@ pub struct DataV1 {
 
 impl DataV1 {
     pub fn from_beamng_mod_zip(mod_path: &Path, options: CreationOptions) -> Result<DataV1, String> {
-        info!("Opening {}", mod_path.display());
-        let zipfile = fs::File::open(mod_path).map_err(|err| {
-            format!("Failed to open {}. {}", mod_path.display(), err.to_string())
-        })?;
-
-        info!("Extracting {}", mod_path.display());
-        let mut archive = zip::ZipArchive::new(zipfile).map_err(|err| {
-            format!("Failed to read archive {}. {}", mod_path.display(), err.to_string())
-        })?;
-
-        let mut info_json_path = None;
-        let mut license_data_path = None;
-        let mut car_data_path = String::new();
-        let mut jbeam_file_list = Vec::new();
-        for file_path in archive.file_names() {
-            if file_path.ends_with("info.json") {
-                info_json_path = Some(String::from(file_path));
-            }
-            else if file_path.ends_with(".car") {
-                car_data_path = String::from(file_path);
-            }
-            else if file_path.ends_with(".jbeam") {
-                jbeam_file_list.push(String::from(file_path));
-            }
-            else if file_path.ends_with("license.txt") {
-                license_data_path = Some(String::from(file_path));
-            }
-        }
-
-        let car_file_data = match _extract_file_data_from_archive(&mut archive, &car_data_path) {
-            Ok(car_data) => { car_data }
-            Err(err_str) => {
-                error!("Couldn't extract {} from {}. {}",
-                            &car_data_path,
-                            mod_path.display(),
-                            &err_str);
-                return Err(format!("Failed to load .car file from mod. {}", err_str));
-            }
+        let mut mod_data = beam_ng::ModData::from_path(mod_path)?;
+        let car_file_data = match mod_data.get_automation_car_file_data() {
+            None => return Err("Failed to load .car file from mod. File is missing".to_string()),
+            Some(data) => data.clone()
         };
         let automation_car_file = automation::car::CarFile::from_bytes(car_file_data.clone())?;
         let uid = _get_engine_uuid_from_car_file(&automation_car_file)?;
@@ -277,34 +243,42 @@ impl DataV1 {
         let expected_engine_data_filename = format!("camso_engine_{}.jbeam", &uid[0..5]);
         info!("Expect to find engine data in {}", &expected_engine_data_filename);
 
-        let mut jbeam_file_data: HashMap<String, Vec<u8>> = HashMap::new();
-        let mut main_engine_data_file = None;
-        for name in jbeam_file_list {
-            if main_engine_data_file.is_none() {
-                if name.ends_with(&expected_engine_data_filename) {
-                    main_engine_data_file = Some(name.clone());
-                } else if _is_legacy_main_engine_data_file(&name) {
-                    main_engine_data_file = Some(name.clone());
+        let mut main_engine_data_file = match mod_data.contains_jbeam_file(&expected_engine_data_filename) {
+            false => {
+                let legacy_engine_filename = "camso_engine.jbeam".to_string();
+                match mod_data.contains_jbeam_file(&legacy_engine_filename) {
+                    true => {
+                        Some(legacy_engine_filename)
+                    },
+                    false => {
+                        None
+                    }
                 }
             }
-            match _extract_file_data_from_archive(&mut archive, &name) {
-                Ok(data) => {
-                    jbeam_file_data.insert(name, data);
-                }
-                Err(err_str) => {
-                    if let Some(main_file) = &main_engine_data_file {
-                        let err_str =
-                            format!("Failed to main engine data from {}. {}", main_file, err_str);
-                        error!("{}", &err_str);
-                        return Err(err_str);
-                    } else {
-                        warn!("Failed to load data from {}. {}", name, err_str);
+            true => {
+                info!("Found main engine data file: {}", &expected_engine_data_filename);
+                Some(expected_engine_data_filename)
+            }
+        };
+
+        if main_engine_data_file.is_none() {
+            for name in mod_data.jbeam_filenames() {
+                if name.contains("camso_engine_")
+                {
+                    if !name.contains("structure") &&
+                        !name.contains("internals") &&
+                        !name.contains("balancing")
+                    {
+                        main_engine_data_file = Some(name.clone());
+                        break;
                     }
                 }
             }
         }
+
         let main_engine_jbeam_filename =
             main_engine_data_file.ok_or("Failed to find the main engine data".to_string())?;
+        info!("Found main engine data file: {}", main_engine_jbeam_filename);
 
         let version = _get_engine_version_from_car_file(&automation_car_file)?;
         info!("Engine version number: {}", version);
@@ -323,38 +297,23 @@ impl DataV1 {
             })?;
         }
 
-        let mut mod_info_json_data = None;
-        if let Some(name) = info_json_path {
-            mod_info_json_data = match _extract_file_data_from_archive(&mut archive, &name) {
-                Ok(data) => {
-                    Some(data)
-                }
-                Err(err_str) => {
-                    warn!("Couldn't extract {} from {}. {}", &name,mod_path.display(), &err_str);
-                    None
-                }
-            };
-        }
-        let mut license_data = None;
-        if let Some(name) = license_data_path {
-            license_data = match _extract_file_data_from_archive(&mut archive, &name) {
-                Ok(data) => {
-                    Some(data)
-                }
-                Err(err_str) => {
-                    warn!("Couldn't extract {} from {}. {}", &name,mod_path.display(), &err_str);
-                    None
-                }
-            };
-        }
+        let mut mod_info_json_data = match mod_data.get_info_json() {
+            Ok(data_str) => {
+                Some(data_str.into_bytes())
+            }
+            Err(err_str) => {
+                warn!("Couldn't read info.json from {}. {}", mod_path.display(), &err_str);
+                None
+            }
+        };
 
         Ok(DataV1 {
             mod_info_json_data,
             main_engine_jbeam_filename,
-            jbeam_file_data,
+            jbeam_file_data: mod_data.take_jbeam_file_data(),
             car_file_data,
             automation_variant_data,
-            license_data
+            license_data: mod_data.take_license_data()
         })
     }
 
@@ -407,33 +366,6 @@ fn _get_engine_version_from_car_file(automation_car_file: &automation::car::CarF
     Ok(version_num as u64)
 }
 
-fn _extract_file_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
-                                   file_path: &str)
-                                   -> Result<Vec<u8>, String>
-{
-    let mut data: Vec<u8> = Vec::new();
-    match archive.by_name(file_path) {
-        Ok(mut file) => {
-            debug!("Found engine data at {}", file_path);
-            file.read_to_end(&mut data).map_err(|e|{
-                format!("Read to end of {} failed. {}", file_path, e.to_string())
-            })?;
-            Ok(data)
-        },
-        Err(err) => {
-            return Err(format!("Failed to read {}. {}", file_path, err.to_string()));
-        }
-    }
-}
-
-fn _extract_jbeam_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
-                                    file_path: &str) -> Result<Map<String, Value>, String> {
-    let jbeam_data: Vec<u8> = _extract_file_data_from_archive(archive, file_path)?;
-    jbeam::from_slice(&*jbeam_data).map_err(|e| {
-        return e.to_string();
-    })
-}
-
 fn _get_name_from_jbeam_data(engine_data: &Vec<u8>) -> Option<String> {
     let data_map = match jbeam::from_slice(&*engine_data) {
         Ok(d) => d,
@@ -456,12 +388,26 @@ fn _get_name_from_jbeam_data(engine_data: &Vec<u8>) -> Option<String> {
 fn create_crate_engine() -> Result<(), String> {
     let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods/dawnv6.zip");
     let eng = CrateEngine::from_beamng_mod_zip(&path, CreationOptions::default())?;
-    println!("Loaded {}", eng.name());
-    let mut file = File::create(format!("{}.eng", eng.name())).expect("Failed to open file");
-    match eng.serialize_to(&mut file) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            Err(e.to_string())
-        }
+    println!("Loaded {} from mod", eng.name());
+    {
+        let mut file = File::create(format!("{}.eng", eng.name())).expect("Failed to open file");
+        match eng.serialize_to(&mut file) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                Err(e.to_string())
+            }
+        }?
     }
+
+    {
+        let mut file = File::open(format!("{}.eng", eng.name())).expect("Failed to open file");
+        let loaded = match CrateEngine::deserialize_from(&mut file) {
+            Ok(c) => Ok(c),
+            Err(e) => {
+                Err(e.to_string())
+            }
+        }?;
+        println!("Loaded {} from eng file", loaded.name());
+    }
+    Ok(())
 }

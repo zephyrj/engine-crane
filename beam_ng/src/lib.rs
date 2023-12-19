@@ -21,13 +21,16 @@
 
 pub mod jbeam;
 
+use std::collections::hash_map::Keys;
+use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use serde_hjson::{Map, Value};
 use steam;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(target_os = "windows")]
 use {
@@ -126,67 +129,93 @@ fn read_mods_in_path(path: &PathBuf) -> Vec<PathBuf> {
 #[derive(Debug)]
 pub struct ModData {
     info_json: serde_json::Map<String, serde_json::Value>,
+    jbeam_file_data: HashMap<String, Vec<u8>>,
     car_file_data: Option<Vec<u8>>,
-    jbeam_data: Map<String, Value>,
+    license_data: Option<Vec<u8>>,
     archive_data: zip::ZipArchive<File>
 }
 
 impl ModData {
     pub fn from_path(mod_path: &Path) -> Result<ModData, String> {
-        debug!("Opening {}", mod_path.display());
+        info!("Opening {}", mod_path.display());
         let zipfile = fs::File::open(mod_path).map_err(|err| {
             format!("Failed to open {}. {}", mod_path.display(), err.to_string())
         })?;
 
-        debug!("Extracting {}", mod_path.display());
+        info!("Extracting {}", mod_path.display());
         let mut archive = zip::ZipArchive::new(zipfile).map_err(|err| {
             format!("Failed to read archive {}. {}", mod_path.display(), err.to_string())
         })?;
 
-        let mut info_json: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-        let mut car_data: Option<Vec<u8>> = None;
-        let jbeam_data: serde_hjson::Map<String, serde_hjson::Value> = Map::new();
-
         let mut info_json_path = String::new();
-        let mut car_data_path = String::new();
-        //let mut jbeam_file_list = Vec::new();
-
+        let mut license_data_path = None;
+        let mut car_data_path: Option<String> = None;
+        let mut jbeam_file_list = Vec::new();
         for file_path in archive.file_names() {
-            if file_path.ends_with("info.json") {
+            if file_path.ends_with(".jbeam") {
+                jbeam_file_list.push(String::from(file_path));
+            }
+            else if file_path.ends_with(".car") {
+                car_data_path = Some(String::from(file_path));
+            }
+            else  if file_path.ends_with("info.json") {
                 info_json_path = String::from(file_path);
             }
-            if file_path.ends_with(".car") {
-                car_data_path = String::from(file_path);
+            else if file_path.ends_with("license.txt") {
+                license_data_path = Some(String::from(file_path));
             }
-            // else if file_path.ends_with(".jbeam") {
-            //     jbeam_file_list.push(String::from(file_path));
-            // }
         }
 
-        info_json = _extract_json_data_from_archive(&mut archive, &info_json_path)?;
-        car_data = match _extract_file_data_from_archive(&mut archive, &car_data_path) {
-            Ok(car_data) => { Some(car_data) }
-            Err(_) => {
-                info!("No .car file found in {}", mod_path.display());
-                None
+        let info_json = _extract_json_data_from_archive(&mut archive, &info_json_path)?;
+
+        let mut jbeam_file_data = HashMap::new();
+        for file_path in jbeam_file_list {
+            match _extract_file_data_from_archive(&mut archive, &file_path) {
+                Ok(data) => {
+                    let filename = match PathBuf::from(&file_path).file_name() {
+                        None => {
+                            warn!("Couldn't get filename of {}", file_path);
+                            file_path
+                        },
+                        Some(p) => p.to_string_lossy().to_string()
+                    };
+                    jbeam_file_data.insert(filename, data);
+                }
+                Err(e) => {
+                    warn!("Couldn't extract {} from {}. {}", file_path, mod_path.display(), e.to_string());
+                }
             }
-        };
-        // for file_path in &jbeam_file_list {
-        //     match _extract_jbeam_data_from_archive(&mut archive, &file_path) {
-        //         Ok(data) => {
-        //             jbeam_data.extend(data);
-        //         }
-        //         Err(err) => {
-        //             println!("Failed to decode {}. {}", file_path, err.to_string());
-        //         }
-        //     }
-        //
-        // }
+        }
+
+        let mut car_file_data = None;
+        if let Some(path) = &car_data_path {
+            car_file_data = match _extract_file_data_from_archive(&mut archive, path) {
+                Ok(car_data) => { Some(car_data) }
+                Err(_) => {
+                    info!("No .car file found in {}", mod_path.display());
+                    None
+                }
+            };
+        }
+
+        let mut license_data = None;
+        if let Some(name) = license_data_path {
+            license_data = match _extract_file_data_from_archive(&mut archive, &name) {
+                Ok(data) => {
+                    Some(data)
+                }
+                Err(err_str) => {
+                    warn!("Couldn't extract license data from {}. {}",mod_path.display(), &err_str);
+                    None
+                }
+            };
+        }
 
         Ok(ModData{
             info_json,
-            car_file_data: car_data,
-            jbeam_data,
+            car_file_data,
+            jbeam_file_data,
+            license_data,
             archive_data: archive
         })
     }
@@ -198,37 +227,32 @@ impl ModData {
         }
     }
 
-    pub fn find_jbeam_engine_key(&self) -> Result<String, String> {
-        match self.info_json.get("Name") {
-            Some(mod_name) => {
-                let name = mod_name.as_str().ok_or(format!("Couldn't get mod name"))?;
-                let mod_info = self.jbeam_data.get(name).ok_or(format!("Couldn't find mod data for {}", name))?;
-                let mod_object = mod_info.as_object().ok_or(format!("{} wasn't an object", name))?;
-                let slots =
-                    mod_object.get("slots")
-                        .ok_or(format!("Couldn't find slots in {}", name))?
-                        .as_array().ok_or(format!("slots wasn't an array in {}", name))?;
-                for val in slots {
-                    match val.as_array() {
-                        None => { info!("Skipping unknown slot type in {}", name) }
-                        Some(line) => {
-                            match line[0].as_str() {
-                                None => { info!("Skipping unknown slot type in {}", name) }
-                                Some(val) => {
-                                    if val.to_lowercase() == "camso_engine" {
-                                        return Ok(line[1].as_str().ok_or(format!("Couldn't read {} as it isn't a string", val))?.to_string());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            None => {
-                return Err(format!("Couldn't find Name in info.json"))
-            }
-        }
-        Err(format!("Couldn't find key"))
+    pub fn get_info_json_map(&self) -> &serde_json::Map<String, serde_json::Value> {
+        &self.info_json
+    }
+
+    pub fn get_info_json(&self) -> serde_json::Result<String> {
+        serde_json::to_string(&self.info_json)
+    }
+
+    pub fn take_license_data(&mut self) -> Option<Vec<u8>>{
+        std::mem::take(&mut self.license_data)
+    }
+
+    pub fn jbeam_filenames(&self) -> Keys<'_, String, Vec<u8>> {
+        self.jbeam_file_data.keys()
+    }
+
+    pub fn get_jbeam_file_data(&self, filename: &str) -> Option<&Vec<u8>> {
+        self.jbeam_file_data.get(filename)
+    }
+
+    pub fn contains_jbeam_file(&self, filename: &str) -> bool {
+        self.jbeam_file_data.contains_key(filename)
+    }
+
+    pub fn take_jbeam_file_data(&mut self) -> HashMap<String, Vec<u8>> {
+        std::mem::take(&mut self.jbeam_file_data)
     }
 
     pub fn get_engine_jbeam_data(&mut self, expected_eng_key: Option<&str>) -> Result<Map<String, Value>, String> {
