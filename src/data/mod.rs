@@ -40,19 +40,35 @@ use {
     directories::BaseDirs,
 };
 
-const LOCAL_DATA_DIRNAME: &'static str = "engine_crane";
+const LOCAL_DATA_DIRNAME: &'static str = "EngineCrane";
+const DEFAULT_CRATE_ENGINE_DIRNAME: &'static str = "crate";
 
 #[cfg(target_os = "windows")]
-pub fn get_default_crate_engine_path() -> PathBuf {
+fn backup_data_dir() -> PathBuf {
+    let username = whoami::username();
+    PathBuf::from_iter(["C:", "Users", &username, "AppData", "Local"])
+}
+
+#[cfg(target_os = "linux")]
+fn backup_data_dir() -> PathBuf {
+    let username = whoami::username();
+    PathBuf::from_iter(["home", &username, ".local", "share"])
+}
+
+
+pub fn get_local_app_data_path() -> PathBuf {
     let mut local_data_root : PathBuf = match BaseDirs::new() {
-        None => {
-            let username = whoami::username();
-            PathBuf::from_iter(["C:", "Users", &username, "AppData", "Local"])
-        }
-        Some(basedirs) => { basedirs.cache_dir().to_path_buf() }
+        None => backup_data_dir(),
+        Some(basedirs) => { basedirs.data_local_dir().to_path_buf() }
     };
     local_data_root.push(LOCAL_DATA_DIRNAME);
     local_data_root
+}
+
+pub fn get_default_crate_engine_path() -> PathBuf {
+    let mut path = get_local_app_data_path();
+    path.push(DEFAULT_CRATE_ENGINE_DIRNAME);
+    path
 }
 
 pub struct CrateEngine {

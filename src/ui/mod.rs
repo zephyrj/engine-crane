@@ -26,6 +26,7 @@ mod image_data;
 mod button;
 
 use std::fs;
+use std::fs::create_dir;
 use swap::{EngineSwapMessage, EngineSwapTab};
 use edit::{EditMessage, EditTab};
 use settings::{SettingsMessage, SettingsTab};
@@ -44,6 +45,7 @@ use crate::{assetto_corsa, beam_ng, fabricator};
 use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
+use crate::data::{get_default_crate_engine_path, get_local_app_data_path};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 
 const HEADER_SIZE: u16 = 32;
@@ -282,10 +284,34 @@ pub struct ApplicationData {
     beam_ng_data: BeamNGData
 }
 
+fn create_local_data_dirs_if_missing() {
+    let local_data_path = get_local_app_data_path();
+    if !local_data_path.is_dir() {
+        match create_dir(&local_data_path) {
+            Ok(_) => {
+                info!("Created local data dir {}", local_data_path.display());
+                let crate_eng_dir = get_default_crate_engine_path();
+                match create_dir(&crate_eng_dir) {
+                    Ok(_) => {
+                        info!("Created default crate engine dir {}", crate_eng_dir.display());
+                    }
+                    Err(e) => {
+                        warn!("Failed to create default crate engine dir. {}", e.to_string())
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to create local data dir. {}", e.to_string())
+            }
+        }
+    }
+}
+
 impl ApplicationData {
     fn new() -> ApplicationData {
+        create_local_data_dirs_if_missing();
         let settings = GlobalSettings::load().unwrap_or_else(|e| {
-            error!("Failed to load settings. {}", e.to_string());
+            warn!("Failed to load settings. {}", e.to_string());
             GlobalSettings::default()
         });
         match settings.ac_install_path() {
@@ -295,6 +321,10 @@ impl ApplicationData {
         match settings.beamng_mod_path() {
             None => { info!("BeamNG mod path not set") }
             Some(path) => { info!("BeamNG mod path set to {}", path.display()) }
+        }
+        match settings.crate_engine_path() {
+            None => { info!("Crate engine path not set") }
+            Some(path) => { info!("Crate engine path set to {}", path.display()) }
         }
 
         let assetto_corsa_data = AssettoCorsaData::from_settings(&settings);
