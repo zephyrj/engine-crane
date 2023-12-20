@@ -47,6 +47,7 @@ use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 use crate::ui::data::{ApplicationData, AssettoCorsaData, BeamNGData};
+use crate::ui::swap::EngineSource;
 
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
@@ -318,9 +319,22 @@ impl Sandbox for UIMain {
                 if self.engine_swap_tab.current_car.is_none() {
                     self.engine_swap_tab.update_status(String::from("Please select an Assetto Corsa car"));
                     return;
-                } else if self.engine_swap_tab.current_mod.is_none() {
-                    self.engine_swap_tab.update_status(String::from("Please select an BeamNG mod"));
-                    return;
+                } else {
+                    match self.engine_swap_tab.current_source {
+                        EngineSource::BeamNGMod => {
+                            if self.engine_swap_tab.current_mod.is_none() {
+                                self.engine_swap_tab.update_status(String::from("Please select an BeamNG mod"));
+                                return;
+                            }
+                        }
+                        EngineSource::CrateEngine => {
+                            if self.engine_swap_tab.current_crate_eng.is_none() {
+                                self.engine_swap_tab.update_status(String::from("Please select a crate engine"));
+                                return;
+                            }
+                        }
+                    }
+
                 }
 
                 let new_spec_name = self.engine_swap_tab.current_new_spec_name.as_str();
@@ -344,43 +358,78 @@ impl Sandbox for UIMain {
                     }
                 };
 
-                if let Some(mod_path) = self.engine_swap_tab.current_mod.as_ref() {
-                    let span = span!(Level::INFO, "Updating car physics");
-                    let _enter = span.enter();
-                    let current_engine_weight =
-                        if let Some(weight_string) = &self.engine_swap_tab.current_engine_weight {
-                            match weight_string.parse::<u32>() {
-                                Ok(val) => {
-                                    Some(val)
-                                }
-                                Err(_) => {
-                                    None
-                                }
+                let mut car_settings = AssettoCorsaCarSettings::default();
+                car_settings.minimum_physics_level = self.engine_swap_tab.current_minimum_physics;
+                let current_engine_weight =
+                    if let Some(weight_string) = &self.engine_swap_tab.current_engine_weight {
+                        match weight_string.parse::<u32>() {
+                            Ok(val) => {
+                                Some(val)
                             }
-                        } else {
-                            None
+                            Err(_) => {
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+                let additional_car_settings = AdditionalAcCarData::new(current_engine_weight);
+
+                let res = match self.engine_swap_tab.current_source {
+                    EngineSource::BeamNGMod => {
+                        let mod_path = match self.engine_swap_tab.current_mod.as_ref() {
+                            Some(p) => p,
+                            None => {
+                                let err_str = "Swap failed: Couldn't get ref to current mod";
+                                error!(err_str);
+                                self.engine_swap_tab.update_status(format!("{}", err_str));
+                                return;
+                            }
                         };
-                    let mut car_settings = AssettoCorsaCarSettings::default();
-                    car_settings.minimum_physics_level = self.engine_swap_tab.current_minimum_physics;
-                    match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
-                                                                         new_car_path.as_path(),
-                                                                         car_settings,
-                                                                         AdditionalAcCarData::new(current_engine_weight)) {
-                        Ok(_) => {
-                            self.engine_swap_tab.update_status(format!("Created {} successfully", new_car_path.display()));
-                            self.app_data.refresh_available_cars();
-                            self.notify_app_data_update(&message);
-                        }
-                        Err(err_str) => {
-                            error!("{}", &err_str);
-                            self.engine_swap_tab.update_status(err_str)
-                        }
+                        let span = span!(Level::INFO, "Updating car physics from BeamNG mod");
+                        let _enter = span.enter();
+                        fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
+                                                                             new_car_path.as_path(),
+                                                                             car_settings,
+                                                                             additional_car_settings)
                     }
-                } else {
-                    let err_str = "Swap failed: Couldn't get ref to current mod";
-                    error!(err_str);
-                    self.engine_swap_tab.update_status(format!("{}", err_str));
-                    return;
+                    EngineSource::CrateEngine => {
+                        let crate_eng_name = match self.engine_swap_tab.current_crate_eng.as_ref() {
+                            Some(c) => c,
+                            None => {
+                                let err_str = "Couldn't get currently selected crate engine name";
+                                error!(err_str);
+                                self.engine_swap_tab.update_status(format!("{}", err_str));
+                                return;
+                            }
+                        };
+                        let crate_path = match self.app_data.crate_engine_data.get_path_for(crate_eng_name) {
+                            Some(p) => p,
+                            None => {
+                                let err_str = format!("Path for crate engine {} not found", crate_eng_name);
+                                error!(err_str);
+                                self.engine_swap_tab.update_status(format!("{}", err_str));
+                                return;
+                            }
+                        };
+                        let span = span!(Level::INFO, "Updating car physics from crate engine");
+                        let _enter = span.enter();
+                        fabricator::swap_crate_engine_into_ac_car(crate_path.as_path(),
+                                                                        new_car_path.as_path(),
+                                                                        car_settings,
+                                                                        additional_car_settings)
+                    }
+                };
+                match res {
+                    Ok(_) => {
+                        self.engine_swap_tab.update_status(format!("Created {} successfully", new_car_path.display()));
+                        self.app_data.refresh_available_cars();
+                        self.notify_app_data_update(&message);
+                    }
+                    Err(err_str) => {
+                        error!("{}", &err_str);
+                        self.engine_swap_tab.update_status(err_str)
+                    }
                 }
             }
         }

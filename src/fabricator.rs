@@ -514,11 +514,10 @@ impl AcEngineParameterCalculatorV1 {
     }
 }
 
-pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
-                                          ac_car_path: &Path,
-                                          settings: AssettoCorsaCarSettings,
-                                          additional_car_data: AdditionalAcCarData) -> Result<(), String> {
-    let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
+pub fn update_ac_engine_parameters(ac_car_path: &Path,
+                                   calculator: AcEngineParameterCalculatorV1,
+                                   settings: AssettoCorsaCarSettings,
+                                   additional_car_data: AdditionalAcCarData) -> Result<(), String> {
     info!("Loading car {}", ac_car_path.display());
     let mut car = Car::load_from_path(ac_car_path).map_err(|err|{
         let err_str = format!("Failed to load {}. {}", ac_car_path.display(), err.to_string());
@@ -785,6 +784,26 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
     }
 
     Ok(())
+}
+
+pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
+                                          ac_car_path: &Path,
+                                          settings: AssettoCorsaCarSettings,
+                                          additional_car_data: AdditionalAcCarData) -> Result<(), String> {
+    update_ac_engine_parameters(ac_car_path,
+                                AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?,
+                                settings, additional_car_data
+    )
+}
+
+pub fn swap_crate_engine_into_ac_car(crate_engine_path: &Path,
+                                          ac_car_path: &Path,
+                                          settings: AssettoCorsaCarSettings,
+                                          additional_car_data: AdditionalAcCarData) -> Result<(), String> {
+    update_ac_engine_parameters(ac_car_path,
+                                AcEngineParameterCalculatorV1::from_crate_engine(crate_engine_path)?,
+                                settings, additional_car_data
+    )
 }
 
 #[cfg(test)]

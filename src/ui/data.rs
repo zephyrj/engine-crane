@@ -243,6 +243,10 @@ impl CrateEngineData {
         }
     }
 
+    pub fn get_path_for(&self, name: &str) -> Option<&PathBuf> {
+        self.locations.get(name)
+    }
+
     fn refresh_available_engines(&mut self, crate_engine_path: &PathBuf) {
         self.available_engines.clear();
         if crate_engine_path.is_dir() {
