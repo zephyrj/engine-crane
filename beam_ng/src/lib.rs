@@ -23,14 +23,13 @@ pub mod jbeam;
 
 use std::collections::hash_map::Keys;
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use serde_hjson::{Map, Value};
 use steam;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 #[cfg(target_os = "windows")]
 use {
@@ -46,7 +45,10 @@ pub const AUTOMATION_STEAM_GAME_ID: i64 = 293760;
 #[cfg(target_os = "windows")]
 pub fn get_default_mod_path() -> PathBuf {
     let mut mod_path_buf : PathBuf = match BaseDirs::new() {
-        None => { PathBuf::from("C:\\Users\\steamuser\\AppData\\Local") }
+        None => {
+            let username = whoami::username();
+            PathBuf::from_iter(["C:", "Users", &username, "AppData", "Local"])
+        }
         Some(basedirs) => { basedirs.cache_dir().to_path_buf() }
     };
     mod_path_buf.push(STEAM_GAME_NAME);

@@ -21,21 +21,39 @@
 mod validation;
 
 use std::collections::HashMap;
-use std::{fs, io, mem};
+use std::{mem};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
+use automation::sandbox::{EngineV1, SandboxVersion};
 
-use bincode::{deserialize, deserialize_from, serialize, serialize_into};
+use bincode::{deserialize, deserialize_from, serialize_into};
 use serde::{Deserialize, Serialize};
-use serde_hjson::{Map, Value};
 use sha2::{Digest, Sha256};
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 use beam_ng::jbeam;
 pub use crate::data::validation::AutomationSandboxCrossChecker;
 
+#[cfg(target_os = "windows")]
+use {
+    directories::BaseDirs,
+};
+
+const LOCAL_DATA_DIRNAME: &'static str = "engine_crane";
+
+#[cfg(target_os = "windows")]
+pub fn get_default_crate_engine_path() -> PathBuf {
+    let mut local_data_root : PathBuf = match BaseDirs::new() {
+        None => {
+            let username = whoami::username();
+            PathBuf::from_iter(["C:", "Users", &username, "AppData", "Local"])
+        }
+        Some(basedirs) => { basedirs.cache_dir().to_path_buf() }
+    };
+    local_data_root.push(LOCAL_DATA_DIRNAME);
+    local_data_root
+}
 
 pub struct CrateEngine {
     metadata: CrateEngineMetadata,

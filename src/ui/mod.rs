@@ -58,6 +58,7 @@ pub enum Message {
     TabSelected(usize),
     AcPathSelectPressed,
     BeamNGModPathSelectPressed,
+    CrateEnginePathSelectPressed,
     EngineSwap(EngineSwapMessage),
     EngineSwapRequested,
     Edit(EditMessage),
@@ -68,20 +69,20 @@ pub enum Message {
 pub struct GlobalSettings {
     ac_install_path: String,
     beamng_mod_path: String,
+    crate_engine_path: String
 }
-
-
-//.map_err(|e|{ format!("Failed to set config. {}", e.to_string()) })?
 
 impl GlobalSettings {
     const AC_INSTALL_PATH: &'static str = "ac_install_path";
     const BEAMNG_MOD_PATH: &'static str = "beamng_mod_path";
+    const CRATE_ENGINE_PATH: &'static str = "crate_engine_path";
     const CONFIG_FILENAME: &'static str = "engine-crane-conf";
 
     fn default() -> Self {
         GlobalSettings {
             ac_install_path: assetto_corsa::get_default_install_path().to_string_lossy().into_owned(),
-            beamng_mod_path: beam_ng::get_default_mod_path().to_string_lossy().into_owned()
+            beamng_mod_path: beam_ng::get_default_mod_path().to_string_lossy().into_owned(),
+            crate_engine_path: crate::data::get_default_crate_engine_path().to_string_lossy().into_owned()
         }
     }
 
@@ -90,6 +91,7 @@ impl GlobalSettings {
         return match builder
             .set_default(GlobalSettings::AC_INSTALL_PATH, assetto_corsa::get_default_install_path().to_string_lossy().into_owned())?
             .set_default(GlobalSettings::BEAMNG_MOD_PATH, beam_ng::get_default_mod_path().to_string_lossy().into_owned())?
+            .set_default(GlobalSettings::CRATE_ENGINE_PATH, crate::data::get_default_crate_engine_path().to_string_lossy().into_owned())?
             .add_source(config::File::with_name(GlobalSettings::CONFIG_FILENAME))
             .add_source(config::Environment::with_prefix("APP"))
             .build() {
@@ -102,6 +104,7 @@ impl GlobalSettings {
                 let settings = builder
                     .set_default(GlobalSettings::AC_INSTALL_PATH, assetto_corsa::get_default_install_path().to_string_lossy().into_owned())?
                     .set_default(GlobalSettings::BEAMNG_MOD_PATH, beam_ng::get_default_mod_path().to_string_lossy().into_owned())?
+                    .set_default(GlobalSettings::CRATE_ENGINE_PATH, crate::data::get_default_crate_engine_path().to_string_lossy().into_owned())?
                     .build()?;
                 let ret: GlobalSettings = settings.try_deserialize()?;
                 ret.write().unwrap_or_else(|e| { error!("Failed to write settings. {}", e.to_string())});
@@ -132,6 +135,18 @@ impl GlobalSettings {
 
     fn set_beamng_mod_path(&mut self, new_path: &Path) {
         self.beamng_mod_path = new_path.to_string_lossy().into_owned();
+    }
+
+    fn crate_engine_path(&self) -> Option<PathBuf> {
+        let path = PathBuf::from(&self.crate_engine_path);
+        if path.is_dir() {
+            return Some(path);
+        }
+        None
+    }
+
+    fn set_crate_engine_pahth(&mut self, new_path: &Path) {
+        self.crate_engine_path = new_path.to_string_lossy().into_owned();
     }
 
     fn write(&self) -> std::io::Result<()> {
@@ -309,6 +324,14 @@ impl ApplicationData {
         self.beam_ng_data.property_update(&self.settings);
     }
 
+    fn get_crate_engine_path(&self) -> Option<PathBuf> {
+        self.settings.crate_engine_path()
+    }
+
+    fn update_crate_engine_path(&mut self, new_path: PathBuf) {
+        self.settings.set_crate_engine_pahth(&new_path);
+    }
+
     fn refresh_available_cars(&mut self) {
         self.assetto_corsa_data.refresh_available_cars(&PathBuf::from(&self.settings.ac_install_path))
     }
@@ -419,26 +442,23 @@ impl Sandbox for UIMain {
             Message::Edit(message) => self.edit_tab.update(message, &self.app_data),
             Message::Settings(message) => self.settings_tab.update(message, &self.app_data),
             Message::AcPathSelectPressed => {
-                let install_path = FileDialog::new()
-                    .set_directory(match self.app_data.get_ac_install_path() {
-                        Some(str) => str,
-                        None => PathBuf::from("/")
-                    })
-                    .pick_folder();
+                let install_path = open_dir_select_dialog(self.app_data.get_ac_install_path().as_ref());
                 if let Some(path) = install_path {
                     self.app_data.update_ac_install_path(path);
                     self.notify_app_data_update(&message);
                 }
             }
             Message::BeamNGModPathSelectPressed => {
-                let mod_path = FileDialog::new()
-                    .set_directory(match self.app_data.get_beam_ng_mod_path() {
-                        Some(str) => str,
-                        None => PathBuf::from("/")
-                    })
-                    .pick_folder();
+                let mod_path = open_dir_select_dialog(self.app_data.get_beam_ng_mod_path().as_ref());
                 if let Some(path) = mod_path {
                     self.app_data.update_beamng_mod_path(path);
+                    self.notify_app_data_update(&message);
+                }
+            }
+            Message::CrateEnginePathSelectPressed => {
+                let eng_path = open_dir_select_dialog(self.app_data.get_crate_engine_path().as_ref());
+                if let Some(path) = eng_path {
+                    self.app_data.update_crate_engine_path(path);
                     self.notify_app_data_update(&message);
                 }
             }
@@ -536,6 +556,14 @@ impl Sandbox for UIMain {
             .tab_bar_position(iced_aw::TabBarPosition::Top)
             .into()
     }
+}
+
+fn open_dir_select_dialog(starting_path: Option<&PathBuf>) -> Option<PathBuf> {
+    let root_dir = PathBuf::from("/");
+    let path = starting_path.unwrap_or(&root_dir);
+    FileDialog::new()
+        .set_directory(path)
+        .pick_folder()
 }
 
 

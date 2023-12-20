@@ -17,3 +17,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde-hjson = { workspace = true }
 zip = { workspace = true }
+whoami = { workspace = true }
