@@ -20,28 +20,28 @@
  */
 mod validation;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::{mem};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use automation::sandbox::{EngineV1, SandboxVersion};
+use directories::BaseDirs;
 
 use bincode::{deserialize, deserialize_from, serialize_into};
+use iced_native::futures::io;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
-use beam_ng::jbeam;
-pub use crate::data::validation::AutomationSandboxCrossChecker;
 
-#[cfg(target_os = "windows")]
-use {
-    directories::BaseDirs,
-};
+use beam_ng::jbeam;
+use automation::sandbox::{EngineV1, SandboxVersion};
+use utils::filesystem::get_filetypes_in_path;
+pub use crate::data::validation::AutomationSandboxCrossChecker;
 
 const LOCAL_DATA_DIRNAME: &'static str = "EngineCrane";
 const DEFAULT_CRATE_ENGINE_DIRNAME: &'static str = "crate";
+pub const CRATE_ENGINE_FILE_SUFFIX: &'static str = "eng";
 
 #[cfg(target_os = "windows")]
 fn backup_data_dir() -> PathBuf {
@@ -69,6 +69,25 @@ pub fn get_default_crate_engine_path() -> PathBuf {
     let mut path = get_local_app_data_path();
     path.push(DEFAULT_CRATE_ENGINE_DIRNAME);
     path
+}
+
+pub fn find_crate_engines_in_path(path: &Path) -> io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
+    let mut found_metadata = BTreeMap::new();
+    let paths = get_filetypes_in_path(path, CRATE_ENGINE_FILE_SUFFIX)?;
+    for path in paths.into_iter() {
+        match File::open(&path) {
+            Ok(mut f) => match CrateEngineMetadata::from_reader(&mut f) {
+                Ok(m) => {
+                    found_metadata.insert(path, m);
+                }
+                Err(e) => {
+                    warn!("Error occured for {}. {}", path.display(), e);
+                }
+            }
+            Err(e) => warn!("Couldn't open {}. {}", path.display(), e.to_string())
+        }
+    }
+    Ok(found_metadata)
 }
 
 pub struct CrateEngine {

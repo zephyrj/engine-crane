@@ -19,17 +19,12 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::BTreeMap;
 use std::fs::create_dir;
 use std::path::PathBuf;
 use tracing::{error, info, Level, span, warn};
-use crate::data::{get_default_crate_engine_path, get_local_app_data_path};
+use crate::data::{CrateEngineMetadata, find_crate_engines_in_path, get_default_crate_engine_path, get_local_app_data_path};
 use crate::ui::{GlobalSettings, ListPath};
-
-pub struct ApplicationData {
-    pub(crate) settings: GlobalSettings,
-    pub(crate) assetto_corsa_data: AssettoCorsaData,
-    pub(crate) beam_ng_data: BeamNGData
-}
 
 fn create_local_data_dirs_if_missing() {
     let local_data_path = get_local_app_data_path();
@@ -56,6 +51,13 @@ fn create_local_data_dirs_if_missing() {
     }
 }
 
+pub struct ApplicationData {
+    pub(crate) settings: GlobalSettings,
+    pub(crate) assetto_corsa_data: AssettoCorsaData,
+    pub(crate) beam_ng_data: BeamNGData,
+    pub(crate) crate_engine_data: CrateEngineData
+}
+
 impl ApplicationData {
     pub(crate) fn new() -> ApplicationData {
         create_local_data_dirs_if_missing();
@@ -78,10 +80,12 @@ impl ApplicationData {
 
         let assetto_corsa_data = AssettoCorsaData::from_settings(&settings);
         let beam_ng_data = BeamNGData::from_settings(&settings);
+        let crate_engine_data = CrateEngineData::from_settings(&settings);
         ApplicationData {
             settings,
             assetto_corsa_data,
-            beam_ng_data
+            beam_ng_data,
+            crate_engine_data
         }
     }
 
@@ -206,5 +210,59 @@ impl BeamNGData {
         let mods = ListPath::convert_path_vec(beam_ng::get_mod_list_in(beamng_mod_path));
         info!("Found {} mods", mods.len());
         mods
+    }
+}
+
+pub struct CrateEngineData {
+    pub(crate) available_engines: Vec<String>,
+    metadata: BTreeMap<String, CrateEngineMetadata>,
+    locations: BTreeMap<String, PathBuf>
+}
+
+impl CrateEngineData {
+    fn new() -> CrateEngineData {
+        CrateEngineData {
+            available_engines: Vec::new(),
+            metadata: BTreeMap::new(),
+            locations: BTreeMap::new()
+        }
+    }
+
+    fn from_settings(settings: &GlobalSettings) -> CrateEngineData {
+        let mut data = CrateEngineData::new();
+        data.property_update(settings);
+        data
+    }
+
+    pub fn property_update(&mut self, settings: &GlobalSettings) {
+        if let Some(path) = &settings.crate_engine_path() {
+            self.refresh_available_engines(path);
+        } else {
+            info!("Update to GlobalSettings contains no crate engine path");
+            self.available_engines.clear();
+        }
+    }
+
+    fn refresh_available_engines(&mut self, crate_engine_path: &PathBuf) {
+        self.available_engines.clear();
+        if crate_engine_path.is_dir() {
+            self.load_available_engines(crate_engine_path);
+        }
+    }
+
+    fn load_available_engines(&mut self, crate_eng_path: &PathBuf) {
+        let span = span!(Level::INFO, "Loading crate engines");
+        let _enter = span.enter();
+        let found_engs = find_crate_engines_in_path(crate_eng_path).unwrap_or_else(|e| {
+            warn!("Failed to read {}. {}", crate_eng_path.display(), e.to_string());
+            BTreeMap::new()
+        });
+        info!("Found {} crate engines", found_engs.len());
+        for (path, metadatum) in found_engs.into_iter() {
+            let name = metadatum.name().to_string();
+            self.available_engines.push(name.clone());
+            self.metadata.insert(name.clone(), metadatum);
+            self.locations.insert(name, path);
+        }
     }
 }

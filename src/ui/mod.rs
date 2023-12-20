@@ -27,7 +27,6 @@ mod button;
 mod data;
 
 use std::fs;
-use std::fs::create_dir;
 use swap::{EngineSwapMessage, EngineSwapTab};
 use edit::{EditMessage, EditTab};
 use settings::{SettingsMessage, SettingsTab};
@@ -46,7 +45,6 @@ use crate::{assetto_corsa, beam_ng, fabricator};
 use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
-use crate::data::{get_default_crate_engine_path, get_local_app_data_path};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 use crate::ui::data::{ApplicationData, AssettoCorsaData, BeamNGData};
 
