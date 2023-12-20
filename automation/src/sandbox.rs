@@ -33,7 +33,7 @@ use directories::{BaseDirs, UserDirs};
 #[cfg(target_os = "linux")]
 use crate::STEAM_GAME_ID;
 
-use utils::round_float_to;
+use utils::numeric::round_float_to;
 use crate::STEAM_GAME_ID;
 
 pub enum SandboxVersion {

@@ -25,6 +25,7 @@ use std::path::Path;
 use itertools::Itertools;
 use sha2::{Sha256, Digest};
 use tracing::{debug, error, info, warn};
+use utils::numeric::{round_float_to, round_up_to_nearest_multiple};
 use crate::{automation, beam_ng, utils};
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
@@ -38,7 +39,6 @@ use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::Engine;
 use crate::assetto_corsa::car::data::engine;
 use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
-use crate::utils::round_float_to;
 use crate::data::{AutomationSandboxCrossChecker, CrateEngine};
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
@@ -674,7 +674,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                         Ok(mut clutch) => {
                             let peak_torque = calculator.peak_torque();
                             if peak_torque > clutch.max_torque {
-                                clutch.max_torque = utils::round_up_to_nearest_multiple(peak_torque+30, 50)
+                                clutch.max_torque = round_up_to_nearest_multiple(peak_torque+30, 50)
                             }
                             if update_car_data(&mut drivetrain, &clutch).is_err() {
                                 error!("Failed to update drivetrain with clutch data");

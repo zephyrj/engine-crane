@@ -23,7 +23,7 @@ use sha2::{Digest, Sha256};
 use tracing::info;
 use automation::car::{CarFile, Section};
 use automation::sandbox::EngineV1;
-use utils::round_float_to;
+use utils::numeric::round_float_to;
 
 pub struct AutomationSandboxCrossChecker<'a, 'b> {
     car_file: &'a CarFile,
