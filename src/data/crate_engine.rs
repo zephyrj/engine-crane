@@ -51,13 +51,22 @@ impl CrateEngine {
                     m.strip_suffix(".zip").unwrap_or(m).to_string()
                 });
 
-        let mut auto_hash = Sha256::new();
-        auto_hash.update(&data.automation_variant_data.family_data_checksum_data());
-        auto_hash.update(&data.automation_variant_data.variant_data_checksum_data());
-        auto_hash.update(&data.automation_variant_data.result_data_checksum_data());
-        let data_hash: Vec<u8> = auto_hash.finalize().iter().map(|b| *b).collect();
-        let automation_data_hash = data_hash.try_into().unwrap();
-        let engine_jbeam_hash = [0u8; 32];
+        let mut auto_hasher = Sha256::new();
+        auto_hasher.update(&data.automation_variant_data.family_data_checksum_data());
+        auto_hasher.update(&data.automation_variant_data.variant_data_checksum_data());
+        auto_hasher.update(&data.automation_variant_data.result_data_checksum_data());
+        let automation_data_hash = create_sha256_hash_array(auto_hasher);
+        if automation_data_hash.is_none() {
+            warn!("Failed to calculate automation data hash");
+        }
+
+        let mut jbeam_hasher = Sha256::new();
+        jbeam_hasher.update(engine_data);
+        let engine_jbeam_hash = create_sha256_hash_array(jbeam_hasher);
+        if automation_data_hash.is_none() {
+            warn!("Failed to calculate engine jbeam data hash");
+        }
+
         let metadata = MetadataV1 {
             data_version: DataVersion::V1.as_u16(),
             name,
@@ -101,6 +110,16 @@ impl CrateEngine {
 
     pub fn get_engine_jbeam_data(&self) -> Option<&Vec<u8>> {
         self.data.get_engine_jbeam_data()
+    }
+}
+
+fn create_sha256_hash_array(hasher: impl sha2::Digest) -> Option<[u8; 32]> {
+    let hash: Vec<u8> = hasher.finalize().iter().map(|b| *b).collect();
+    match <[u8; 32]>::try_from(hash) {
+        Ok(hash_array) => Some(hash_array),
+        Err(_) => {
+            None
+        }
     }
 }
 
@@ -150,8 +169,8 @@ impl CrateEngineMetadata {
 pub struct MetadataV1 {
     data_version: u16,
     name: String,
-    engine_jbeam_hash: [u8; 32],
-    automation_data_hash: [u8; 32]
+    engine_jbeam_hash: Option<[u8; 32]>,
+    automation_data_hash: Option<[u8; 32]>
 }
 
 
