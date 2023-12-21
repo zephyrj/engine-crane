@@ -113,6 +113,7 @@ impl ApplicationData {
 
     pub(crate) fn update_crate_engine_path(&mut self, new_path: PathBuf) {
         self.settings.set_crate_engine_pahth(&new_path);
+        self.crate_engine_data.property_update(&self.settings)
     }
 
     pub(crate) fn refresh_available_cars(&mut self) {
@@ -239,7 +240,7 @@ impl CrateEngineData {
             self.refresh_available_engines(path);
         } else {
             info!("Update to GlobalSettings contains no crate engine path");
-            self.available_engines.clear();
+            self.clear_data();
         }
     }
 
@@ -247,8 +248,14 @@ impl CrateEngineData {
         self.locations.get(name)
     }
 
-    fn refresh_available_engines(&mut self, crate_engine_path: &PathBuf) {
+    fn clear_data(&mut self) {
         self.available_engines.clear();
+        self.locations.clear();
+        self.metadata.clear();
+    }
+
+    fn refresh_available_engines(&mut self, crate_engine_path: &PathBuf) {
+        self.clear_data();
         if crate_engine_path.is_dir() {
             self.load_available_engines(crate_engine_path);
         }
@@ -263,10 +270,18 @@ impl CrateEngineData {
         });
         info!("Found {} crate engines", found_engs.len());
         for (path, metadatum) in found_engs.into_iter() {
-            let name = metadatum.name().to_string();
-            self.available_engines.push(name.clone());
-            self.metadata.insert(name.clone(), metadatum);
-            self.locations.insert(name, path);
+            let x = path.file_name().unwrap_or(path.as_os_str()).to_string_lossy();
+            let id_name =
+                format!("{} ({})",
+                        metadatum.name().to_string(),
+                        x);
+            self.add_engine(id_name, path, metadatum);
         }
+    }
+
+    fn add_engine(&mut self, id_name: String, path: PathBuf, metadatum: CrateEngineMetadata) {
+        self.available_engines.push(id_name.clone());
+        self.locations.insert(id_name.clone(), path);
+        self.metadata.insert(id_name, metadatum);
     }
 }

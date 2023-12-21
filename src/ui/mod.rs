@@ -25,6 +25,8 @@ mod settings;
 mod image_data;
 mod button;
 mod data;
+mod crate_engines;
+mod elements;
 
 use std::fs;
 use swap::{EngineSwapMessage, EngineSwapTab};
@@ -46,7 +48,8 @@ use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
-use crate::ui::data::{ApplicationData, AssettoCorsaData, BeamNGData};
+use crate::ui::crate_engines::{CrateEngineTab, CrateTabMessage};
+use crate::ui::data::{ApplicationData, AssettoCorsaData, BeamNGData, CrateEngineData};
 use crate::ui::swap::EngineSource;
 
 const HEADER_SIZE: u16 = 32;
@@ -64,6 +67,7 @@ pub enum Message {
     CrateEnginePathSelectPressed,
     EngineSwap(EngineSwapMessage),
     EngineSwapRequested,
+    CrateTab(CrateTabMessage),
     Edit(EditMessage),
     Settings(SettingsMessage),
 }
@@ -231,6 +235,7 @@ pub struct UIMain {
     app_data: ApplicationData,
     active_tab: usize,
     engine_swap_tab: EngineSwapTab,
+    crate_engine_tab: CrateEngineTab,
     edit_tab: EditTab,
     settings_tab: SettingsTab
 }
@@ -248,6 +253,8 @@ impl UIMain {
         &self.app_data.beam_ng_data
     }
 
+    pub fn get_crate_engine_data(&self) -> &CrateEngineData { &self.app_data.crate_engine_data }
+
     pub fn notify_app_data_update(&mut self, update_event: &Message) {
         match self.app_data.settings.write() {
             Ok(_) => { info!("Wrote settings successfully"); }
@@ -255,6 +262,7 @@ impl UIMain {
         }
         self.settings_tab.app_data_update(&self.app_data, update_event);
         self.engine_swap_tab.app_data_update(&self.app_data, update_event);
+        self.crate_engine_tab.app_data_update(&self.app_data, update_event);
         self.edit_tab.app_data_update(&self.app_data, update_event);
     }
 }
@@ -270,11 +278,15 @@ impl Sandbox for UIMain {
         info!("Created settings tab");
         let engine_swap_tab = EngineSwapTab::new();
         info!("Created engine-swap tab");
+        let crate_engine_tab = CrateEngineTab::new(&app_data);
+        info!("Created crate engine tab");
         let edit_tab = EditTab::new(&app_data);
+        info!("Created edit tab");
         UIMain {
             app_data,
             active_tab: 0,
             engine_swap_tab,
+            crate_engine_tab,
             edit_tab,
             settings_tab
         }
@@ -288,6 +300,7 @@ impl Sandbox for UIMain {
         match message {
             Message::TabSelected(selected) => self.active_tab = selected,
             Message::EngineSwap(message) => self.engine_swap_tab.update(message, &self.app_data),
+            Message::CrateTab(message) => self.crate_engine_tab.update(message, &self.app_data),
             Message::Edit(message) => self.edit_tab.update(message, &self.app_data),
             Message::Settings(message) => self.settings_tab.update(message, &self.app_data),
             Message::AcPathSelectPressed => {
@@ -440,6 +453,10 @@ impl Sandbox for UIMain {
             .push(
                 self.engine_swap_tab.tab_label(),
                 self.engine_swap_tab.view(&self.app_data)
+            )
+            .push(
+                self.crate_engine_tab.tab_label(),
+                self.crate_engine_tab.view(&self.app_data)
             )
             .push(
                 self.edit_tab.tab_label(),
