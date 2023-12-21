@@ -21,9 +21,10 @@
 
 use std::collections::BTreeMap;
 use iced::{Alignment, Element, Length, Padding, Renderer};
-use iced::alignment::Horizontal;
+use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Button, Column, Container, PickList, Row, Text, TextInput};
 use iced_aw::TabLabel;
+use iced_native::widget::vertical_rule;
 use tracing::metadata;
 use crate::data::CrateEngineMetadata;
 
@@ -34,47 +35,63 @@ use crate::ui::elements::create_drop_down_list;
 
 #[derive(Debug, Clone)]
 pub enum CrateTabMessage {
-    EngineSelected(String)
+    EngineSelected(String),
+    BeamNGModSelected(ListPath)
 }
 
 #[derive(Default)]
 pub struct CrateEngineTab {
-    crate_engine_list: Vec<String>,
-    current_eng_selection: Option<String>,
+    selected_engine: Option<String>,
+    pub(crate) selected_beam_ng_mod: Option<ListPath>
 }
 
 impl CrateEngineTab {
     pub(crate) fn new(app_data: &ApplicationData) -> Self {
-        let mut c = CrateEngineTab {
-            crate_engine_list: Vec::new(),
-            current_eng_selection: None
-        };
-        c.load_crate_engine_list(app_data);
-        c
-    }
-
-    fn load_crate_engine_list(&mut self, application_data: &ApplicationData) {
-        self.crate_engine_list.clear();
-        self.current_eng_selection = None;
-        self.crate_engine_list =
-            application_data.crate_engine_data.available_engines.iter().map(|e| e.clone()).collect()
+        CrateEngineTab {
+            selected_engine: None,
+            selected_beam_ng_mod: None
+        }
     }
 
     pub fn update(&mut self, message: CrateTabMessage, app_data: &ApplicationData) {
         match message {
             CrateTabMessage::EngineSelected(name) => {
-                self.current_eng_selection = Some(name)
+                self.selected_engine = Some(name)
+            },
+            CrateTabMessage::BeamNGModSelected(name) => {
+                self.selected_beam_ng_mod = Some(name)
             }
         }
     }
 
     pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
-        match update_event {
-            Message::CrateEnginePathSelectPressed => {
-                self.load_crate_engine_list(app_data)
+        // match update_event {
+        //     Message::CrateEnginePathSelectPressed => {
+        //         self.load_crate_engine_list(app_data)
+        //     },
+        //     Message::ImportCrateEngineRequested => {
+        //
+        //     }
+        //     _ => {}
+        // }
+    }
+
+    fn create_metadata_container(data: Option<&CrateEngineMetadata>) -> Column<'_, Message> {
+        let mut metadata_container = Column::new();
+        match data {
+            None => {
+                metadata_container = metadata_container.push(Text::new("No metadata found"));
+            },
+            Some(m) => {
+                metadata_container = metadata_container.push(Text::new(format!("Name: {}", m.name())));
+                let version_string = match m.data_version() {
+                    Ok(v) => v.to_string(),
+                    Err(_) => "Unknown".to_string()
+                };
+                metadata_container = metadata_container.push(Text::new(format!("Version: {}", version_string)));
             }
-            _ => {}
-        }
+        };
+        metadata_container
     }
 }
 
@@ -92,30 +109,42 @@ impl Tab for CrateEngineTab {
     fn content<'a, 'b>(&'a self, app_data: &'b ApplicationData ) -> Element<'_, Self::Message, Renderer>
         where 'b: 'a
     {
-        let mut layout = Column::new()
-            .align_items(Alignment::Fill)
+        let mut crate_layout = Column::new()
+            .width(Length::FillPortion(2))
             .spacing(20);
         let list = create_drop_down_list(
             "Crate Engines",
-            &self.crate_engine_list,
-            self.current_eng_selection.clone(),
+            &app_data.crate_engine_data.available_engines,
+            self.selected_engine.clone(),
             move |new_val| Message::CrateTab(CrateTabMessage::EngineSelected(new_val))
         );
-        layout = layout.push(list);
-
-        if let Some(name) = &self.current_eng_selection {
-            layout = match app_data.crate_engine_data.get_metadata_for(name) {
-                None => layout.push(Text::new("No metadata found")),
-                Some(m) => {
-                    layout = layout.push(Text::new(format!("Name: {}", m.name())));
-                    let version_string = match m.data_version() {
-                        Ok(v) => v.to_string(),
-                        Err(_) => "Unknown".to_string()
-                    };
-                    layout.push(Text::new(format!("Version: {}", version_string)))
-                }
-            }
+        crate_layout = crate_layout.push(list);
+        if let Some(name) = &self.selected_engine {
+            crate_layout = crate_layout.push(Self::create_metadata_container(app_data.crate_engine_data.get_metadata_for(name)))
         }
-        layout.into()
+
+        let mut import_layout = Column::new().width(Length::FillPortion(1)).align_items(Alignment::Center);
+        let mut drop_down_list = create_drop_down_list(
+            "Import from BeamNG mod",
+            &app_data.beam_ng_data.available_mods,
+            self.selected_beam_ng_mod.clone(),
+            move |new_val| Message::CrateTab(CrateTabMessage::BeamNGModSelected(new_val))
+        );
+        let mut import_button = Button::new(Text::new("Import")).width(Length::Units(60));
+        if self.selected_beam_ng_mod.is_some() {
+            import_button = import_button.on_press(Message::ImportCrateEngineRequested)
+        }
+        drop_down_list = drop_down_list.push(import_button);
+        import_layout = import_layout.push(drop_down_list);
+
+        let layout = Row::new()
+            .push(crate_layout)
+            .push(vertical_rule(4))
+            .push(import_layout)
+            .spacing(20);
+        Container::new(layout)
+            .align_x(Horizontal::Left)
+            .align_y(Vertical::Top)
+            .padding(20).into()
     }
 }

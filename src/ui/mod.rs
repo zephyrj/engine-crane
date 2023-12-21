@@ -29,6 +29,7 @@ mod crate_engines;
 mod elements;
 
 use std::fs;
+use std::fs::File;
 use swap::{EngineSwapMessage, EngineSwapTab};
 use edit::{EditMessage, EditTab};
 use settings::{SettingsMessage, SettingsTab};
@@ -47,6 +48,7 @@ use crate::{assetto_corsa, beam_ng, fabricator};
 use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
+use crate::data::{CrateEngine, CreationOptions};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 use crate::ui::crate_engines::{CrateEngineTab, CrateTabMessage};
 use crate::ui::data::{ApplicationData, AssettoCorsaData, BeamNGData, CrateEngineData};
@@ -68,6 +70,7 @@ pub enum Message {
     EngineSwap(EngineSwapMessage),
     EngineSwapRequested,
     CrateTab(CrateTabMessage),
+    ImportCrateEngineRequested,
     Edit(EditMessage),
     Settings(SettingsMessage),
 }
@@ -443,6 +446,48 @@ impl Sandbox for UIMain {
                         error!("{}", &err_str);
                         self.engine_swap_tab.update_status(err_str)
                     }
+                }
+            },
+            Message::ImportCrateEngineRequested => {
+                if let Some(mod_path) = &self.crate_engine_tab.selected_beam_ng_mod {
+                    if let Some(crate_engine_path) = self.app_data.settings.crate_engine_path() {
+                        match CrateEngine::from_beamng_mod_zip(&mod_path.full_path, CreationOptions::default()) {
+                            Ok(crate_eng) => {
+                                let mut sanitized_name = sanitize_filename::sanitize(crate_eng.name());
+                                sanitized_name = sanitized_name.replace(" ", "_");
+                                let mut crate_path = crate_engine_path.join(format!("{}.eng", sanitized_name));
+                                let mut extra_num = 2;
+                                while crate_path.is_file() {
+                                    crate_path = crate_engine_path.join(format!("{}{}.eng", sanitized_name, extra_num));
+                                    extra_num += 1;
+                                }
+                                match File::create(&crate_path) {
+                                    Ok(mut f) => {
+                                        match crate_eng.serialize_to(&mut f) {
+                                            Ok(_) => {
+                                                info!("Successfully created crate engine {}", crate_path.display());
+                                                self.app_data.refresh_crate_engines();
+                                                self.notify_app_data_update(&message);
+                                            }
+                                            Err(e) => {
+                                                error!("Failed to serialize to {}. {}",crate_path.display(), e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to create crate engine from BeamNG mod {}. {}",mod_path.full_path.display(), e)
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to create crate engine from BeamNG mod {}. {}",mod_path.full_path.display(), e)
+                            }
+                        }
+                    } else {
+                        error!("Cannot import crate engine as path not set/accessible")
+                    }
+                } else {
+                    error!("Cannot import crate engine as no BeamNG mod selected")
                 }
             }
         }

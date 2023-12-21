@@ -36,7 +36,7 @@ use tracing::warn;
 use utils::filesystem::get_filetypes_in_path;
 
 pub use crate::data::validation::AutomationSandboxCrossChecker;
-pub use crate_engine::{CrateEngine, CrateEngineMetadata};
+pub use crate_engine::{CrateEngine, CrateEngineMetadata, CreationOptions};
 
 const LOCAL_DATA_DIRNAME: &'static str = "EngineCrane";
 const DEFAULT_CRATE_ENGINE_DIRNAME: &'static str = "crate";

@@ -119,6 +119,10 @@ impl ApplicationData {
     pub(crate) fn refresh_available_cars(&mut self) {
         self.assetto_corsa_data.refresh_available_cars(&PathBuf::from(&self.settings.ac_install_path))
     }
+
+    pub(crate) fn refresh_crate_engines(&mut self) {
+        self.crate_engine_data.refresh_available_engines(&PathBuf::from(&self.settings.crate_engine_path))
+    }
 }
 
 pub struct AssettoCorsaData {
