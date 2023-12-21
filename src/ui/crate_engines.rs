@@ -24,6 +24,8 @@ use iced::{Alignment, Element, Length, Padding, Renderer};
 use iced::alignment::Horizontal;
 use iced::widget::{Button, Column, Container, PickList, Row, Text, TextInput};
 use iced_aw::TabLabel;
+use tracing::metadata;
+use crate::data::CrateEngineMetadata;
 
 use crate::ui::{ListPath, Message, Tab};
 use crate::ui::data::ApplicationData;
@@ -90,10 +92,30 @@ impl Tab for CrateEngineTab {
     fn content<'a, 'b>(&'a self, app_data: &'b ApplicationData ) -> Element<'_, Self::Message, Renderer>
         where 'b: 'a
     {
-        create_drop_down_list(
+        let mut layout = Column::new()
+            .align_items(Alignment::Fill)
+            .spacing(20);
+        let list = create_drop_down_list(
             "Crate Engines",
             &self.crate_engine_list,
             self.current_eng_selection.clone(),
-            move |new_val| Message::CrateTab(CrateTabMessage::EngineSelected(new_val))).into()
+            move |new_val| Message::CrateTab(CrateTabMessage::EngineSelected(new_val))
+        );
+        layout = layout.push(list);
+
+        if let Some(name) = &self.current_eng_selection {
+            layout = match app_data.crate_engine_data.get_metadata_for(name) {
+                None => layout.push(Text::new("No metadata found")),
+                Some(m) => {
+                    layout = layout.push(Text::new(format!("Name: {}", m.name())));
+                    let version_string = match m.data_version() {
+                        Ok(v) => v.to_string(),
+                        Err(_) => "Unknown".to_string()
+                    };
+                    layout.push(Text::new(format!("Version: {}", version_string)))
+                }
+            }
+        }
+        layout.into()
     }
 }

@@ -248,6 +248,10 @@ impl CrateEngineData {
         self.locations.get(name)
     }
 
+    pub fn get_metadata_for(&self, name: &str) -> Option<&CrateEngineMetadata> {
+        self.metadata.get(name)
+    }
+
     fn clear_data(&mut self) {
         self.available_engines.clear();
         self.locations.clear();
