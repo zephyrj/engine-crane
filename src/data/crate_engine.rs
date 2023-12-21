@@ -35,6 +35,10 @@ use crate::data::{AutomationSandboxCrossChecker};
 
 pub(crate) const CRATE_ENGINE_FILE_SUFFIX: &'static str = "eng";
 
+type CurrentMetadataType = MetadataV1;
+type CurrentDataType = DataV1;
+
+
 pub struct CrateEngine {
     metadata: CrateEngineMetadata,
     data: CrateEngineData
@@ -67,16 +71,16 @@ impl CrateEngine {
             warn!("Failed to calculate engine jbeam data hash");
         }
 
-        let metadata = MetadataV1 {
-            data_version: DataVersion::V1.as_u16(),
+        let metadata = CurrentMetadataType {
+            data_version: CurrentDataType::VERSION.as_u16(),
             name,
             automation_data_hash,
             engine_jbeam_hash
         };
 
         Ok(CrateEngine{
-            metadata: CrateEngineMetadata::MetadataV1(metadata),
-            data: CrateEngineData::DataV1(data)
+            metadata: CrateEngineMetadata::from_current_version(metadata),
+            data: CrateEngineData::from_current_version(data)
         })
     }
 
@@ -87,7 +91,6 @@ impl CrateEngine {
     }
 
     pub fn serialize_to(&self, writer: &mut impl Write) -> bincode::Result<()> {
-        writer.write(&1_u16.to_le_bytes())?;
         self.metadata.serialize_into(writer)?;
         self.data.serialize_into(writer)
     }
@@ -113,7 +116,7 @@ impl CrateEngine {
     }
 }
 
-fn create_sha256_hash_array(hasher: impl sha2::Digest) -> Option<[u8; 32]> {
+fn create_sha256_hash_array(hasher: impl Digest) -> Option<[u8; 32]> {
     let hash: Vec<u8> = hasher.finalize().iter().map(|b| *b).collect();
     match <[u8; 32]>::try_from(hash) {
         Ok(hash_array) => Some(hash_array),
@@ -128,12 +131,16 @@ pub enum CrateEngineMetadata {
 }
 
 impl CrateEngineMetadata {
+    fn from_current_version(inner_type: CurrentMetadataType) -> CrateEngineMetadata {
+        return CrateEngineMetadata::MetadataV1(inner_type)
+    }
+
     pub fn from_reader(reader: &mut impl Read) -> Result<CrateEngineMetadata, String> {
         let mut buf = [0u8; mem::size_of::<u16>()];
         reader.read_exact(&mut buf).map_err(|e| format!("Failed to read metadata. {}", e.to_string()))?;
         let metadata_version = u16::from_le_bytes(buf);
         match metadata_version {
-            1 => {
+            MetadataV1::VERSION_U16 => {
                 let internal_type: MetadataV1 =
                     deserialize_from(reader)
                         .map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
@@ -143,7 +150,16 @@ impl CrateEngineMetadata {
         }
     }
 
+    pub fn get_metadata_version_u16(&self) -> u16 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => {
+                m.get_version_u16()
+            }
+        }
+    }
+
     pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
+        writer.write(&self.get_metadata_version_u16().to_le_bytes())?;
         match self {
             CrateEngineMetadata::MetadataV1(m) => {
                 serialize_into(writer, &m)
@@ -171,6 +187,13 @@ pub struct MetadataV1 {
     name: String,
     engine_jbeam_hash: Option<[u8; 32]>,
     automation_data_hash: Option<[u8; 32]>
+}
+
+impl MetadataV1 {
+    const VERSION_U16: u16 = 1_u16;
+    pub fn get_version_u16(&self) -> u16 {
+        MetadataV1::VERSION_U16
+    }
 }
 
 
@@ -224,6 +247,10 @@ pub enum CrateEngineData {
 }
 
 impl CrateEngineData {
+    fn from_current_version(inner_type: CurrentDataType) -> CrateEngineData {
+        return CrateEngineData::DataV1(inner_type)
+    }
+
     pub fn from_reader(metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<CrateEngineData, String> {
         match metadata.data_version()? {
             DataVersion::V1 => {
@@ -281,6 +308,12 @@ pub struct DataV1 {
 }
 
 impl DataV1 {
+    pub const VERSION: DataVersion = DataVersion::V1;
+
+    pub fn version(&self) -> DataVersion {
+        Self::VERSION
+    }
+
     pub fn from_beamng_mod_zip(mod_path: &Path, options: CreationOptions) -> Result<DataV1, String> {
         let mut mod_data = beam_ng::ModData::from_path(mod_path)?;
         let car_file_data = match mod_data.get_automation_car_file_data() {
