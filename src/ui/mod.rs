@@ -48,6 +48,7 @@ use crate::{assetto_corsa, beam_ng, fabricator};
 use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
+use assetto_corsa::car::delete_car;
 use crate::data::{CrateEngine, CreationOptions};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 use crate::ui::crate_engines::{CrateEngineTab, CrateTabMessage};
@@ -328,38 +329,43 @@ impl Sandbox for UIMain {
                 }
             }
             Message::EngineSwapRequested => {
-                if self.app_data.get_ac_install_path().is_none() {
-                    self.engine_swap_tab.update_status(String::from("Please set the Assetto Corsa install path in the settings tab"));
-                    return;
-                }
+                let ac_install = match &self.app_data.get_ac_install_path() {
+                    None => {
+                        self.engine_swap_tab.update_status(String::from("Please set the Assetto Corsa install path in the settings tab"));
+                        return;
+                    }
+                    Some(path) => assetto_corsa::Installation::from_path(path.clone())
+                };
+
                 if self.engine_swap_tab.current_car.is_none() {
                     self.engine_swap_tab.update_status(String::from("Please select an Assetto Corsa car"));
                     return;
-                } else {
-                    match self.engine_swap_tab.current_source {
-                        EngineSource::BeamNGMod => {
-                            if self.engine_swap_tab.current_mod.is_none() {
-                                self.engine_swap_tab.update_status(String::from("Please select an BeamNG mod"));
-                                return;
-                            }
-                        }
-                        EngineSource::CrateEngine => {
-                            if self.engine_swap_tab.current_crate_eng.is_none() {
-                                self.engine_swap_tab.update_status(String::from("Please select a crate engine"));
-                                return;
-                            }
+                }
+
+                match self.engine_swap_tab.current_source {
+                    EngineSource::BeamNGMod => {
+                        if self.engine_swap_tab.current_mod.is_none() {
+                            self.engine_swap_tab.update_status(String::from("Please select an BeamNG mod"));
+                            return;
                         }
                     }
-
+                    EngineSource::CrateEngine => {
+                        if self.engine_swap_tab.current_crate_eng.is_none() {
+                            self.engine_swap_tab.update_status(String::from("Please select a crate engine"));
+                            return;
+                        }
+                    }
                 }
 
                 let new_spec_name = self.engine_swap_tab.current_new_spec_name.as_str();
+                if new_spec_name.is_empty() {
+                    self.engine_swap_tab.update_status(String::from("Please enter a spec name"));
+                    return;
+                }
                 let new_car_path = {
                     let span = span!(Level::INFO, "Creating new car spec");
                     let _enter = span.enter();
-                    let ac_install = assetto_corsa::Installation::from_path(
-                        self.app_data.get_ac_install_path().as_ref().unwrap().clone()
-                    );
+
                     match assetto_corsa::car::create_new_car_spec(&ac_install,
                                                                   self.engine_swap_tab.current_car.as_ref().unwrap(),
                                                                   new_spec_name,
@@ -405,9 +411,9 @@ impl Sandbox for UIMain {
                         let span = span!(Level::INFO, "Updating car physics from BeamNG mod");
                         let _enter = span.enter();
                         fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
-                                                                             new_car_path.as_path(),
-                                                                             car_settings,
-                                                                             additional_car_settings)
+                                                                       new_car_path.as_path(),
+                                                                       car_settings,
+                                                                       additional_car_settings)
                     }
                     EngineSource::CrateEngine => {
                         let crate_eng_name = match self.engine_swap_tab.current_crate_eng.as_ref() {
@@ -431,9 +437,9 @@ impl Sandbox for UIMain {
                         let span = span!(Level::INFO, "Updating car physics from crate engine");
                         let _enter = span.enter();
                         fabricator::swap_crate_engine_into_ac_car(crate_path.as_path(),
-                                                                        new_car_path.as_path(),
-                                                                        car_settings,
-                                                                        additional_car_settings)
+                                                                  new_car_path.as_path(),
+                                                                  car_settings,
+                                                                  additional_car_settings)
                     }
                 };
                 match res {
@@ -443,8 +449,15 @@ impl Sandbox for UIMain {
                         self.notify_app_data_update(&message);
                     }
                     Err(err_str) => {
+                        if let Some(car_folder_name) = new_car_path.file_name() {
+                            delete_car(&ac_install, Path::new(car_folder_name)).unwrap_or_else(|e|{
+                                error!("Failed to delete {}. {}", new_car_path.display(), e.to_string());
+                            });
+                        } else {
+                            error!("Failed to delete {}. Couldn't get car folder name", new_car_path.display());
+                        }
                         error!("{}", &err_str);
-                        self.engine_swap_tab.update_status(err_str)
+                        self.engine_swap_tab.update_status(err_str.to_string())
                     }
                 }
             },

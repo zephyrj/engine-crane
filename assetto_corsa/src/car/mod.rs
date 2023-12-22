@@ -156,6 +156,11 @@ pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub fn delete_car(ac_installation: &Installation, car_folder_name: &Path) -> std::io::Result<()> {
+    let path = ac_installation.get_installed_car_path().join(car_folder_name);
+    std::fs::remove_dir_all(path)
+}
+
 fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<()> {
     let new_car_name = get_final_path_part(car_path)?;
     let mut paths_to_update: Vec<PathBuf> = Vec::new();

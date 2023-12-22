@@ -52,7 +52,7 @@ pub struct Engine<'a> {
 }
 
 impl<'a> Engine<'a> {
-    const INI_FILENAME: &'static str = "engine.ini";
+    pub const INI_FILENAME: &'static str = "engine.ini";
 
     // pub fn load_from_ini_string(ini_data: String) -> Engine<'a> {
     //     let ini_data = Ini::load_from_string(ini_data);

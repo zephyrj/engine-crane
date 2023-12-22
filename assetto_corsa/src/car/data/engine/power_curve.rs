@@ -30,8 +30,10 @@ pub struct PowerCurve {
 }
 
 impl PowerCurve {
-    pub fn update(&mut self, power_vec: Vec<(i32, f64)>) -> Result<Vec<(i32, f64)>> {
-        Ok(self.power_lut.update(power_vec))
+    pub const SECTION_NAME: &'static str = "POWER_CURVE";
+
+    pub fn update(&mut self, power_vec: Vec<(i32, f64)>) -> Vec<(i32, f64)> {
+        self.power_lut.update(power_vec)
     }
 
     pub fn get_curve_data(&self) -> BTreeMap<i32, f64> {
@@ -44,7 +46,7 @@ impl MandatoryDataSection for PowerCurve {
     fn load_from_parent(parent_data: &dyn CarDataFile) -> Result<Self> where Self: Sized {
         let power_lut = match LutProperty::<i32, f64>::mandatory_from_ini(
             String::from("HEADER"),
-            String::from("POWER_CURVE"),
+            String::from(Self::SECTION_NAME),
             parent_data.ini_data(),
             parent_data.data_interface()) {
             Ok(lut) => {

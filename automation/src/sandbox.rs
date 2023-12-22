@@ -56,7 +56,7 @@ impl SandboxVersion {
         return match self {
             SandboxVersion::Legacy => { get_db_path() }
             SandboxVersion::FourDotTwo => { get_db_path_4_2() }
-            SandboxVersion::Ellisbury => { get_db_path_ellisbury()}
+            SandboxVersion::Ellisbury => { get_db_path_ellisbury() }
         }
     }
 
@@ -491,12 +491,19 @@ pub fn load_engines() -> HashMap<String, EngineV1> {
 }
 
 pub fn load_engine_by_uuid(uuid: &str, version: SandboxVersion) -> Result<Option<EngineV1>, String> {
-    let db_path = version.get_path().unwrap();
+    let db_path = version.get_path().ok_or_else(||{
+        format!("No sandbox db file available for {}", version)
+    })?;
     info!("Loading {} from {}", uuid, PathBuf::from(&db_path).display());
-    let conn = Connection::open(db_path).unwrap();
-    let mut stmt = conn.prepare(load_engine_by_uuid_query()).unwrap();
-    let engs = stmt.query_map(&[(":uid", uuid)],
-                                                         EngineV1::load_from_row).unwrap();
+    let conn = Connection::open(&db_path).map_err(|e|{
+        format!("Failed to connect to {}. {}", db_path.to_string_lossy(), e.to_string())
+    })?;
+    let mut stmt = conn.prepare(load_engine_by_uuid_query()).map_err(|e|{
+        format!("Failed to prepare engine load by uuid statement. {}", e.to_string())
+    })?;
+    let engs = stmt.query_map(&[(":uid", uuid)], EngineV1::load_from_row).map_err(|e|{
+        format!("Failed to query sandbox db for engine data. {}", e.to_string())
+    })?;
     for row in engs {
         let eng = row.map_err(|err|{
             format!("Failed to read sandbox.db. {}", err.to_string())

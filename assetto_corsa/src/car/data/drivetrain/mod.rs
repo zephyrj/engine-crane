@@ -51,7 +51,7 @@ pub struct Drivetrain<'a> {
 }
 
 impl<'a> Drivetrain<'a> {
-    const INI_FILENAME: &'static str = "drivetrain.ini";
+    pub const INI_FILENAME: &'static str = "drivetrain.ini";
 
     pub fn from_car(car: &'a mut Car) -> Result<Drivetrain<'a>> {
         let file_data = match car.data_interface.get_original_file_data(Drivetrain::INI_FILENAME) {
