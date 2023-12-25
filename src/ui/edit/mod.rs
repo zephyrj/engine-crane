@@ -358,7 +358,7 @@ impl Tab for EditTab {
         let mut reset_but =
             Button::new("Undo")
             .style(theme::Button::Destructive);
-        if let Some(_) =current_car {
+        if let Some(_) = current_car {
             apply_but = apply_but.on_press(EditMessage::ApplyChanges());
             reset_but = reset_but.on_press(EditMessage::ResetChanges());
         }

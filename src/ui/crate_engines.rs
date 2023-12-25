@@ -19,37 +19,63 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::BTreeMap;
-use iced::{Alignment, Element, Length, Padding, Renderer};
+use std::fs::File;
+use std::path::PathBuf;
+use iced::{Alignment, Background, Color, Element, Length, Padding, Renderer, Theme, theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Button, Column, Container, PickList, Row, Text, TextInput};
+use iced_aw::style::colors::WHITE;
 use iced_aw::TabLabel;
-use iced_native::widget::vertical_rule;
-use tracing::metadata;
-use crate::data::CrateEngineMetadata;
+use iced_native::widget::{button, container, text, vertical_rule};
+use tracing::{error, info, metadata};
+use crate::data::{CrateEngine, CrateEngineMetadata, CreationOptions};
 
 use crate::ui::{ListPath, Message, Tab};
 use crate::ui::data::ApplicationData;
 use crate::ui::edit::EditMessage;
 use crate::ui::elements::create_drop_down_list;
+use crate::ui::elements::modal::Modal;
+
+
 
 #[derive(Debug, Clone)]
 pub enum CrateTabMessage {
     EngineSelected(String),
-    BeamNGModSelected(ListPath)
+    BeamNGModSelected(ListPath),
+    VerifyImport,
+    ImportCancelled,
+    ImportCompleted,
+    ImportConfirmation
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum ModalState {
+    Hidden,
+    VerifyImport,
+    ShowImportResult
+}
+
+impl Default for ModalState {
+    fn default() -> Self {
+        ModalState::Hidden
+    }
 }
 
 #[derive(Default)]
 pub struct CrateEngineTab {
     selected_engine: Option<String>,
-    pub(crate) selected_beam_ng_mod: Option<ListPath>
+    pub(crate) selected_beam_ng_mod: Option<ListPath>,
+    modal: ModalState,
+    import_result_str: Option<String>
 }
 
 impl CrateEngineTab {
     pub(crate) fn new(app_data: &ApplicationData) -> Self {
         CrateEngineTab {
             selected_engine: None,
-            selected_beam_ng_mod: None
+            selected_beam_ng_mod: None,
+            modal: ModalState::Hidden,
+            import_result_str: None
         }
     }
 
@@ -61,19 +87,41 @@ impl CrateEngineTab {
             CrateTabMessage::BeamNGModSelected(name) => {
                 self.selected_beam_ng_mod = Some(name)
             }
+            CrateTabMessage::VerifyImport => {
+                self.modal = ModalState::VerifyImport
+            }
+            CrateTabMessage::ImportCancelled => {
+                self.modal = ModalState::Hidden
+            }
+            CrateTabMessage::ImportConfirmation => {
+                self.import_crate_engine(app_data);
+                self.modal = ModalState::ShowImportResult
+            }
+            CrateTabMessage::ImportCompleted => {
+                self.modal = ModalState::Hidden
+            }
         }
     }
 
     pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
-        // match update_event {
-        //     Message::CrateEnginePathSelectPressed => {
-        //         self.load_crate_engine_list(app_data)
-        //     },
-        //     Message::ImportCrateEngineRequested => {
-        //
-        //     }
-        //     _ => {}
-        // }
+        match update_event {
+            Message::RefreshCrateEngines => {
+                if self.modal == ModalState::ShowImportResult {
+                    self.modal = ModalState::Hidden
+                }
+            }
+            _ => {}
+        }
+        if let Some(path) = self.selected_beam_ng_mod.as_ref() {
+            if !app_data.beam_ng_data.available_mods.contains(path) {
+                self.selected_beam_ng_mod = None;
+            }
+        }
+        if let Some(name) = self.selected_engine.as_ref() {
+            if !app_data.crate_engine_data.available_engines.contains(name) {
+                self.selected_engine = None;
+            }
+        }
     }
 
     fn create_metadata_container(data: Option<&CrateEngineMetadata>) -> Column<'_, Message> {
@@ -92,6 +140,109 @@ impl CrateEngineTab {
             }
         };
         metadata_container
+    }
+
+    fn get_modal_content(&self) -> Option<Element<'_, Message>> {
+        match &self.modal {
+            ModalState::Hidden => None,
+            ModalState::VerifyImport => {
+                let f: fn(&Theme) -> container::Appearance = |_theme: &Theme| {
+                    container::Appearance{
+                        text_color: None,
+                        background: Some(Background::Color(WHITE)),
+                        border_radius: 1.0,
+                        border_width: 1.0,
+                        border_color: Color::BLACK,
+                    }
+                };
+                let default_val = ListPath::from_path(PathBuf::from("unknown"));
+                let mod_path = self.selected_beam_ng_mod.as_ref().unwrap_or(&default_val);
+                let modal_message = format!("This will import a crate engine from the beamNG mod at {}", mod_path.full_path.display());
+                let modal_contents = container(
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .spacing(5)
+                        .push(container(text(modal_message)))
+                        .push(button("Ok")
+                            .style(theme::Button::Positive)
+                            .on_press(Message::CrateTab(CrateTabMessage::ImportConfirmation)))
+                ).style(theme::Container::Custom(
+                    Box::new(f)
+                )).padding(20);
+                Some(modal_contents.into())
+            }
+            ModalState::ShowImportResult => {
+                let f: fn(&Theme) -> container::Appearance = |_theme: &Theme| {
+                    container::Appearance{
+                        text_color: None,
+                        background: Some(Background::Color(WHITE)),
+                        border_radius: 1.0,
+                        border_width: 1.0,
+                        border_color: Color::BLACK,
+                    }
+                };
+                let default_message = String::from("Unknown status");
+                let modal_message = self.import_result_str.as_ref().unwrap_or(&default_message);
+                let modal_contents = container(
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .spacing(5)
+                        .push(container(text(modal_message)))
+                        .push(
+                            button("Ok")
+                                .style(theme::Button::Positive)
+                                .on_press(Message::RefreshCrateEngines)
+                        )
+                ).style(theme::Container::Custom(
+                    Box::new(f)
+                )).padding(20);
+                Some(modal_contents.into())
+            }
+        }
+    }
+
+    fn import_crate_engine(&mut self, app_data: &ApplicationData) {
+        if let Some(mod_path) = &self.selected_beam_ng_mod {
+            if let Some(crate_engine_path) = app_data.settings.crate_engine_path() {
+                match CrateEngine::from_beamng_mod_zip(&mod_path.full_path, CreationOptions::default()) {
+                    Ok(crate_eng) => {
+                        let mut sanitized_name = sanitize_filename::sanitize(crate_eng.name());
+                        sanitized_name = sanitized_name.replace(" ", "_");
+                        let mut crate_path = crate_engine_path.join(format!("{}.eng", sanitized_name));
+                        let mut extra_num = 2;
+                        while crate_path.is_file() {
+                            crate_path = crate_engine_path.join(format!("{}{}.eng", sanitized_name, extra_num));
+                            extra_num += 1;
+                        }
+                        match File::create(&crate_path) {
+                            Ok(mut f) => {
+                                match crate_eng.serialize_to(&mut f) {
+                                    Ok(_) => {
+                                        self.import_result_str = Some(format!("Successfully created crate engine {}", crate_path.display()));
+                                        info!("{}", self.import_result_str.as_ref().unwrap());
+                                        // TODO trigger RefreshCrateEngines call
+                                    }
+                                    Err(e) => {
+                                        self.import_result_str = Some(format!("Failed to serialize to {}. {}",crate_path.display(), e));
+                                        error!("{}", self.import_result_str.as_ref().unwrap());
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to create crate engine from BeamNG mod {}. {}",mod_path.full_path.display(), e)
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to create crate engine from BeamNG mod {}. {}",mod_path.full_path.display(), e)
+                    }
+                }
+            } else {
+                error!("Cannot import crate engine as path not set/accessible")
+            }
+        } else {
+            error!("Cannot import crate engine as no BeamNG mod selected")
+        }
     }
 }
 
@@ -132,7 +283,7 @@ impl Tab for CrateEngineTab {
         );
         let mut import_button = Button::new(Text::new("Import")).width(Length::Units(60));
         if self.selected_beam_ng_mod.is_some() {
-            import_button = import_button.on_press(Message::ImportCrateEngineRequested)
+            import_button = import_button.on_press(Message::CrateTab(CrateTabMessage::VerifyImport))
         }
         drop_down_list = drop_down_list.push(import_button);
         import_layout = import_layout.push(drop_down_list);
@@ -142,9 +293,16 @@ impl Tab for CrateEngineTab {
             .push(vertical_rule(4))
             .push(import_layout)
             .spacing(20);
-        Container::new(layout)
+        let content = Container::new(layout)
             .align_x(Horizontal::Left)
             .align_y(Vertical::Top)
-            .padding(20).into()
+            .padding(20);
+
+        return match self.get_modal_content() {
+            None => content.into(),
+            Some(modal_content) => {
+                Modal::new(content, modal_content).into()
+            }
+        }
     }
 }
