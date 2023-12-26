@@ -137,6 +137,19 @@ impl CrateEngineTab {
                     Err(_) => "Unknown".to_string()
                 };
                 metadata_container = metadata_container.push(Text::new(format!("Version: {}", version_string)));
+                metadata_container = metadata_container.push(Text::new(format!("Automation Version: {}", m.automation_version())));
+                metadata_container = metadata_container.push(Text::new(format!("Year: {}", m.build_year())));
+                metadata_container = metadata_container.push(Text::new(format!("Block Config: {}", m.block_config())));
+                metadata_container = metadata_container.push(Text::new(format!("Capacity: {}cc", m.capacity())));
+                metadata_container = metadata_container.push(
+                    Text::new(format!("Power: {}kW@{}rpm", m.peak_power(), m.peak_power_rpm()))
+                );
+                metadata_container = metadata_container.push(
+                    Text::new(format!("Torque {}Nm@{}rpm", m.peak_torque(), m.peak_torque_rpm()))
+                );
+                metadata_container = metadata_container.push(Text::new(format!("Max RPM: {}", m.max_rpm())));
+                metadata_container = metadata_container.push(Text::new(format!("Aspiration: {}", m.aspiration())));
+                metadata_container = metadata_container.push(Text::new(format!("Fuel: {}", m.fuel())));
             }
         };
         metadata_container

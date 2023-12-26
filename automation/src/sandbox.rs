@@ -311,6 +311,18 @@ impl EngineV1 {
         format!("{} - {}", self.family_name, self.variant_name)
     }
 
+    pub fn get_family_build_year(&self) -> u16 {
+        internal_days_to_year(self.family_game_days)
+    }
+
+    pub fn get_variant_build_year(&self) -> u16 {
+        internal_days_to_year(self.variant_game_days)
+    }
+
+    pub fn get_capacity_cc(&self) -> u32 {
+        (self.capacity * 1000.0).round() as u32
+    }
+
     pub fn family_data_checksum_data(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
         hasher.update(&self.family_version.to_string().as_bytes());
@@ -462,6 +474,12 @@ impl EngineV1 {
     }
 }
 
+impl std::fmt::Display for EngineV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.family_name, self.variant_name)
+    }
+}
+
 fn _sha256_data_to_string(data: Vec<u8>) -> String {
     let mut hash = String::new();
     for byte in data {
@@ -470,10 +488,8 @@ fn _sha256_data_to_string(data: Vec<u8>) -> String {
     hash
 }
 
-impl std::fmt::Display for EngineV1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}", self.family_name, self.variant_name)
-    }
+fn internal_days_to_year(days: i32) -> u16 {
+    (1940 + (days / 360)) as u16
 }
 
 pub fn load_engines() -> HashMap<String, EngineV1> {

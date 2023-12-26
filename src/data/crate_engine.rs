@@ -71,11 +71,27 @@ impl CrateEngine {
             warn!("Failed to calculate engine jbeam data hash");
         }
 
+        let aspiration = data.automation_variant_data.aspiration.clone();
+        let fuel = match data.automation_variant_data.fuel_type.as_ref() {
+            None => "Unknown".to_string(),
+            Some(f) => f.clone()
+        };
         let metadata = CurrentMetadataType {
             data_version: CurrentDataType::VERSION.as_u16(),
+            automation_version: data.automation_variant_data.variant_version,
             name,
             automation_data_hash,
-            engine_jbeam_hash
+            engine_jbeam_hash,
+            build_year: data.automation_variant_data.get_variant_build_year(),
+            block_config: data.automation_variant_data.block_config.clone(),
+            capacity: data.automation_variant_data.get_capacity_cc(),
+            aspiration,
+            fuel,
+            peak_power: data.automation_variant_data.peak_power.round() as u32,
+            peak_power_rpm: data.automation_variant_data.peak_power_rpm.round() as u32,
+            peak_torque: data.automation_variant_data.peak_torque.round() as u32,
+            peak_torque_rpm: data.automation_variant_data.peak_torque_rpm.round() as u32,
+            max_rpm: data.automation_variant_data.max_rpm.round() as u32
         };
 
         Ok(CrateEngine{
@@ -179,14 +195,91 @@ impl CrateEngineMetadata {
         };
         DataVersion::from_u16(*val)
     }
+
+    pub fn automation_version(&self) -> u64 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => { m.automation_version }
+        }
+    }
+
+    pub fn build_year(&self) -> u16 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.build_year
+        }
+    }
+
+    pub fn block_config(&self) -> &str {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.block_config
+        }
+    }
+
+    pub fn capacity(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.capacity
+        }
+    }
+
+    pub fn aspiration(&self) -> &str {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.aspiration
+        }
+    }
+
+    pub fn fuel(&self) -> &str {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.fuel
+        }
+    }
+
+    pub fn peak_power(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.peak_power
+        }
+    }
+
+    pub fn peak_power_rpm(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.peak_power_rpm
+        }
+    }
+
+    pub fn peak_torque(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.peak_torque
+        }
+    }
+
+    pub fn peak_torque_rpm(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.peak_torque_rpm
+        }
+    }
+
+    pub fn max_rpm(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.max_rpm
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MetadataV1 {
     data_version: u16,
+    automation_version: u64,
     name: String,
     engine_jbeam_hash: Option<[u8; 32]>,
-    automation_data_hash: Option<[u8; 32]>
+    automation_data_hash: Option<[u8; 32]>,
+    build_year: u16,
+    block_config: String,
+    capacity: u32,
+    aspiration: String,
+    fuel: String,
+    peak_power: u32,
+    peak_power_rpm: u32,
+    peak_torque: u32,
+    peak_torque_rpm: u32,
+    max_rpm: u32
 }
 
 impl MetadataV1 {
