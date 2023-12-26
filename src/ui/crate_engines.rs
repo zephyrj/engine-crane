@@ -23,6 +23,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use iced::{Alignment, Background, Color, Element, Length, Padding, Renderer, Theme, theme};
 use iced::alignment::{Horizontal, Vertical};
+use iced::Length::Fill;
 use iced::widget::{Button, Column, Container, PickList, Row, Text, TextInput};
 use iced_aw::style::colors::WHITE;
 use iced_aw::TabLabel;
@@ -32,7 +33,6 @@ use crate::data::{CrateEngine, CrateEngineMetadata, CreationOptions};
 
 use crate::ui::{ListPath, Message, Tab};
 use crate::ui::data::ApplicationData;
-use crate::ui::edit::EditMessage;
 use crate::ui::elements::create_drop_down_list;
 use crate::ui::elements::modal::Modal;
 
@@ -157,15 +157,35 @@ impl CrateEngineTab {
                 };
                 let default_val = ListPath::from_path(PathBuf::from("unknown"));
                 let mod_path = self.selected_beam_ng_mod.as_ref().unwrap_or(&default_val);
-                let modal_message = format!("This will import a crate engine from the beamNG mod at {}", mod_path.full_path.display());
+                let modal_message = format!("This will import a crate engine from the BeamNG mod at:\n{}", mod_path.full_path.display());
+                let confirm_content =
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .width(Length::Units(50))
+                        .push(Text::new("Ok").size(20).width(Fill));
+                let mut confirm_button =
+                    button(confirm_content)
+                        .style(theme::Button::Positive)
+                        .on_press(Message::CrateTab(CrateTabMessage::ImportConfirmation));
+                let cancel_content =
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .width(Length::Units(75))
+                        .push(Text::new("Cancel").size(20).width(Fill));
+                let cancel_button =
+                    button(cancel_content)
+                        .style(theme::Button::Destructive)
+                        .on_press(Message::CrateTab(CrateTabMessage::ImportCancelled));
+                let button_rom =
+                    Row::with_children(vec![confirm_button.into(), cancel_button.into()])
+                        .width(Length::Shrink)
+                        .spacing(5);
                 let modal_contents = container(
                     Column::new()
                         .align_items(Alignment::Center)
                         .spacing(5)
                         .push(container(text(modal_message)))
-                        .push(button("Ok")
-                            .style(theme::Button::Positive)
-                            .on_press(Message::CrateTab(CrateTabMessage::ImportConfirmation)))
+                        .push(button_rom)
                 ).style(theme::Container::Custom(
                     Box::new(f)
                 )).padding(20);
@@ -218,31 +238,42 @@ impl CrateEngineTab {
                             Ok(mut f) => {
                                 match crate_eng.serialize_to(&mut f) {
                                     Ok(_) => {
-                                        self.import_result_str = Some(format!("Successfully created crate engine {}", crate_path.display()));
-                                        info!("{}", self.import_result_str.as_ref().unwrap());
-                                        // TODO trigger RefreshCrateEngines call
+                                        self.set_success_status(format!("Successfully created crate engine {}", crate_path.display()));
                                     }
                                     Err(e) => {
-                                        self.import_result_str = Some(format!("Failed to serialize to {}. {}",crate_path.display(), e));
-                                        error!("{}", self.import_result_str.as_ref().unwrap());
+                                        self.set_error_status(format!("Failed to serialize to {}. {}",crate_path.display(), e));
                                     }
                                 }
                             }
                             Err(e) => {
-                                error!("Failed to create crate engine from BeamNG mod {}. {}",mod_path.full_path.display(), e)
+                                self.set_error_status(format!("Failed to serialize to {}. {}",crate_path.display(), e));
                             }
                         }
                     }
                     Err(e) => {
-                        error!("Failed to create crate engine from BeamNG mod {}. {}",mod_path.full_path.display(), e)
+                        self.set_error_status(format!("Failed to create crate engine from BeamNG mod {}. {}",mod_path.full_path.display(), e));
                     }
                 }
             } else {
-                error!("Cannot import crate engine as path not set/accessible")
+                self.set_error_status("Cannot import crate engine as path not set/accessible".to_string());
             }
         } else {
-            error!("Cannot import crate engine as no BeamNG mod selected")
+            self.set_error_status("Cannot import crate engine as no BeamNG mod selected".to_string());
         }
+    }
+
+    fn set_success_status(&mut self, error_str: String) {
+        info!("{}",&error_str);
+        self.import_result_str = Some(error_str);
+    }
+
+    fn set_error_status(&mut self, error_str: String) {
+        error!("{}",&error_str);
+        self.import_result_str = Some(error_str);
+    }
+
+    fn clear_status_string(&mut self) {
+        self.import_result_str = None
     }
 }
 
