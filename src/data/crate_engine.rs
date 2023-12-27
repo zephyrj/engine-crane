@@ -29,7 +29,7 @@ use bincode::{deserialize, deserialize_from, serialize_into};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
-use automation::sandbox::{EngineV1, SandboxVersion};
+use automation::sandbox::{BlockConfig, EngineV1, HeadConfig, SandboxVersion};
 use beam_ng::jbeam;
 use crate::data::{AutomationSandboxCrossChecker};
 
@@ -83,7 +83,8 @@ impl CrateEngine {
             automation_data_hash,
             engine_jbeam_hash,
             build_year: data.automation_variant_data.get_variant_build_year(),
-            block_config: data.automation_variant_data.block_config.clone(),
+            block_config: data.automation_variant_data.get_block_config(),
+            head_config: data.automation_variant_data.get_head_config(),
             capacity: data.automation_variant_data.get_capacity_cc(),
             aspiration,
             fuel,
@@ -208,9 +209,15 @@ impl CrateEngineMetadata {
         }
     }
 
-    pub fn block_config(&self) -> &str {
+    pub fn block_config(&self) -> &BlockConfig {
         match self {
             CrateEngineMetadata::MetadataV1(m) => &m.block_config
+        }
+    }
+
+    pub fn head_config(&self) -> &HeadConfig {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.head_config
         }
     }
 
@@ -271,7 +278,8 @@ pub struct MetadataV1 {
     engine_jbeam_hash: Option<[u8; 32]>,
     automation_data_hash: Option<[u8; 32]>,
     build_year: u16,
-    block_config: String,
+    block_config: BlockConfig,
+    head_config: HeadConfig,
     capacity: u32,
     aspiration: String,
     fuel: String,
