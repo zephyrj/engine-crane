@@ -131,25 +131,37 @@ impl CrateEngineTab {
                 metadata_container = metadata_container.push(Text::new("No metadata found"));
             },
             Some(m) => {
-                metadata_container = metadata_container.push(Text::new(format!("Name: {}", m.name())));
+                let mut title_col = Column::new();
+                let mut value_col = Column::new();
+
+                title_col = title_col.push(Text::new("Name:"));
+                value_col = value_col.push(Text::new(format!("{}", m.name())));
+                title_col = title_col.push(Text::new("Year:"));
+                value_col = value_col.push(Text::new(format!("{}", m.build_year())));
+                title_col = title_col.push(Text::new("Capacity:"));
+                value_col = value_col.push(Text::new(format!("{}cc", m.capacity())));
+                title_col = title_col.push(Text::new("Power:"));
+                value_col = value_col.push(Text::new(format!("{}kW@{}rpm", m.peak_power(), m.peak_power_rpm())));
+                title_col = title_col.push(Text::new("Torque:"));
+                value_col = value_col.push(Text::new(format!("{}Nm@{}rpm", m.peak_torque(), m.peak_torque_rpm())));
+                title_col = title_col.push(Text::new("Max RPM:"));
+                value_col = value_col.push(Text::new(format!("{}rpm", m.max_rpm())));
+                title_col = title_col.push(Text::new("Block Config:"));
+                value_col = value_col.push(Text::new(format!("{}", m.block_config())));
+                title_col = title_col.push(Text::new("Aspiration:"));
+                value_col = value_col.push(Text::new(format!("{}", m.aspiration())));
+                title_col = title_col.push(Text::new("Fuel:"));
+                value_col = value_col.push(Text::new(format!("{}", m.fuel())));
+
+                let table_holder =
+                    Row::with_children(vec![title_col.into(), value_col.into()]).spacing(10).padding([0, 0, 10, 0]);
+                metadata_container = metadata_container.push(table_holder);
                 let version_string = match m.data_version() {
                     Ok(v) => v.to_string(),
                     Err(_) => "Unknown".to_string()
                 };
                 metadata_container = metadata_container.push(Text::new(format!("Version: {}", version_string)));
                 metadata_container = metadata_container.push(Text::new(format!("Automation Version: {}", m.automation_version())));
-                metadata_container = metadata_container.push(Text::new(format!("Year: {}", m.build_year())));
-                metadata_container = metadata_container.push(Text::new(format!("Block Config: {}", m.block_config())));
-                metadata_container = metadata_container.push(Text::new(format!("Capacity: {}cc", m.capacity())));
-                metadata_container = metadata_container.push(
-                    Text::new(format!("Power: {}kW@{}rpm", m.peak_power(), m.peak_power_rpm()))
-                );
-                metadata_container = metadata_container.push(
-                    Text::new(format!("Torque {}Nm@{}rpm", m.peak_torque(), m.peak_torque_rpm()))
-                );
-                metadata_container = metadata_container.push(Text::new(format!("Max RPM: {}", m.max_rpm())));
-                metadata_container = metadata_container.push(Text::new(format!("Aspiration: {}", m.aspiration())));
-                metadata_container = metadata_container.push(Text::new(format!("Fuel: {}", m.fuel())));
             }
         };
         metadata_container
