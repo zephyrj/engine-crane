@@ -33,7 +33,7 @@ use crate::data::{CrateEngine, CrateEngineMetadata, CreationOptions};
 
 use crate::ui::{ListPath, Message, Tab};
 use crate::ui::data::ApplicationData;
-use crate::ui::elements::create_drop_down_list;
+use crate::ui::elements::{create_drop_down_list, create_text_with_units};
 use crate::ui::elements::modal::Modal;
 
 
@@ -139,19 +139,29 @@ impl CrateEngineTab {
                 title_col = title_col.push(Text::new("Year:"));
                 value_col = value_col.push(Text::new(format!("{}", m.build_year())));
                 title_col = title_col.push(Text::new("Capacity:"));
-                value_col = value_col.push(Text::new(format!("{}cc", m.capacity())));
-                title_col = title_col.push(Text::new("Power:"));
-                value_col = value_col.push(Text::new(format!("{}kW@{}rpm", m.peak_power(), m.peak_power_rpm())));
-                title_col = title_col.push(Text::new("Torque:"));
-                value_col = value_col.push(Text::new(format!("{}Nm@{}rpm", m.peak_torque(), m.peak_torque_rpm())));
-                title_col = title_col.push(Text::new("Max RPM:"));
-                value_col = value_col.push(Text::new(format!("{}rpm", m.max_rpm())));
-                title_col = title_col.push(Text::new("Block Config:"));
-                value_col = value_col.push(Text::new(format!("{}", m.block_config())));
+                value_col = value_col.push(create_text_with_units(format!("{}", m.capacity()), "cc"));
+                title_col = title_col.push(Text::new("Config:"));
+                value_col = value_col.push(Text::new(format!("{} {} {}", m.block_config(), m.head_config(), m.valves())));
                 title_col = title_col.push(Text::new("Aspiration:"));
                 value_col = value_col.push(Text::new(format!("{}", m.aspiration())));
                 title_col = title_col.push(Text::new("Fuel:"));
                 value_col = value_col.push(Text::new(format!("{}", m.fuel())));
+                title_col = title_col.push(Text::new("Limiter:"));
+                value_col = value_col.push(create_text_with_units(format!("{}", m.max_rpm()), "rpm"));
+
+                title_col = title_col.push(Text::new("Power:"));
+                let mut power_container = Row::new().align_items(Alignment::End);
+                power_container = power_container.push(create_text_with_units(format!("{}", m.peak_power()), "kW"));
+                power_container = power_container.push(Text::new("@").size(18));
+                power_container = power_container.push(create_text_with_units(format!("{}", m.peak_power_rpm()), "rpm"));
+                value_col = value_col.push(power_container);
+
+                title_col = title_col.push(Text::new("Torque:"));
+                let mut torque_container = Row::new().align_items(Alignment::End);
+                torque_container = torque_container.push(create_text_with_units(format!("{}", m.peak_torque()), "Nm"));
+                torque_container = torque_container.push(Text::new("@").size(18));
+                torque_container = torque_container.push(create_text_with_units(format!("{}", m.peak_torque_rpm()), "rpm"));
+                value_col = value_col.push(torque_container);
 
                 let table_holder =
                     Row::with_children(vec![title_col.into(), value_col.into()]).spacing(10).padding([0, 0, 10, 0]);

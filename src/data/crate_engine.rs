@@ -25,11 +25,11 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::mem;
 use std::path::{Path, PathBuf};
-use bincode::{deserialize, deserialize_from, serialize_into};
+use bincode::{deserialize, deserialize_from, Options, serialize_into};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
-use automation::sandbox::{BlockConfig, EngineV1, HeadConfig, SandboxVersion};
+use automation::sandbox::{AspirationType, BlockConfig, EngineV1, HeadConfig, SandboxVersion, Valves};
 use beam_ng::jbeam;
 use crate::data::{AutomationSandboxCrossChecker};
 
@@ -71,7 +71,6 @@ impl CrateEngine {
             warn!("Failed to calculate engine jbeam data hash");
         }
 
-        let aspiration = data.automation_variant_data.aspiration.clone();
         let fuel = match data.automation_variant_data.fuel_type.as_ref() {
             None => "Unknown".to_string(),
             Some(f) => f.clone()
@@ -85,8 +84,9 @@ impl CrateEngine {
             build_year: data.automation_variant_data.get_variant_build_year(),
             block_config: data.automation_variant_data.get_block_config(),
             head_config: data.automation_variant_data.get_head_config(),
+            valves: data.automation_variant_data.get_valve_type(),
             capacity: data.automation_variant_data.get_capacity_cc(),
-            aspiration,
+            aspiration: data.automation_variant_data.get_aspiration(),
             fuel,
             peak_power: data.automation_variant_data.peak_power.round() as u32,
             peak_power_rpm: data.automation_variant_data.peak_power_rpm.round() as u32,
@@ -221,13 +221,19 @@ impl CrateEngineMetadata {
         }
     }
 
+    pub fn valves(&self) -> &Valves {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.valves
+        }
+    }
+
     pub fn capacity(&self) -> u32 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.capacity
         }
     }
 
-    pub fn aspiration(&self) -> &str {
+    pub fn aspiration(&self) -> &AspirationType {
         match self {
             CrateEngineMetadata::MetadataV1(m) => &m.aspiration
         }
@@ -280,8 +286,9 @@ pub struct MetadataV1 {
     build_year: u16,
     block_config: BlockConfig,
     head_config: HeadConfig,
+    valves: Valves,
     capacity: u32,
-    aspiration: String,
+    aspiration: AspirationType,
     fuel: String,
     peak_power: u32,
     peak_power_rpm: u32,
@@ -508,7 +515,8 @@ impl DataV1 {
         let mut file = File::open(file_path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
-        deserialize(&buffer)
+        let config = bincode::options().with_limit(104857600);
+        config.deserialize(&buffer)
     }
 
     pub fn write_to_file(&self, file: &mut File) -> bincode::Result<()> {

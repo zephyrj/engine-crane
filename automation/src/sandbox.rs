@@ -332,6 +332,14 @@ impl EngineV1 {
         self.head_type.parse().unwrap()
     }
 
+    pub fn get_aspiration(&self) -> AspirationType {
+        self.aspiration.parse().unwrap()
+    }
+
+    pub fn get_valve_type(&self) -> Valves {
+        self.valves.parse().unwrap()
+    }
+
     pub fn family_data_checksum_data(&self) -> Vec<u8> {
         let mut hasher = Sha256::new();
         hasher.update(&self.family_version.to_string().as_bytes());
@@ -582,6 +590,70 @@ impl Display for HeadConfig {
             HeadConfig::DAOHC => write!(f, "DAOHC"),
             HeadConfig::DOHC => write!(f, "DOHC"),
             HeadConfig::Unknown(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub enum Valves {
+    Two,
+    Three,
+    Four,
+    Five,
+    Unknown(String)
+}
+
+impl FromStr for Valves {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Valves, std::convert::Infallible> {
+        match s {
+            "ValveCount_2_Name" => Ok(Valves::Two),
+            "ValveCount_3_Name" => Ok(Valves::Three),
+            "ValveCount_4_Name" => Ok(Valves::Four),
+            "ValveCount_5_Name" => Ok(Valves::Five),
+            _ => Ok(Valves::Unknown(s.to_string())),
+        }
+    }
+}
+
+impl Display for Valves {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Valves::Two => write!(f, "2v"),
+            Valves::Three => write!(f, "3v"),
+            Valves::Four => write!(f, "4v"),
+            Valves::Five => write!(f, "5v"),
+            Valves::Unknown(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub enum AspirationType {
+    NA,
+    Turbo,
+    Unknown(String)
+}
+
+impl FromStr for AspirationType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<AspirationType, std::convert::Infallible> {
+        match s {
+            "Aspiration_Natural_Name" => Ok(AspirationType::NA),
+            "Aspiration_Turbo_Name" => Ok(AspirationType::Turbo),
+            _ => Ok(AspirationType::Unknown(s.to_string())),
+        }
+    }
+}
+
+impl Display for AspirationType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AspirationType::NA => write!(f, "Naturally Aspirated"),
+            AspirationType::Turbo => write!(f, "Turbocharged"),
+            AspirationType::Unknown(s) => write!(f, "{}", s),
         }
     }
 }

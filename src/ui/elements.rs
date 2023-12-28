@@ -19,9 +19,10 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::borrow::Cow;
 use std::fmt::Display;
 use iced::Alignment;
-use iced::widget::{Column, Text};
+use iced::widget::{Column, Row, Text};
 use iced_native::widget::{pick_list};
 use crate::ui::Message;
 
@@ -34,6 +35,12 @@ pub fn create_drop_down_list<'a, T: Display + Clone + Eq + 'static>(title: &'sta
         .align_items(Alignment::Start)
         .push(Text::new(title))
         .push(picklist)
+}
+
+pub fn create_text_with_units<'a>(text: impl Into<Cow<'a, str>>, unit: &'static str) -> Row<'a, Message> {
+    let mut text_container = Row::new().align_items(Alignment::End);
+    text_container = text_container.push(Text::new(text));
+    text_container.push(Text::new(unit).size(14))
 }
 
 pub mod modal {
