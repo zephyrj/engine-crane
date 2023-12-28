@@ -1,6 +1,6 @@
 [package]
 name = "automation"
-version = "0.2.3-alpha"
+version = "0.3.0-alpha"
 edition = "2021"
 authors = ["zephyrj <zephyrj@protonmail.com>"]
 
@@ -11,6 +11,8 @@ steam = { workspace = true }
 utils = { workspace = true }
 tracing =  { workspace = true }
 sha2 = { workspace = true }
+bincode = { workspace = true }
+serde = { version = "1.0.152", features = ["derive"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 directories = { workspace = true }

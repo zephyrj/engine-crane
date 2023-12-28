@@ -33,7 +33,7 @@ pub struct Damage {
 }
 
 impl Damage {
-    const SECTION_NAME: &'static str = "DAMAGE";
+    pub const SECTION_NAME: &'static str = "DAMAGE";
 
     pub fn new(rpm_threshold: i32,
                rpm_damage_k: i32,

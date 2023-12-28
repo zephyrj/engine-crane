@@ -19,12 +19,19 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
+use std::fs::File;
+use std::io;
 use std::path::Path;
 use itertools::Itertools;
+use serde_hjson;
 use sha2::{Sha256, Digest};
 use tracing::{debug, error, info, warn};
-use crate::{automation, beam_ng, utils};
+
+use assetto_corsa::car::data::engine::{CoastCurve, Damage, EngineData, PowerCurve};
+use utils::numeric::{round_float_to, round_up_to_nearest_multiple};
+use crate::{beam_ng, utils};
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
 use crate::assetto_corsa::car::data::ai::Ai;
@@ -37,11 +44,40 @@ use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::Engine;
 use crate::assetto_corsa::car::data::engine;
 use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
-use crate::utils::round_float_to;
+use crate::data::{AutomationSandboxCrossChecker, CrateEngine};
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
-use crate::automation::car::{CarFile, Section};
+use crate::automation::car::{CarFile};
 use crate::automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
+use crate::fabricator::FabricationError::{InvalidData, MissingDataSection, MissingDataSource};
+
+#[derive(thiserror::Error, Debug)]
+pub enum FabricationError {
+    #[error("io error")]
+    IoError(#[from] io::Error),
+    #[error("assetto corsa data error")]
+    ACDataError(#[from] assetto_corsa::error::Error),
+    #[error("BeamNG mod data error. `{0}`")]
+    BeamNGModDataError(String),
+    #[error("jbeam encoding error")]
+    JBeamError(#[from] serde_hjson::Error),
+    #[error("invalid data `{0}`. `{1}`")]
+    InvalidData(String, String),
+    #[error("missing data source `{0}`")]
+    MissingDataSource(String),
+    #[error("missing data section `{0}` from `{1}`")]
+    MissingDataSection(String, String),
+    #[error("failed to update `{0}` in `{1}`. `{2}`")]
+    FailedToUpdate(String, String, String),
+    #[error("failed to load `{0}`. `{1}`")]
+    FailedToLoad(String, String),
+    #[error("failed to write `{0}`. `{1}`")]
+    FailedToWrite(String, String),
+    #[error("Data validation failure. `{0}`")]
+    ValidationError(String),
+    #[error("fabrication error: `{0}`")]
+    Other(String)
+}
 
 enum ACEngineParameterVersion {
     V1
@@ -131,41 +167,98 @@ pub fn kw_to_bhp(power_kw: f64) -> f64 {
 }
 
 #[derive(Debug)]
-struct AcEngineParameterCalculatorV1 {
+pub(crate) struct AcEngineParameterCalculatorV1 {
     automation_car_file: CarFile,
     engine_jbeam_data: serde_hjson::Map<String, serde_hjson::Value>,
     engine_sqlite_data: EngineV1
 }
 
 impl AcEngineParameterCalculatorV1 {
-    pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<AcEngineParameterCalculatorV1, String> {
-        info!("Creating AC parameter calculator for {}", beam_ng_mod_path.to_path_buf().display());
-        let mut mod_data = beam_ng::ModData::from_path(beam_ng_mod_path)?;
-        let automation_car_file = automation::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or(format!("Couldn't get .car data for {}", beam_ng_mod_path.display()))?.clone())?;
-        let variant_info = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-        let version_num = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap();
+    pub fn from_crate_engine(crate_eng_path: &Path) -> Result<AcEngineParameterCalculatorV1, FabricationError> {
+        use FabricationError::*;
+        info!("Creating AC parameter calculator for crate engine {}", crate_eng_path.display());
+        let mut file = File::open(crate_eng_path)?;
+        let crate_eng = CrateEngine::deserialize_from(&mut file).map_err(|reason|{
+            FailedToLoad(crate_eng_path.display().to_string(), reason)
+        })?;
+        info!("Loaded {} from eng file", crate_eng.name());
+
+        info!("Loading Automation car file");
+        let automation_car_file_data = crate_eng.get_automation_car_file_data().clone();
+        if automation_car_file_data.is_empty() {
+            return Err(MissingDataSource("Automation car file".to_string()))
+        }
+        let automation_car_file = CarFile::from_bytes(automation_car_file_data).map_err(|reason|{
+            FailedToLoad("Automation car file".to_string(), reason)
+        })?;
+
+        info!("Loading main engine JBeam file");
+        let engine_jbeam_bytes = crate_eng.get_engine_jbeam_data().ok_or_else(||{
+            MissingDataSource("Main engine JBeam file".to_string())
+        })?;
+        Ok(AcEngineParameterCalculatorV1 {
+            automation_car_file,
+            engine_jbeam_data: serde_hjson::from_slice(engine_jbeam_bytes)?,
+            engine_sqlite_data: crate_eng.get_automation_engine_data().clone()
+        })
+    }
+
+    pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<AcEngineParameterCalculatorV1, FabricationError> {
+        use FabricationError::*;
+        info!("Creating AC parameter calculator for BeamNG mod {}", beam_ng_mod_path.to_path_buf().display());
+        let mut mod_data = beam_ng::ModData::from_path(beam_ng_mod_path).map_err(
+            BeamNGModDataError
+        )?;
+
+        info!("Loading Automation car file");
+        let automation_car_file_data = mod_data.get_automation_car_file_data().ok_or_else(||{
+            MissingDataSource("Automation car file".to_string())
+        })?.clone();
+        let automation_car_file = CarFile::from_bytes(automation_car_file_data).map_err(|reason|{
+            FailedToLoad("Automation car file".to_string(), reason)
+        })?;
+
+        let car_section = automation_car_file.get_section("Car").ok_or_else(||{
+            MissingDataSection("'Car'".to_string(), format!("Automation .car file in {}", beam_ng_mod_path.display()))
+        })?;
+        let variant_info = car_section.get_section("Variant").ok_or_else(||{
+            MissingDataSection("'Car.Variant'".to_string(), format!("Automation .car file in {}", beam_ng_mod_path.display()))
+        })?;
+        let version_num_attr = variant_info.get_attribute("GameVersion").ok_or_else(||{
+            MissingDataSection("'Car.Variant.GameVersion'".to_string(), format!("Automation .car file in {}", beam_ng_mod_path.display()))
+        })?;
+        let version_num = version_num_attr.value.as_num().map_err(|err|{
+            FailedToLoad("'Car.Variant.GameVersion'".to_string(), err)
+        })?;
 
         info!("Engine version number: {}", version_num);
         let version = SandboxVersion::from_version_number(version_num as u64);
         info!("Deduced as {}", version);
 
-        let uid = variant_info.get_attribute("UID").unwrap().value.as_str();
+        let uid_attr = variant_info.get_attribute("UID").ok_or_else(||{
+            MissingDataSection("'Car.Variant.UID'".to_string(), format!("Automation .car file in {}", beam_ng_mod_path.display()))
+        })?;
+        let uid= uid_attr.value.as_str();
+        info!("Engine uuid: {}", uid);
         let expected_key = &uid[0..5];
         let engine_jbeam_data = mod_data.get_engine_jbeam_data(Some(expected_key)).map_err(|e|{
-            format!("Couldn't load engine data from {}. {}", beam_ng_mod_path.display(), &e)
+            FailedToLoad("Main engine JBeam".to_string(), e)
         })?;
 
-        info!("Engine uuid: {}", uid);
-        let engine_sqlite_data = match load_engine_by_uuid(uid, version)? {
-            None => {
-                return Err(format!("No engine found with uuid {}", uid));
-            }
-            Some(eng) => { eng }
-        };
+        let engine_sqlite_data = load_engine_by_uuid(uid, version).map_err(|e|{
+            FailedToLoad(format!("Sandbox db engine {}", uid), e)
+        })?.ok_or_else(||{
+            MissingDataSection(format!("engine {}", uid), format!("sandbox db"))
+        })?;
+
         {
-            EngineDataValidator::new(&automation_car_file, &engine_sqlite_data).validate().map_err(|err|{
-                format!("{}. The BeamNG mod may be out-of-date; try recreating a mod with the latest engine version", err)
+            AutomationSandboxCrossChecker::new(&automation_car_file, &engine_sqlite_data).validate().map_err(|err|{
+                ValidationError(format!("{}. The engine data saved in Automation doesn't match the BeamNG mod data.\
+                                         The mod may be out-of-date; try recreating a mod with the latest engine version", err))
             })?;
+        }
+        if engine_sqlite_data.rpm_curve.is_empty() {
+            return Err(MissingDataSection("curve data".to_string(), "sandbox db".to_string()));
         }
         Ok(AcEngineParameterCalculatorV1 {
             automation_car_file,
@@ -190,38 +283,54 @@ impl AcEngineParameterCalculatorV1 {
         engine_key
     }
 
-    pub fn inertia(&self) -> Option<f64> {
-        let engine_key= self.get_engine_jbeam_key();
-        info!("JBeam engine key is {}", engine_key);
-        let eng_map = self.engine_jbeam_data.get(&engine_key)?.as_object()?.get("mainEngine")?.as_object()?;
-        eng_map.get("inertia")?.as_f64().or_else(||{
-            if let Some(str_data) = eng_map.get("inertia")?.as_str() {
-                let end_trimmed_data = str_data.split("*$").collect_vec();
+    pub fn get_main_engine_jbeam_map(&self) -> Result<&serde_hjson::Map<String, serde_hjson::Value>, FabricationError> {
+        let section_name = self.get_engine_jbeam_key();
+        let eng_section_object = get_object_from_jbeam_map(
+            &self.engine_jbeam_data,
+            &section_name,
+            "main jbeam engine file"
+        )?;
+        Ok(get_object_from_jbeam_map(
+            eng_section_object,
+            "mainEngine",
+            "main jbeam engine file"
+        )?)
+    }
+
+    pub fn inertia(&self) -> Result<f64, FabricationError> {
+        let eng_map = self.get_main_engine_jbeam_map()?;
+        let inertia_val = eng_map.get("inertia").ok_or_else(||{
+            MissingDataSection("inertia".to_string(), "mainEngine".to_string())
+        })?;
+        match inertia_val {
+            serde_hjson::Value::F64(inertia) => Ok(*inertia),
+            serde_hjson::Value::String(inertia_str) => {
+                let end_trimmed_data = inertia_str.split("*$").collect_vec();
                 debug!("End trimmed inertia is {:?}", end_trimmed_data);
                 let trimmed_data = end_trimmed_data[0].rsplit("$=").collect_vec();
                 debug!("Trimmed inertia is {:?}", trimmed_data);
-                return match trimmed_data[0].parse::<f64>() {
+                match trimmed_data[0].parse::<f64>() {
                     Ok(val) => {
                         debug!("inertia is {}", val);
-                        Some(val)
+                        Ok(val)
                     }
-                    Err(_) => { None }
+                    Err(_) => Err(InvalidData("inertia".to_string(), format!("couldn't parse f64 from {}", inertia_str)))
                 }
             }
-            None
-        })
+            _ => Err(InvalidData("inertia".to_string(), "expected to be an f64 or string".to_string()))
+        }
     }
 
     pub fn idle_speed(&self) -> Option<f64> {
         let values = vec![self.engine_sqlite_data.idle_speed, self.engine_sqlite_data.rpm_curve[0]];
-        values.into_iter().max_by(|a, b| a.partial_cmp(b).unwrap())
+        values.into_iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
     }
 
     pub fn limiter(&self) -> f64 {
         self.engine_sqlite_data.max_rpm
     }
 
-    pub fn basic_fuel_consumption(&self) -> Option<f64> {
+    pub fn basic_fuel_consumption(&self) -> f64 {
         // From https://buildingclub.info/calculator/g-kwh-to-l-h-online-from-gram-kwh-to-liters-per-hour/
         // Fuel Use (l/h) = (Engine Power (kW) * BSFC@Power) / Fuel density kg/m3
         let fuel_use_per_hour = (self.engine_sqlite_data.peak_power * self.engine_sqlite_data.econ) / 750f64;
@@ -236,7 +345,7 @@ impl AcEngineParameterCalculatorV1 {
         // rather than the consumption at max power but the values still seem to be higher than
         // the values of other AC engines
         // # TODO refine this
-        return Some((fuel_use_per_sec * 1000f64) / self.engine_sqlite_data.peak_power_rpm)
+        return (fuel_use_per_sec * 1000f64) / self.engine_sqlite_data.peak_power_rpm
     }
 
     fn get_fuel_use_per_sec_at_rpm(&self, rpm_index: usize) -> f64 {
@@ -332,7 +441,7 @@ impl AcEngineParameterCalculatorV1 {
             return (0, 0.0);
         }
         let (ref_rpm_idx, max_boost) = self.engine_sqlite_data.boost_curve.iter().enumerate().fold(
-            (0 as usize, normalise_boost_value(self.engine_sqlite_data.boost_curve[0], decimal_place_precision)),
+            (0usize, normalise_boost_value(self.engine_sqlite_data.boost_curve[0], decimal_place_precision)),
             |(idx_max, max_val), (idx, val)| {
                 if normalise_boost_value(*val, 2) > max_val {
                     if normalise_boost_value(*val, 1) > normalise_boost_value(max_val, 1) {
@@ -394,7 +503,7 @@ impl AcEngineParameterCalculatorV1 {
         Some(controller)
     }
 
-    pub fn coast_data(&self) -> Option<engine::CoastCurve> {
+    pub fn coast_data(&self) -> Result<engine::CoastCurve, FabricationError> {
         let variant_info = self.automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
         let version_num = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap() as u64;
         if version_num < 2209220000 {
@@ -408,7 +517,7 @@ impl AcEngineParameterCalculatorV1 {
         return self.coast_data_v2();
     }
 
-    pub fn coast_data_v1(&self) -> Option<engine::CoastCurve> {
+    pub fn coast_data_v1(&self) -> Result<engine::CoastCurve, FabricationError> {
         //   The following data is available from the engine.jbeam exported file
         //   The dynamic friction torque on the engine in Nm/s.
         //   This is a friction torque which increases proportional to engine AV (rad/s).
@@ -418,33 +527,33 @@ impl AcEngineParameterCalculatorV1 {
         //   #### NOTE ####
         //   I'm assuming that all of the sources of friction are being taken into account in the BeamNG parameters used above
         //   this may not be correct.
-        let eng_map = self.engine_jbeam_data.get(&self.get_engine_jbeam_key())?.as_object()?.get("mainEngine")?.as_object()?;
-        let dynamic_friction = eng_map.get("dynamicFriction")?.as_f64().unwrap();
-        let static_friction = eng_map.get("friction")?.as_f64().unwrap();
+        let eng_map = self.get_main_engine_jbeam_map()?;
+        let dynamic_friction = get_f64_from_jbeam_map(eng_map, "dynamicFriction", "mainEngine")?;
+        let static_friction = get_f64_from_jbeam_map(eng_map, "friction", "mainEngine")?;
         let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm * 2_f64 * std::f64::consts::PI) / 60_f64;
         let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + (2_f64 * static_friction);
-        Some(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
+        Ok(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
                                                     friction_torque.round() as i32,
                                                     0.0))
     }
 
-    pub fn coast_data_v2(&self) -> Option<engine::CoastCurve> {
-        let eng_map = self.engine_jbeam_data.get(&self.get_engine_jbeam_key())?.as_object()?.get("mainEngine")?.as_object()?;
-        let dynamic_friction = eng_map.get("dynamicFriction")?.as_f64().unwrap();
+    pub fn coast_data_v2(&self) -> Result<engine::CoastCurve, FabricationError> {
+        let eng_map = self.get_main_engine_jbeam_map()?;
+        let dynamic_friction = get_f64_from_jbeam_map(eng_map, "dynamicFriction", "mainEngine")?;
         // Not sure if this is set correctly in the outputted jbeam files but the best we can work with atm
-        let static_friction = eng_map.get("engineBrakeTorque")?.as_f64().unwrap();
+        let static_friction = get_f64_from_jbeam_map(eng_map, "engineBrakeTorque", "mainEngine")?;
         let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm / 60_f64) * 2_f64 * std::f64::consts::PI;
         // TODO Assuming the jbeam files are correct I think this should be:
         // friction + dynamicFriction * engineAV + engineBrakeTorque
         // however friction and engineBrakeTorque are the same in the output jbeam files which
         // would result in too high a value. Add only engineBrakeTorque for now
         let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + static_friction;
-        Some(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
-                                                    friction_torque.round() as i32,
-                                                    0.0))
+        Ok(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
+                                                  friction_torque.round() as i32,
+                                                  0.0))
     }
 
-    pub fn coast_data_v3(&self) -> Option<engine::CoastCurve> {
+    pub fn coast_data_v3(&self) -> Result<engine::CoastCurve, FabricationError> {
         //   The following data is available from the engine.jbeam exported file
         //   The dynamic friction torque on the engine in Nm/s.
         //   This is a friction torque which increases proportional to engine AV (rad/s).
@@ -454,15 +563,16 @@ impl AcEngineParameterCalculatorV1 {
         //   #### NOTE ####
         //   I'm assuming that all of the sources of friction are being taken into account in the BeamNG parameters used above
         //   this may not be correct.
-        let eng_map = self.engine_jbeam_data.get(&self.get_engine_jbeam_key())?.as_object()?.get("mainEngine")?.as_object()?;
-        let dynamic_friction = eng_map.get("dynamicFriction")?.as_f64().unwrap();
-        let static_friction = eng_map.get("friction")?.as_f64().unwrap();
-        let engine_brake_torque = eng_map.get("engineBrakeTorque")?.as_f64().unwrap();
+        let eng_map = self.get_main_engine_jbeam_map()?;
+        let dynamic_friction = get_f64_from_jbeam_map(eng_map, "dynamicFriction", "mainEngine")?;
+        // Not sure if this is set correctly in the outputted jbeam files but the best we can work with atm
+        let static_friction = get_f64_from_jbeam_map(eng_map, "friction", "mainEngine")?;
+        let engine_brake_torque = get_f64_from_jbeam_map(eng_map, "engineBrakeTorque", "mainEngine")?;
         let angular_velocity_at_max_rpm = (self.engine_sqlite_data.max_rpm * 2_f64 * std::f64::consts::PI) / 60_f64;
         let friction_torque = (angular_velocity_at_max_rpm * dynamic_friction) + engine_brake_torque + static_friction;
-        Some(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
-                                                    friction_torque.round() as i32,
-                                                    0.0))
+        Ok(engine::CoastCurve::new_from_coast_ref(self.engine_sqlite_data.max_rpm.round() as i32,
+                                                  friction_torque.round() as i32,
+                                                  0.0))
     }
 
     pub fn damage(&self) -> engine::Damage {
@@ -487,39 +597,40 @@ impl AcEngineParameterCalculatorV1 {
     }
 }
 
-pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
-                                          ac_car_path: &Path,
-                                          settings: AssettoCorsaCarSettings,
-                                          additional_car_data: AdditionalAcCarData) -> Result<(), String> {
-    let calculator = AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?;
+pub fn update_ac_engine_parameters(ac_car_path: &Path,
+                                   calculator: AcEngineParameterCalculatorV1,
+                                   settings: AssettoCorsaCarSettings,
+                                   additional_car_data: AdditionalAcCarData) -> Result<(), FabricationError> {
+    use FabricationError::*;
+
     info!("Loading car {}", ac_car_path.display());
     let mut car = Car::load_from_path(ac_car_path).map_err(|err|{
-        let err_str = format!("Failed to load {}. {}", ac_car_path.display(), err.to_string());
-        error!("{}", &err_str);
-        err_str
+        FailedToLoad(ac_car_path.display().to_string(), err.to_string())
     })?;
-    let drive_type = match Drivetrain::from_car(&mut car) {
-        Ok(drivetrain) => {
-            extract_mandatory_section::<data::drivetrain::Traction>(&drivetrain).map_err(|err|{
-                format!("Failed to load drivetrain. {}", err.to_string())
-            })?.drive_type
-        },
-        Err(err) => {
-            return Err(format!("Failed to load drivetrain. {}", err.to_string()));
-        }
-    };
+
+    let drive_type;
+    {
+        let drivetrain = Drivetrain::from_car(&mut car).map_err(|e|{
+            FailedToLoad(Drivetrain::INI_FILENAME.to_string(), e.to_string())
+        })?;
+        drive_type = extract_mandatory_section::<data::drivetrain::Traction>(&drivetrain).map_err(|err|{
+            MissingDataSection("Traction".to_string(), Drivetrain::INI_FILENAME.to_string())
+        })?.drive_type
+    }
     info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, drive_type.mechanical_efficiency());
 
-    let mut mass = 0;
+    let mut mass = None;
     let mut old_limiter = 0;
     let new_limiter = calculator.limiter().round() as i32;
 
     {
-        let mut ini_data = CarIniData::from_car(&mut car).unwrap();
+        let mut ini_data = CarIniData::from_car(&mut car).map_err(|err|{
+            FailedToLoad(CarIniData::FILENAME.to_string(), err.to_string())
+        })?;
         match settings.minimum_physics_level {
             AssettoCorsaPhysicsLevel::BaseGame => {
                 info!("Using base game physics");
-                ini_data.set_fuel_consumption(calculator.basic_fuel_consumption().unwrap());
+                ini_data.set_fuel_consumption(calculator.basic_fuel_consumption());
             }
             AssettoCorsaPhysicsLevel::CspExtendedPhysics => {
                 info!("Using CSP extended physics");
@@ -535,92 +646,135 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                 let new_engine_delta: i32 = calculator.engine_weight() as i32 - current_engine_weight as i32;
                 if new_engine_delta < 0 && new_engine_delta.abs() as u32 >= current_car_mass {
                     error!("Invalid existing engine weight ({}). Would result in negative total mass", current_engine_weight);
+                } else {
+                    let new_mass = (current_car_mass as i32 + new_engine_delta) as u32;
+                    info!("Updating total mass to {} based off a provided existing engine weight of {}", new_mass, current_engine_weight);
+                    ini_data.set_total_mass(new_mass);
                 }
-                let new_mass = (current_car_mass as i32 + new_engine_delta) as u32;
-                info!("Updating total mass to {} based off a provided existing engine weight of {}", new_mass, current_engine_weight);
-                ini_data.set_total_mass(new_mass);
             } else {
                 error!("Existing car doesn't have a total mass property")
             }
         }
         info!("Writing car ini files");
-        mass = ini_data.total_mass().unwrap();
-        ini_data.write().unwrap();
+        mass = ini_data.total_mass();
+        ini_data.write().map_err(|e| {
+            FailedToWrite(CarIniData::FILENAME.to_string(), e.to_string())
+        })?;
     }
 
     info!("Clearing existing turbo controllers");
     let res = delete_all_turbo_controllers_from_car(&mut car);
     if let Some(err) = res.err() {
-        warn!("Failed to clear fuel turbo controllers. {}", err.to_string());
+        warn!("Failed to clear turbo controllers. {}", err.to_string());
     }
 
     {
         let mut engine = Engine::from_car(&mut car).map_err(|err| {
-            format!("Failed to load engine. {}", err.to_string())
+            FailedToLoad(Engine::INI_FILENAME.to_string(), err.to_string())
         })?;
         match settings.minimum_physics_level {
             AssettoCorsaPhysicsLevel::CspExtendedPhysics => {
                 update_car_data(&mut engine,
                                 &calculator.fuel_flow_consumption(drive_type.mechanical_efficiency()))
                     .map_err(|err| {
-                        error!("Failed to update fuel consumption. {}", err.to_string());
-                        err.to_string()
+                        FailedToUpdate(engine::FuelConsumptionFlowRate::SECTION_NAME.to_string(),
+                                       Engine::INI_FILENAME.to_string(),
+                                       err.to_string())
                     })?
             }
             _ => {}
         }
 
-        let mut engine_data = extract_mandatory_section::<data::engine::EngineData>(&engine).unwrap();
-        let inertia = calculator.inertia().unwrap();
-        engine_data.inertia = inertia;
+        let mut engine_data = extract_mandatory_section::<data::engine::EngineData>(&engine).map_err(|err|{
+            FailedToLoad(EngineData::SECTION_NAME.to_string(), err.to_string())
+        })?;
+
+        match calculator.inertia() {
+            Ok(inertia) => engine_data.inertia = inertia,
+            Err(e) => warn!("Failed to calculate new inertia value. {}. existing value will be used", e.to_string())
+        };
+
         old_limiter = engine_data.limiter;
         engine_data.limiter = new_limiter;
-        engine_data.minimum = calculator.idle_speed().unwrap().round() as i32;
-        update_car_data(&mut engine, &engine_data).unwrap();
-        update_car_data(&mut engine, &calculator.damage()).unwrap();
-
-        update_car_data(&mut engine, &calculator.coast_data().unwrap()).unwrap();
-
-        let mut power_curve = match extract_mandatory_section::<engine::PowerCurve>(&engine) {
-            Ok(p) => { p }
-            Err(e) => {
-                error!("Failed to load power curver from engine data. {}", e.to_string());
-                return Err( format!("Failed to load power curver from engine data. {}", e.to_string()));
+        engine_data.minimum = match calculator.idle_speed() {
+            Some(idle) => idle.round() as i32,
+            None => {
+                warn!("Failed to calculate idle rpm. Using 500 as value");
+                500
             }
         };
-        power_curve.update(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency())).unwrap();
-        update_car_data(&mut engine, &power_curve).unwrap();
+        update_car_data(&mut engine, &engine_data).map_err(|err|{
+            FailedToUpdate(EngineData::SECTION_NAME.to_string(),
+                           Engine::INI_FILENAME.to_string(),
+                           err.to_string())
+        })?;
+        update_car_data(&mut engine, &calculator.damage()).map_err(|err|{
+            FailedToUpdate(Damage::SECTION_NAME.to_string(),
+                           Engine::INI_FILENAME.to_string(),
+                           err.to_string())
+        })?;
+
+        let coast_data = calculator.coast_data()?;
+        update_car_data(&mut engine, &coast_data).map_err(|err|{
+            FailedToUpdate(CoastCurve::COAST_REF_SECTION_NAME.to_string(),
+                           Engine::INI_FILENAME.to_string(),
+                           err.to_string())
+        })?;
+
+        let mut power_curve = extract_mandatory_section::<engine::PowerCurve>(&engine).map_err(|err|{
+            MissingDataSection(PowerCurve::SECTION_NAME.to_string(),
+                               Engine::INI_FILENAME.to_string())
+        })?;
+        power_curve.update(calculator.naturally_aspirated_wheel_torque_curve(drive_type.mechanical_efficiency()));
+        update_car_data(&mut engine, &power_curve).map_err(|err|{
+            FailedToUpdate(PowerCurve::SECTION_NAME.to_string(),
+                           Engine::INI_FILENAME.to_string(),
+                           err.to_string())
+        })?;
 
         match calculator.create_turbo() {
             None => {
                 info!("The new engine doesn't have a turbo");
-                if let Some(mut old_turbo) = extract_optional_section::<engine::Turbo>(&engine).unwrap() {
+                let old_turbo = extract_optional_section::<engine::Turbo>(&engine).map_err(|e|
+                    FailedToLoad(format!("Turbo from {}", Engine::INI_FILENAME), e.to_string())
+                )?;
+                if let Some(mut turbo) = old_turbo {
                     info!("Removing old engine turbo parameters");
-                    old_turbo.clear_sections();
-                    old_turbo.clear_bov_threshold();
-                    update_car_data(&mut engine,&old_turbo).unwrap();
+                    turbo.clear_sections();
+                    turbo.clear_bov_threshold();
+                    update_car_data(&mut engine, &turbo).map_err(|err|{
+                        FailedToUpdate("TURBO".to_string(),
+                                       Engine::INI_FILENAME.to_string(),
+                                       err.to_string())
+                    })?;
                 }
             }
             Some(new_turbo) => {
                 info!("The new engine has a turbo");
-                update_car_data(&mut engine,&new_turbo).unwrap();
+                update_car_data(&mut engine, &new_turbo).map_err(|err|{
+                    FailedToUpdate("TURBO".to_string(),
+                                   Engine::INI_FILENAME.to_string(),
+                                   err.to_string())
+                })?;
             }
         }
 
         info!("Writing engine ini files");
         engine.write().map_err(|err| {
-            error!("{}", err.to_string());
-            format!("Swap failed. {}", err.to_string())
+            FailedToWrite(Engine::INI_FILENAME.to_string(), err.to_string())
         })?;
     }
 
     if let Some(turbo_ctrl) = calculator.create_turbo_controller() {
         info!("Writing turbo controller with index 0");
         let mut controller_file = engine::TurboControllerFile::new(&mut car, 0);
-        update_car_data(&mut controller_file, &turbo_ctrl).unwrap();
+        update_car_data(&mut controller_file, &turbo_ctrl).map_err(|err|{
+            FailedToUpdate("boost curve".to_string(),
+                           controller_file.filename(),
+                           err.to_string())
+        })?;
         controller_file.write().map_err(|err| {
-            error!("{}", err.to_string());
-            format!("Swap failed. {}", err.to_string())
+            FailedToWrite(controller_file.filename(), err.to_string())
         })?;
     }
 
@@ -647,7 +801,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                         Ok(mut clutch) => {
                             let peak_torque = calculator.peak_torque();
                             if peak_torque > clutch.max_torque {
-                                clutch.max_torque = utils::round_up_to_nearest_multiple(peak_torque+30, 50)
+                                clutch.max_torque = round_up_to_nearest_multiple(peak_torque+30, 50)
                             }
                             if update_car_data(&mut drivetrain, &clutch).is_err() {
                                 error!("Failed to update drivetrain with clutch data");
@@ -688,7 +842,7 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                             }
                             match ai.write() {
                                 Err(err) => {
-                                    warn!("Failed to write {}. {}", data::ai::INI_FILENAME, err.to_string());
+                                    error!("Failed to write {}. {}", data::ai::INI_FILENAME, err.to_string());
                                 }
                                 _ => {}
                             }
@@ -740,343 +894,85 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
 
     {
         info!("Updating ui components");
-        let mut ui_data = CarUiData::from_car(&mut car).unwrap();
-        ui_data.ui_info.update_power_curve(calculator.engine_bhp_power_curve());
-        ui_data.ui_info.update_torque_curve(calculator.engine_torque_curve());
-        ui_data.ui_info.update_spec("bhp", format!("{}bhp", calculator.peak_bhp()));
-        ui_data.ui_info.update_spec("torque", format!("{}Nm", calculator.peak_torque()));
-        ui_data.ui_info.update_spec("weight", format!("{}kg", mass));
-        ui_data.ui_info.update_spec("pwratio", format!("{}kg/hp", round_float_to(mass as f64 / (calculator.peak_bhp() as f64), 2)));
-
         let blank = String::from("---");
-        ui_data.ui_info.update_spec("acceleration", blank.clone());
-        ui_data.ui_info.update_spec("range", blank.clone());
-        ui_data.ui_info.update_spec("topspeed", blank);
+        match CarUiData::from_car(&mut car) {
+            Ok(mut ui_data) => {
+                let _ = ui_data.ui_info.update_power_curve(calculator.engine_bhp_power_curve());
+                let _ = ui_data.ui_info.update_torque_curve(calculator.engine_torque_curve());
+                let _ = ui_data.ui_info.update_spec("bhp", format!("{}bhp", calculator.peak_bhp()));
+                let _ = ui_data.ui_info.update_spec("torque", format!("{}Nm", calculator.peak_torque()));
+                if let Some(mass_val) = mass {
+                    let _ = ui_data.ui_info.update_spec("weight", format!("{}kg", mass_val));
+                    let _ = ui_data.ui_info.update_spec("pwratio", format!("{}kg/hp", round_float_to(mass_val as f64 / (calculator.peak_bhp() as f64), 2)));
+                } else {
+                    let _ = ui_data.ui_info.update_spec("weight", blank.clone());
+                    let _ = ui_data.ui_info.update_spec("pwratio", blank.clone());
+                }
+                let _ = ui_data.ui_info.update_spec("acceleration", blank.clone());
+                let _ = ui_data.ui_info.update_spec("range", blank.clone());
+                let _ = ui_data.ui_info.update_spec("topspeed", blank);
 
-        info!("Writing car ui files");
-        ui_data.ui_info.write().unwrap();
-    }
-
-    Ok(())
-}
-
-struct Checksummer {
-    car_file_hasher: Sha256,
-    sandbox_hasher: Sha256
-}
-
-impl Checksummer {
-    pub fn new() -> Checksummer {
-        Checksummer {
-            car_file_hasher: Sha256::new(),
-            sandbox_hasher: Sha256::new()
-        }
-    }
-}
-
-fn checksum_engine_data_v1(car_file: &CarFile, sandbox_data: &EngineV1) -> Result<(), String> {
-    let mut car_file_hasher = Sha256::new();
-    let get_mandatory_attribute_bytes = |section: &Section, attr: &str| {
-        match section.get_attribute(attr) {
-            None => { Err(format!("Car file section {} is missing attribute {}", section.name(), attr))}
-            Some(attribute) => Ok(attribute.value.checksum_bytes())
-        }
-    };
-    let get_optional_attribute_bytes = |section: &Section, attr: &str| {
-        match section.get_attribute(attr) {
-            None => { None }
-            Some(attribute) => Some(attribute.value.checksum_bytes())
-        }
-    };
-
-    let family_data = car_file.get_section("Car").unwrap().get_section("Family").unwrap();
-    for key in ["GameVersion", "UID", "Name", "InternalDays", "QualityFamily", "BlockConfig", "BlockMaterial",
-                      "BlockType", "Head", "HeadMaterial", "Valves", "Stroke", "Bore"] {
-        car_file_hasher.update(get_mandatory_attribute_bytes(family_data, key)?);
-    }
-
-    let mut car_file_family_hash = String::new();
-    for byte in car_file_hasher.finalize() {
-        car_file_family_hash += &format!("{:X?}", byte);
-    }
-
-    let sandbox_family_hash = sandbox_data.family_data_checksum();
-    if car_file_family_hash != sandbox_family_hash {
-        return Err(format!("Family checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_family_hash, car_file_family_hash));
-    }
-    info!("Family checksum match: {}", sandbox_family_hash);
-
-    let mut car_file_hasher = Sha256::new();
-    let variant_data = car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-    for key in ["GameVersion", "FUID", "UID", "Name", "InternalDays", "VVL", "Crank", "Conrods", "Pistons", "VVT",
-                      "AspirationType", "IntercoolerSetting", "FuelSystemType", "FuelSystem", ] {
-        car_file_hasher.update(get_mandatory_attribute_bytes(variant_data, key)?);
-    }
-    for key in ["FuelType", "FuelLeaded"] {
-        if let Some(bytes) = get_optional_attribute_bytes(variant_data, key) {
-            car_file_hasher.update(bytes);
-        }
-    }
-    for key in ["IntakeManifold", "Intake", "Headers", "ExhaustCount", "ExhaustBypassValves", "Cat", "Muffler1",
-                      "Muffler2", "Bore", "Stroke", "Capacity", "Compression", "CamProfileSetting", "VVLCamProfileSetting",
-                      "AFR", "AFRLean", "RPMLimit", "IgnitionTimingSetting", "ExhaustDiameter", "QualityBottomEnd",
-                      "QualityTopEnd", "QualityAspiration", "QualityFuelSystem", "QualityExhaust"] {
-        car_file_hasher.update(get_mandatory_attribute_bytes(variant_data, key)?);
-    }
-    for key in ["BalanceShaft", "SpringStiffnessSetting", "ListedOctane", "TuneOctaneOffset", "AspirationSetup",
-                      "AspirationItemOption_1", "AspirationItemOption_2", "AspirationItemSubOption_1", "AspirationItemSubOption_2",
-                      "AspirationBoostControl", "ChargerSize_1", "ChargerSize_2", "ChargerTune_1", "ChargerTune_2", "ChargerMaxBoost_1",
-                      "ChargerMaxBoost_2", "TurbineSize_1", "TurbineSize_2"] {
-        if let Some(bytes) = get_optional_attribute_bytes(variant_data, key) {
-            car_file_hasher.update(bytes);
-        }
-    }
-    let mut car_file_variant_hash = String::new();
-    for byte in car_file_hasher.finalize() {
-        car_file_variant_hash += &format!("{:X?}", byte);
-    }
-    let sandbox_variant_hash = sandbox_data.variant_data_checksum();
-    if car_file_variant_hash != sandbox_variant_hash {
-        return Err(format!("Variant checksum mismatch.\n Sandbox: {}\n Mod: {}", sandbox_variant_hash, car_file_variant_hash));
-    }
-    info!("Variant checksum match: {}", sandbox_variant_hash);
-    Ok(())
-}
-
-struct EngineDataValidator<'a, 'b> {
-    car_file: &'a CarFile,
-    sandbox_data: &'b EngineV1,
-    float_precision: u32
-}
-
-impl<'a, 'b> EngineDataValidator<'a, 'b> {
-    fn new(car_file: &'a CarFile,
-           sandbox_data: &'b EngineV1) -> EngineDataValidator<'a, 'b> {
-        EngineDataValidator {car_file, sandbox_data, float_precision: 10}
-    }
-
-    fn validate(&self) -> Result<(), String> {
-        let version = self.car_file.get_section("Car").unwrap().get_attribute("Version");
-        if let Some(attribute) = version {
-            if (attribute.value.as_num()?.round() as u64) < 2200000000 {
-                self.validate_legacy_family()?;
-                self.validate_legacy_variant()?;
-                return Ok(());
+                info!("Writing car ui files");
+                ui_data.ui_info.write().unwrap_or_else(|e|{
+                    error!("Failed to write ui files. {}", e.to_string());
+                });
+            }
+            Err(e) => {
+                error!("Failed to load ui files. {}", e.to_string());
             }
         }
-        self.validate_family()?;
-        self.validate_variant()?;
-        Ok(())
     }
+    Ok(())
+}
 
-    fn validate_legacy_family(&self) -> Result<(), String> {
-        let family_data = self.car_file.get_section("Car").unwrap().get_section("Family").unwrap();
-        self.validate_u64( *&self.sandbox_data.family_version, family_data, "GameVersion")?;
-        self.validate_strings(&self.sandbox_data.family_uuid, family_data,"UID")?;
-        self.validate_strings(&self.sandbox_data.family_name, family_data,"Name")?;
-        self.validate_i32(*&self.sandbox_data.family_game_days, family_data,"InternalDays")?;
-        self.validate_strings(&self.sandbox_data.block_config, family_data,"BlockConfig")?;
-        self.validate_strings(&self.sandbox_data.block_material, family_data,"BlockMaterial")?;
-        self.validate_strings(&self.sandbox_data.block_type, family_data,"BlockType")?;
-        self.validate_strings(&self.sandbox_data.head_type, family_data,"Head")?;
-        self.validate_strings(&self.sandbox_data.head_material, family_data,"HeadMaterial")?;
-        self.validate_strings(&self.sandbox_data.vvl, family_data,"VVL")?;
-        self.validate_strings(&self.sandbox_data.valves, family_data,"Valves")?;
-        self.validate_floats(*&self.sandbox_data.max_stroke, family_data,"Stroke")?;
-        self.validate_floats(*&self.sandbox_data.max_bore, family_data,"Bore")?;
-        Ok(())
-    }
+pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
+                                          ac_car_path: &Path,
+                                          settings: AssettoCorsaCarSettings,
+                                          additional_car_data: AdditionalAcCarData) -> Result<(), FabricationError> {
+    update_ac_engine_parameters(ac_car_path,
+                                AcEngineParameterCalculatorV1::from_beam_ng_mod(beam_ng_mod_path)?,
+                                settings, additional_car_data
+    )
+}
 
-    fn validate_family(&self) -> Result<(), String> {
-        let family_data = self.car_file.get_section("Car").unwrap().get_section("Family").unwrap();
-        self.validate_u64( *&self.sandbox_data.family_version, family_data, "GameVersion")?;
-        self.validate_strings(&self.sandbox_data.family_uuid, family_data,"UID")?;
-        self.validate_strings(&self.sandbox_data.family_name, family_data,"Name")?;
-        self.validate_i32(*&self.sandbox_data.family_game_days, family_data,"InternalDays")?;
-        self.validate_i32(*&self.sandbox_data.family_quality, family_data,"QualityFamily")?;
-        self.validate_strings(&self.sandbox_data.block_config, family_data,"BlockConfig")?;
-        self.validate_strings(&self.sandbox_data.block_material, family_data,"BlockMaterial")?;
-        self.validate_strings(&self.sandbox_data.block_type, family_data,"BlockType")?;
-        self.validate_strings(&self.sandbox_data.head_type, family_data,"Head")?;
-        self.validate_strings(&self.sandbox_data.head_material, family_data,"HeadMaterial")?;
-        self.validate_strings(&self.sandbox_data.valves, family_data,"Valves")?;
-        self.validate_floats(*&self.sandbox_data.max_stroke, family_data,"Stroke")?;
-        self.validate_floats(*&self.sandbox_data.max_bore, family_data,"Bore")?;
-        Ok(())
-    }
+pub fn swap_crate_engine_into_ac_car(crate_engine_path: &Path,
+                                     ac_car_path: &Path,
+                                     settings: AssettoCorsaCarSettings,
+                                     additional_car_data: AdditionalAcCarData) -> Result<(), FabricationError> {
+    update_ac_engine_parameters(ac_car_path,
+                                AcEngineParameterCalculatorV1::from_crate_engine(crate_engine_path)?,
+                                settings, additional_car_data
+    )
+}
 
-    fn validate_legacy_variant(&self) -> Result<(), String> {
-        let variant_data = self.car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-        self.validate_u64( *&self.sandbox_data.variant_version, variant_data, "GameVersion")?;
-        self.validate_strings(&self.sandbox_data.family_uuid, variant_data,"FUID")?;
-        self.validate_strings(&self.sandbox_data.uuid, variant_data,"UID")?;
-        self.validate_strings(&self.sandbox_data.variant_name, variant_data,"Name")?;
-        self.validate_i32(*&self.sandbox_data.variant_game_days, variant_data,"InternalDays")?;
-        self.validate_strings(&self.sandbox_data.crank, variant_data,"Crank")?;
-        self.validate_strings(&self.sandbox_data.conrods, variant_data,"Conrods")?;
-        self.validate_strings(&self.sandbox_data.pistons, variant_data,"Pistons")?;
-        self.validate_strings(&self.sandbox_data.vvt, variant_data,"VVT")?;
-        self.validate_strings(&self.sandbox_data.aspiration, variant_data,"AspirationType")?;
-        self.validate_floats(*&self.sandbox_data.intercooler_setting, variant_data,"IntercoolerSetting")?;
-        self.validate_strings(&self.sandbox_data.fuel_system_type, variant_data,"FuelSystemType")?;
-        self.validate_strings(&self.sandbox_data.fuel_system, variant_data,"FuelSystem")?;
-        if let Some(fuel_type) = &self.sandbox_data.fuel_type { self.validate_strings(fuel_type, variant_data,"FuelType")?; }
-        self.validate_strings(&self.sandbox_data.intake_manifold, variant_data,"IntakeManifold")?;
-        self.validate_strings(&self.sandbox_data.intake, variant_data,"Intake")?;
-        self.validate_strings(&self.sandbox_data.headers, variant_data,"Headers")?;
-        self.validate_strings(&self.sandbox_data.exhaust_count, variant_data,"ExhaustCount")?;
-        self.validate_strings(&self.sandbox_data.exhaust_bypass_valves, variant_data,"ExhaustBypassValves")?;
-        self.validate_strings(&self.sandbox_data.cat, variant_data,"Cat")?;
-        self.validate_strings(&self.sandbox_data.muffler_1, variant_data,"Muffler1")?;
-        self.validate_strings(&self.sandbox_data.muffler_2, variant_data,"Muffler2")?;
-        self.validate_floats(*&self.sandbox_data.bore, variant_data,"Bore")?;
-        self.validate_floats(*&self.sandbox_data.stroke, variant_data,"Stroke")?;
-        self.validate_floats(*&self.sandbox_data.capacity, variant_data,"Capacity")?;
-        self.validate_floats(*&self.sandbox_data.compression, variant_data,"Compression")?;
-        self.validate_floats(*&self.sandbox_data.cam_profile_setting, variant_data,"CamProfileSetting")?;
-        self.validate_floats(*&self.sandbox_data.vvl_cam_profile_setting, variant_data,"VVLCamProfileSetting")?;
-        if let Some(afr) = &self.sandbox_data.afr { self.validate_floats(*afr, variant_data,"AFR")?; }
-        if let Some(afr_lean) = &self.sandbox_data.afr_lean {self.validate_floats(*afr_lean, variant_data,"AFRLean")?; }
-        self.validate_floats(*&self.sandbox_data.rpm_limit, variant_data,"RPMLimit")?;
-        self.validate_floats(*&self.sandbox_data.ignition_timing_setting, variant_data,"IgnitionTimingSetting")?;
-        self.validate_floats(*&self.sandbox_data.exhaust_diameter, variant_data,"ExhaustDiameter")?;
-        self.validate_i32(*&self.sandbox_data.quality_bottom_end, variant_data,"QualityBottomEnd")?;
-        self.validate_i32(*&self.sandbox_data.quality_top_end, variant_data,"QualityTopEnd")?;
-        self.validate_i32(*&self.sandbox_data.quality_aspiration, variant_data,"QualityAspiration")?;
-        self.validate_i32(*&self.sandbox_data.quality_fuel_system, variant_data,"QualityFuelSystem")?;
-        self.validate_i32(*&self.sandbox_data.quality_exhaust, variant_data,"QualityExhaust")?;
-        Ok(())
-    }
+fn get_object_from_jbeam_map<'a>(map: &'a serde_hjson::Map<String, serde_hjson::Value>,
+                                 key: &str,
+                                 file_identifier: &str)
+                                 -> Result<&'a serde_hjson::Map<String, serde_hjson::Value>, FabricationError>
+{
+    let section_val = map.get(key).ok_or_else(||{
+        MissingDataSection(key.to_string(), file_identifier.to_string())
+    })?;
+    Ok(section_val.as_object().ok_or_else(||{
+        InvalidData(format!("{} in {}.", key, file_identifier),
+                    "expected to be an object".to_string())
+    })?)
+}
 
-    fn validate_variant(&self) -> Result<(), String> {
-        let variant_data = self.car_file.get_section("Car").unwrap().get_section("Variant").unwrap();
-        self.validate_u64( *&self.sandbox_data.variant_version, variant_data, "GameVersion")?;
-        self.validate_strings(&self.sandbox_data.family_uuid, variant_data,"FUID")?;
-        self.validate_strings(&self.sandbox_data.uuid, variant_data,"UID")?;
-        self.validate_strings(&self.sandbox_data.variant_name, variant_data,"Name")?;
-        self.validate_i32(*&self.sandbox_data.variant_game_days, variant_data,"InternalDays")?;
-        self.validate_strings(&self.sandbox_data.vvl, variant_data,"VVL")?;
-        self.validate_strings(&self.sandbox_data.crank, variant_data,"Crank")?;
-        self.validate_strings(&self.sandbox_data.conrods, variant_data,"Conrods")?;
-        self.validate_strings(&self.sandbox_data.pistons, variant_data,"Pistons")?;
-        self.validate_strings(&self.sandbox_data.vvt, variant_data,"VVT")?;
-        self.validate_strings(&self.sandbox_data.aspiration, variant_data,"AspirationType")?;
-        self.validate_floats(*&self.sandbox_data.intercooler_setting, variant_data,"IntercoolerSetting")?;
-        self.validate_strings(&self.sandbox_data.fuel_system_type, variant_data,"FuelSystemType")?;
-        self.validate_strings(&self.sandbox_data.fuel_system, variant_data,"FuelSystem")?;
-        if let Some(fuel_type) = &self.sandbox_data.fuel_type { self.validate_strings(fuel_type, variant_data,"FuelType")?; }
-        if let Some(fuel_leaded) = &self.sandbox_data.fuel_leaded { self.validate_i32(*fuel_leaded, variant_data,"FuelLeaded")?; }
-        self.validate_strings(&self.sandbox_data.intake_manifold, variant_data,"IntakeManifold")?;
-        self.validate_strings(&self.sandbox_data.intake, variant_data,"Intake")?;
-        self.validate_strings(&self.sandbox_data.headers, variant_data,"Headers")?;
-        self.validate_strings(&self.sandbox_data.exhaust_count, variant_data,"ExhaustCount")?;
-        self.validate_strings(&self.sandbox_data.exhaust_bypass_valves, variant_data,"ExhaustBypassValves")?;
-        self.validate_strings(&self.sandbox_data.cat, variant_data,"Cat")?;
-        self.validate_strings(&self.sandbox_data.muffler_1, variant_data,"Muffler1")?;
-        self.validate_strings(&self.sandbox_data.muffler_2, variant_data,"Muffler2")?;
-        self.validate_floats(*&self.sandbox_data.bore, variant_data,"Bore")?;
-        self.validate_floats(*&self.sandbox_data.stroke, variant_data,"Stroke")?;
-        self.validate_floats(*&self.sandbox_data.capacity, variant_data,"Capacity")?;
-        self.validate_floats(*&self.sandbox_data.compression, variant_data,"Compression")?;
-        self.validate_floats(*&self.sandbox_data.cam_profile_setting, variant_data,"CamProfileSetting")?;
-        self.validate_floats(*&self.sandbox_data.vvl_cam_profile_setting, variant_data,"VVLCamProfileSetting")?;
-        if let Some(afr) = &self.sandbox_data.afr { self.validate_floats(*afr, variant_data,"AFR")?; }
-        if let Some(afr_lean) = &self.sandbox_data.afr_lean {self.validate_floats(*afr_lean, variant_data,"AFRLean")?; }
-        self.validate_floats(*&self.sandbox_data.rpm_limit, variant_data,"RPMLimit")?;
-        self.validate_floats(*&self.sandbox_data.ignition_timing_setting, variant_data,"IgnitionTimingSetting")?;
-        self.validate_floats(*&self.sandbox_data.exhaust_diameter, variant_data,"ExhaustDiameter")?;
-        self.validate_i32(*&self.sandbox_data.quality_bottom_end, variant_data,"QualityBottomEnd")?;
-        self.validate_i32(*&self.sandbox_data.quality_top_end, variant_data,"QualityTopEnd")?;
-        self.validate_i32(*&self.sandbox_data.quality_aspiration, variant_data,"QualityAspiration")?;
-        self.validate_i32(*&self.sandbox_data.quality_fuel_system, variant_data,"QualityFuelSystem")?;
-        self.validate_i32(*&self.sandbox_data.quality_exhaust, variant_data,"QualityExhaust")?;
-        if let Some(val) = &self.sandbox_data.balance_shaft { self.validate_strings(val, variant_data, "BalanceShaft")?; }
-        if let Some(val) = &self.sandbox_data.spring_stiffness { self.validate_floats(*val, variant_data, "SpringStiffnessSetting")?; }
-        if let Some(val) = &self.sandbox_data.listed_octane { self.validate_i32(*val, variant_data, "ListedOctane")?; }
-        if let Some(val) = &self.sandbox_data.tune_octane_offset { self.validate_i32(*val, variant_data, "TuneOctaneOffset")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_setup { self.validate_strings(val, variant_data, "AspirationSetup")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_item_1 { self.validate_strings(val, variant_data, "AspirationItemOption_1")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_item_2 { self.validate_strings(val, variant_data, "AspirationItemOption_2")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_item_suboption_1 { self.validate_strings(val, variant_data, "AspirationItemSubOption_1")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_item_suboption_2 { self.validate_strings(val, variant_data, "AspirationItemSubOption_2")?; }
-        if let Some(val) = &self.sandbox_data.aspiration_boost_control { self.validate_strings(val, variant_data, "AspirationBoostControl")?; }
-        if let Some(val) = &self.sandbox_data.charger_size_1 { self.validate_floats(*val, variant_data, "ChargerSize_1")?; }
-        if let Some(val) = &self.sandbox_data.charger_size_2 { self.validate_floats(*val, variant_data, "ChargerSize_2")?; }
-        if let Some(val) = &self.sandbox_data.charger_tune_1 { self.validate_floats(*val, variant_data, "ChargerTune_1")?; }
-        if let Some(val) = &self.sandbox_data.charger_tune_2 { self.validate_floats(*val, variant_data, "ChargerTune_2")?; }
-        if let Some(val) = &self.sandbox_data.charger_max_boost_1 { self.validate_floats(*val, variant_data, "ChargerMaxBoost_1")?; }
-        if let Some(val) = &self.sandbox_data.charger_max_boost_2 { self.validate_floats(*val, variant_data, "ChargerMaxBoost_2")?; }
-        if let Some(val) = &self.sandbox_data.turbine_size_1 { self.validate_floats(*val, variant_data, "TurbineSize_1")?; }
-        if let Some(val) = &self.sandbox_data.turbine_size_2 { self.validate_floats(*val, variant_data, "TurbineSize_2")?; }
-        Ok(())
-    }
-
-    fn validate_strings(&self,
-                        sandbox_value: &str,
-                        car_file_section: &Section,
-                        car_file_key: &str) -> Result<(), String> {
-        let attr = match car_file_section.get_attribute(car_file_key) {
-            None => { Err(format!("Car file section {} is missing attribute {}", car_file_section.name(), car_file_key))}
-            Some(attribute) => Ok(attribute.value.as_str())
-        }?;
-        info!("Checking {}", car_file_key);
-        if sandbox_value != attr {
-            return Err(format!("{}: {} != {}", car_file_key, sandbox_value, attr))
-        }
-        Ok(())
-    }
-
-    fn validate_u64(&self,
-                    sandbox_value: u64,
-                    car_file_section: &Section,
-                    car_file_key: &str) -> Result<(), String> {
-        let attr = match car_file_section.get_attribute(car_file_key) {
-            None => { Err(format!("Car file section {} is missing attribute {}", car_file_section.name(), car_file_key))}
-            Some(attribute) => Ok(attribute.value.as_num()?.round() as u64)
-        }?;
-        info!("Checking {}", car_file_key);
-        if sandbox_value != attr {
-            return Err(format!("{}: {} != {}", car_file_key, sandbox_value, attr))
-        }
-        Ok(())
-    }
-
-    fn validate_i32(&self,
-                     sandbox_value: i32,
-                     car_file_section: &Section,
-                     car_file_key: &str) -> Result<(), String> {
-        let attr = match car_file_section.get_attribute(car_file_key) {
-            None => { Err(format!("Car file section {} is missing attribute {}", car_file_section.name(), car_file_key))}
-            Some(attribute) => Ok(attribute.value.as_num()?.round() as i32)
-        }?;
-        info!("Checking {}", car_file_key);
-        if sandbox_value != attr {
-            return Err(format!("{}: {} != {}", car_file_key, sandbox_value, attr))
-        }
-        Ok(())
-    }
-
-    fn validate_floats(&self,
-                       sandbox_value: f64,
-                       car_file_section: &Section,
-                       car_file_key: &str) -> Result<(), String> {
-        let attr = match car_file_section.get_attribute(car_file_key) {
-            None => { Err(format!("Car file section {} is missing attribute {}", car_file_section.name(), car_file_key))}
-            Some(attribute) => Ok(attribute.value.as_num()?)
-        }?;
-        info!("Checking {}", car_file_key);
-        if round_float_to(sandbox_value, self.float_precision) !=
-           round_float_to(attr, self.float_precision) {
-            return Err(format!("{}: {} != {}", car_file_key, sandbox_value, attr))
-        }
-        Ok(())
-    }
+fn get_f64_from_jbeam_map<'a>(map: &'a serde_hjson::Map<String, serde_hjson::Value>,
+                              key: &str,
+                              file_identifier: &str)
+                              -> Result<f64, FabricationError>
+{
+    Ok(map.get(key).ok_or_else(||{
+        MissingDataSection(key.to_string(), file_identifier.to_string())
+    })?.as_f64().ok_or_else(||{
+        InvalidData(key.to_string(), "expected to be an f64".to_string())
+    })?)
 }
 
 #[cfg(test)]
 mod tests {
-    
-    
     use std::path::{PathBuf};
     
     use crate::{automation, beam_ng};
@@ -1090,7 +986,7 @@ mod tests {
         std::fs::write("inertia.txt",format!("{}", calculator.inertia().unwrap()));
         std::fs::write("idle.txt",format!("{}", calculator.idle_speed().unwrap()));
         std::fs::write("limiter.txt",format!("{}", calculator.limiter()));
-        std::fs::write("fuel_cons.txt",format!("{}", calculator.basic_fuel_consumption().unwrap()));
+        std::fs::write("fuel_cons.txt",format!("{}", calculator.basic_fuel_consumption()));
         std::fs::write("torque_curve.txt",format!("{:?}", calculator.naturally_aspirated_wheel_torque_curve(0.85)));
         std::fs::write("turbo_ctrl.txt",format!("{:?}", calculator.create_turbo_controller().unwrap()));
         std::fs::write("turbo.txt",format!("{:?}", calculator.create_turbo().unwrap()));
@@ -1118,7 +1014,7 @@ mod tests {
         // C:\Users\zephy\AppData\Local\BeamNG.drive\mods\dae1.zip
         let mod_data = beam_ng::ModData::from_path(&path.join("dawnv6.zip"))?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or("Couldn't find car data")?.clone())?;
-        //println!("{:#?}", automation_car_file);
+        println!("{:#?}", automation_car_file);
         if let Some(version) = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("GameVersion") {
             println!("{}", version);
         }

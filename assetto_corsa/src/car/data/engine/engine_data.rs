@@ -34,7 +34,7 @@ pub struct EngineData {
 }
 
 impl EngineData {
-    const SECTION_NAME: &'static str = "ENGINE_DATA";
+    pub const SECTION_NAME: &'static str = "ENGINE_DATA";
 }
 
 impl MandatoryDataSection for EngineData {

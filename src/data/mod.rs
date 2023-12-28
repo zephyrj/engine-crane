@@ -1,0 +1,89 @@
+/*
+ * Copyright (c):
+ * 2023 zephyrj
+ * zephyrj@protonmail.com
+ *
+ * This file is part of engine-crane.
+ *
+ * engine-crane is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * engine-crane is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
+ */
+mod validation;
+mod crate_engine;
+
+
+use std::collections::BTreeMap;
+use std::fmt::Display;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use directories::BaseDirs;
+use iced::futures::io;
+use serde::{Deserialize, Serialize};
+use sha2::Digest;
+use tracing::warn;
+
+use utils::filesystem::get_filetypes_in_path;
+
+pub use crate::data::validation::AutomationSandboxCrossChecker;
+pub use crate_engine::{CrateEngine, CrateEngineMetadata, CreationOptions};
+
+const LOCAL_DATA_DIRNAME: &'static str = "EngineCrane";
+const DEFAULT_CRATE_ENGINE_DIRNAME: &'static str = "crate";
+
+pub fn find_crate_engines_in_path(path: &Path) -> io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
+    let mut found_metadata = BTreeMap::new();
+    let paths = get_filetypes_in_path(path, crate_engine::CRATE_ENGINE_FILE_SUFFIX)?;
+    for path in paths.into_iter() {
+        match File::open(&path) {
+            Ok(mut f) => match CrateEngineMetadata::from_reader(&mut f) {
+                Ok(m) => {
+                    found_metadata.insert(path, m);
+                }
+                Err(e) => {
+                    warn!("Error occured for {}. {}", path.display(), e);
+                }
+            }
+            Err(e) => warn!("Couldn't open {}. {}", path.display(), e.to_string())
+        }
+    }
+    Ok(found_metadata)
+}
+
+#[cfg(target_os = "windows")]
+fn backup_data_dir() -> PathBuf {
+    let username = whoami::username();
+    PathBuf::from_iter(["C:", "Users", &username, "AppData", "Local"])
+}
+
+#[cfg(target_os = "linux")]
+fn backup_data_dir() -> PathBuf {
+    let username = whoami::username();
+    PathBuf::from_iter(["home", &username, ".local", "share"])
+}
+
+
+pub fn get_local_app_data_path() -> PathBuf {
+    let mut local_data_root : PathBuf = match BaseDirs::new() {
+        None => backup_data_dir(),
+        Some(basedirs) => { basedirs.data_local_dir().to_path_buf() }
+    };
+    local_data_root.push(LOCAL_DATA_DIRNAME);
+    local_data_root
+}
+
+pub fn get_default_crate_engine_path() -> PathBuf {
+    let mut path = get_local_app_data_path();
+    path.push(DEFAULT_CRATE_ENGINE_DIRNAME);
+    path
+}

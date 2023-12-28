@@ -1,6 +1,6 @@
 [package]
 name = "beam_ng"
-version = "0.2.3-alpha"
+version = "0.3.0-alpha"
 edition = "2021"
 authors = ["zephyrj <zephyrj@protonmail.com>"]
 
@@ -16,4 +16,5 @@ tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde-hjson = { workspace = true }
-zip = "0.6.2"
+zip = { workspace = true }
+whoami = { workspace = true }

@@ -49,6 +49,12 @@ impl SettingsTab {
 
     pub fn app_data_update(&mut self, _app_data: &ApplicationData, _update_event: &Message) {
     }
+
+    pub fn notify_action_success(&mut self, _action_event: &Message) {
+    }
+
+    pub fn notify_action_failure(&mut self, action_event: &Message, reason: &str) {
+    }
 }
 
 impl Tab for SettingsTab {
@@ -95,17 +101,42 @@ impl Tab for SettingsTab {
             .push(Text::new("BeamNG mod path:").size(24))
             .push(Text::new(mod_path_str))
             .push(mod_path_select_button)
-            .spacing(5)
             .padding(Padding::from([0, 3, 0, 3]));
+
+        let crate_path_str = match &app_data.get_crate_engine_path() {
+            None => "Not Set".to_string(),
+            Some(path) => format!("{}", path.display())
+        };
+        let crate_path_selector =
+            create_path_select(Message::CrateEnginePathSelectPressed,
+                               "Crate engine path",
+                               crate_path_str)
+                .padding(Padding::from([0, 3, 0, 3]));
+
         let container : Container<'_, Message> = Container::new(
             Column::new()
                 .push(ac_path_select_row)
                 .push(mod_path_select_row)
+                .push(crate_path_selector)
                 .spacing(25)
         );
         container.into()
         //content.map(Message::Edit)
     }
 }
+
+fn create_path_select(on_select: Message, title: &str, current_val: String) -> Column<Message> {
+    let select =
+        Button::new( Text::new("Browse"))
+            .on_press(on_select);
+    Column::new()
+        .align_items(Alignment::Start)
+        .push(Text::new(title).size(24))
+        .push(Text::new(current_val))
+        .push(select)
+        .spacing(5)
+}
+
+
 
 

@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::default::Default;
 use std::fmt::{Display, Formatter};
 use std::mem;
-use utils::round_float_to;
+use utils::numeric::round_float_to;
 
 
 #[derive(Copy, Clone, Debug)]

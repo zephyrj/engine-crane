@@ -34,7 +34,7 @@ pub struct CarIniData<'a> {
 }
 
 impl<'a> CarIniData<'a> {
-    const FILENAME: &'static str = "car.ini";
+    pub const FILENAME: &'static str = "car.ini";
 
     pub fn from_car(car: &'a mut Car) -> Result<CarIniData<'a>> {
         let car_ini_data = match car.data_interface.get_original_file_data(CarIniData::FILENAME) {
@@ -97,7 +97,7 @@ impl<'a> CarIniData<'a> {
 
     pub fn write(&'a mut self) -> Result<()> {
         let data_interface = self.car.mut_data_interface();
-        data_interface.update_file_data("car.ini", self.ini_config.to_bytes());
+        data_interface.update_file_data(Self::FILENAME, self.ini_config.to_bytes());
         data_interface.write()?;
         Ok(())
     }

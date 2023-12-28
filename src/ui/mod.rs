@@ -24,8 +24,12 @@ mod edit;
 mod settings;
 mod image_data;
 mod button;
+mod data;
+mod crate_engines;
+mod elements;
 
 use std::fs;
+use std::fs::File;
 use swap::{EngineSwapMessage, EngineSwapTab};
 use edit::{EditMessage, EditTab};
 use settings::{SettingsMessage, SettingsTab};
@@ -44,7 +48,12 @@ use crate::{assetto_corsa, beam_ng, fabricator};
 use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
+use assetto_corsa::car::delete_car;
+use crate::data::{CrateEngine, CreationOptions};
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
+use crate::ui::crate_engines::{CrateEngineTab, CrateTabMessage};
+use crate::ui::data::{ApplicationData, AssettoCorsaData, BeamNGData, CrateEngineData};
+use crate::ui::swap::EngineSource;
 
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
@@ -58,30 +67,34 @@ pub enum Message {
     TabSelected(usize),
     AcPathSelectPressed,
     BeamNGModPathSelectPressed,
+    CrateEnginePathSelectPressed,
     EngineSwap(EngineSwapMessage),
     EngineSwapRequested,
+    CrateTab(CrateTabMessage),
     Edit(EditMessage),
     Settings(SettingsMessage),
+    DeleteCrateEngine(String),
+    RefreshCrateEngines
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GlobalSettings {
     ac_install_path: String,
     beamng_mod_path: String,
+    crate_engine_path: String
 }
-
-
-//.map_err(|e|{ format!("Failed to set config. {}", e.to_string()) })?
 
 impl GlobalSettings {
     const AC_INSTALL_PATH: &'static str = "ac_install_path";
     const BEAMNG_MOD_PATH: &'static str = "beamng_mod_path";
+    const CRATE_ENGINE_PATH: &'static str = "crate_engine_path";
     const CONFIG_FILENAME: &'static str = "engine-crane-conf";
 
     fn default() -> Self {
         GlobalSettings {
             ac_install_path: assetto_corsa::get_default_install_path().to_string_lossy().into_owned(),
-            beamng_mod_path: beam_ng::get_default_mod_path().to_string_lossy().into_owned()
+            beamng_mod_path: beam_ng::get_default_mod_path().to_string_lossy().into_owned(),
+            crate_engine_path: crate::data::get_default_crate_engine_path().to_string_lossy().into_owned()
         }
     }
 
@@ -90,6 +103,7 @@ impl GlobalSettings {
         return match builder
             .set_default(GlobalSettings::AC_INSTALL_PATH, assetto_corsa::get_default_install_path().to_string_lossy().into_owned())?
             .set_default(GlobalSettings::BEAMNG_MOD_PATH, beam_ng::get_default_mod_path().to_string_lossy().into_owned())?
+            .set_default(GlobalSettings::CRATE_ENGINE_PATH, crate::data::get_default_crate_engine_path().to_string_lossy().into_owned())?
             .add_source(config::File::with_name(GlobalSettings::CONFIG_FILENAME))
             .add_source(config::Environment::with_prefix("APP"))
             .build() {
@@ -102,6 +116,7 @@ impl GlobalSettings {
                 let settings = builder
                     .set_default(GlobalSettings::AC_INSTALL_PATH, assetto_corsa::get_default_install_path().to_string_lossy().into_owned())?
                     .set_default(GlobalSettings::BEAMNG_MOD_PATH, beam_ng::get_default_mod_path().to_string_lossy().into_owned())?
+                    .set_default(GlobalSettings::CRATE_ENGINE_PATH, crate::data::get_default_crate_engine_path().to_string_lossy().into_owned())?
                     .build()?;
                 let ret: GlobalSettings = settings.try_deserialize()?;
                 ret.write().unwrap_or_else(|e| { error!("Failed to write settings. {}", e.to_string())});
@@ -132,6 +147,18 @@ impl GlobalSettings {
 
     fn set_beamng_mod_path(&mut self, new_path: &Path) {
         self.beamng_mod_path = new_path.to_string_lossy().into_owned();
+    }
+
+    fn crate_engine_path(&self) -> Option<PathBuf> {
+        let path = PathBuf::from(&self.crate_engine_path);
+        if path.is_dir() {
+            return Some(path);
+        }
+        None
+    }
+
+    fn set_crate_engine_pahth(&mut self, new_path: &Path) {
+        self.crate_engine_path = new_path.to_string_lossy().into_owned();
     }
 
     fn write(&self) -> std::io::Result<()> {
@@ -165,152 +192,6 @@ impl std::fmt::Display for ListPath {
             Some(filename) => { filename.to_string_lossy().into_owned() }
         };
         write!(f, "{}", out)
-    }
-}
-
-pub struct AssettoCorsaData {
-    available_cars: Vec<ListPath>,
-}
-
-impl AssettoCorsaData {
-    fn new() -> AssettoCorsaData {
-        AssettoCorsaData {
-            available_cars: Vec::new()
-        }
-    }
-
-    fn from_settings(settings: &GlobalSettings) -> AssettoCorsaData {
-        let mut ac_data = AssettoCorsaData::new();
-        ac_data.property_update(settings);
-        ac_data
-    }
-
-    pub fn property_update(&mut self, settings: &GlobalSettings) {
-        if let Some(path) = &settings.ac_install_path() {
-            self.refresh_available_cars(path);
-        } else {
-            info!("Update to GlobalSettings contains no AC install path");
-            self.available_cars.clear();
-        }
-    }
-
-    pub fn refresh_available_cars(&mut self, ac_install_path: &PathBuf) {
-        self.available_cars.clear();
-        if ac_install_path.is_dir() {
-            self.available_cars = Self::load_available_cars(ac_install_path);
-            self.available_cars.sort();
-        }
-    }
-
-    fn load_available_cars(ac_install_path: &PathBuf) -> Vec<ListPath> {
-        let span = span!(Level::INFO, "Loading Assetto Corsa cars");
-        let _enter = span.enter();
-        return match assetto_corsa::Installation::from_path(ac_install_path.clone()).get_list_of_installed_cars() {
-            Ok(vec) => {
-                info!("Found {} cars", vec.len());
-                ListPath::convert_path_vec(vec)
-            }
-            Err(err) => {
-                error!("{}", err.to_string());
-                Vec::new()
-            }
-        }
-    }
-}
-
-pub struct BeamNGData {
-    available_mods: Vec<ListPath>
-}
-
-impl BeamNGData {
-    fn new() -> BeamNGData {
-        BeamNGData {
-            available_mods: Vec::new()
-        }
-    }
-
-    fn from_settings(settings: &GlobalSettings) -> BeamNGData {
-        let mut beam_data = BeamNGData::new();
-        beam_data.property_update(settings);
-        beam_data
-    }
-
-    pub fn property_update(&mut self, settings: &GlobalSettings) {
-        if let Some(path) = &settings.beamng_mod_path() {
-            self.refresh_available_mods(path);
-        } else {
-            info!("Update to GlobalSettings contains no BeamNG data path");
-            self.available_mods.clear();
-        }
-    }
-
-    fn refresh_available_mods(&mut self, beam_install_path: &PathBuf) {
-        self.available_mods.clear();
-        if beam_install_path.is_dir() {
-            self.available_mods = Self::load_available_mods(beam_install_path);
-            self.available_mods.sort();
-        }
-    }
-
-    fn load_available_mods(beamng_mod_path: &PathBuf) -> Vec<ListPath> {
-        let span = span!(Level::INFO, "Loading beamNG mods");
-        let _enter = span.enter();
-        let mods = ListPath::convert_path_vec(beam_ng::get_mod_list_in(beamng_mod_path));
-        info!("Found {} mods", mods.len());
-        mods
-    }
-}
-
-pub struct ApplicationData {
-    settings: GlobalSettings,
-    assetto_corsa_data: AssettoCorsaData,
-    beam_ng_data: BeamNGData
-}
-
-impl ApplicationData {
-    fn new() -> ApplicationData {
-        let settings = GlobalSettings::load().unwrap_or_else(|e| {
-            error!("Failed to load settings. {}", e.to_string());
-            GlobalSettings::default()
-        });
-        match settings.ac_install_path() {
-            None => { info!("Assetto Corsa path not set") }
-            Some(path) => { info!("Assetto Corsa path set to {}", path.display()) }
-        }
-        match settings.beamng_mod_path() {
-            None => { info!("BeamNG mod path not set") }
-            Some(path) => { info!("BeamNG mod path set to {}", path.display()) }
-        }
-
-        let assetto_corsa_data = AssettoCorsaData::from_settings(&settings);
-        let beam_ng_data = BeamNGData::from_settings(&settings);
-        ApplicationData {
-            settings,
-            assetto_corsa_data,
-            beam_ng_data
-        }
-    }
-
-    fn get_ac_install_path(&self) -> Option<PathBuf> {
-        self.settings.ac_install_path()
-    }
-
-    fn update_ac_install_path(&mut self, new_path: PathBuf) {
-        self.settings.set_ac_install_path(&new_path);
-        self.assetto_corsa_data.property_update(&self.settings);
-    }
-
-    fn get_beam_ng_mod_path(&self) -> Option<PathBuf> {
-        self.settings.beamng_mod_path()
-    }
-
-    fn update_beamng_mod_path(&mut self, new_path: PathBuf) {
-        self.settings.set_beamng_mod_path(&new_path);
-        self.beam_ng_data.property_update(&self.settings);
-    }
-
-    fn refresh_available_cars(&mut self) {
-        self.assetto_corsa_data.refresh_available_cars(&PathBuf::from(&self.settings.ac_install_path))
     }
 }
 
@@ -359,6 +240,7 @@ pub struct UIMain {
     app_data: ApplicationData,
     active_tab: usize,
     engine_swap_tab: EngineSwapTab,
+    crate_engine_tab: CrateEngineTab,
     edit_tab: EditTab,
     settings_tab: SettingsTab
 }
@@ -376,6 +258,8 @@ impl UIMain {
         &self.app_data.beam_ng_data
     }
 
+    pub fn get_crate_engine_data(&self) -> &CrateEngineData { &self.app_data.crate_engine_data }
+
     pub fn notify_app_data_update(&mut self, update_event: &Message) {
         match self.app_data.settings.write() {
             Ok(_) => { info!("Wrote settings successfully"); }
@@ -383,7 +267,22 @@ impl UIMain {
         }
         self.settings_tab.app_data_update(&self.app_data, update_event);
         self.engine_swap_tab.app_data_update(&self.app_data, update_event);
+        self.crate_engine_tab.app_data_update(&self.app_data, update_event);
         self.edit_tab.app_data_update(&self.app_data, update_event);
+    }
+
+    pub fn notify_action_success(&mut self, action_event: &Message) {
+        self.settings_tab.notify_action_success(action_event);
+        self.engine_swap_tab.notify_action_success(action_event);
+        self.crate_engine_tab.notify_action_success(action_event);
+        self.edit_tab.notify_action_success(action_event);
+    }
+
+    pub fn notify_action_failure(&mut self, action_event: &Message, reason: String) {
+        self.settings_tab.notify_action_failure(action_event, &reason);
+        self.engine_swap_tab.notify_action_failure(action_event, &reason);
+        self.crate_engine_tab.notify_action_failure(action_event, &reason);
+        self.edit_tab.notify_action_failure(action_event, &reason);
     }
 }
 
@@ -398,11 +297,15 @@ impl Sandbox for UIMain {
         info!("Created settings tab");
         let engine_swap_tab = EngineSwapTab::new();
         info!("Created engine-swap tab");
+        let crate_engine_tab = CrateEngineTab::new(&app_data);
+        info!("Created crate engine tab");
         let edit_tab = EditTab::new(&app_data);
+        info!("Created edit tab");
         UIMain {
             app_data,
             active_tab: 0,
             engine_swap_tab,
+            crate_engine_tab,
             edit_tab,
             settings_tab
         }
@@ -416,52 +319,68 @@ impl Sandbox for UIMain {
         match message {
             Message::TabSelected(selected) => self.active_tab = selected,
             Message::EngineSwap(message) => self.engine_swap_tab.update(message, &self.app_data),
+            Message::CrateTab(message) => self.crate_engine_tab.update(message, &self.app_data),
             Message::Edit(message) => self.edit_tab.update(message, &self.app_data),
             Message::Settings(message) => self.settings_tab.update(message, &self.app_data),
             Message::AcPathSelectPressed => {
-                let install_path = FileDialog::new()
-                    .set_directory(match self.app_data.get_ac_install_path() {
-                        Some(str) => str,
-                        None => PathBuf::from("/")
-                    })
-                    .pick_folder();
+                let install_path = open_dir_select_dialog(self.app_data.get_ac_install_path().as_ref());
                 if let Some(path) = install_path {
                     self.app_data.update_ac_install_path(path);
                     self.notify_app_data_update(&message);
                 }
             }
             Message::BeamNGModPathSelectPressed => {
-                let mod_path = FileDialog::new()
-                    .set_directory(match self.app_data.get_beam_ng_mod_path() {
-                        Some(str) => str,
-                        None => PathBuf::from("/")
-                    })
-                    .pick_folder();
+                let mod_path = open_dir_select_dialog(self.app_data.get_beam_ng_mod_path().as_ref());
                 if let Some(path) = mod_path {
                     self.app_data.update_beamng_mod_path(path);
                     self.notify_app_data_update(&message);
                 }
             }
-            Message::EngineSwapRequested => {
-                if self.app_data.get_ac_install_path().is_none() {
-                    self.engine_swap_tab.update_status(String::from("Please set the Assetto Corsa install path in the settings tab"));
-                    return;
+            Message::CrateEnginePathSelectPressed => {
+                let eng_path = open_dir_select_dialog(self.app_data.get_crate_engine_path().as_ref());
+                if let Some(path) = eng_path {
+                    self.app_data.update_crate_engine_path(path);
+                    self.notify_app_data_update(&message);
                 }
+            }
+            Message::EngineSwapRequested => {
+                let ac_install = match &self.app_data.get_ac_install_path() {
+                    None => {
+                        self.engine_swap_tab.update_status(String::from("Please set the Assetto Corsa install path in the settings tab"));
+                        return;
+                    }
+                    Some(path) => assetto_corsa::Installation::from_path(path.clone())
+                };
+
                 if self.engine_swap_tab.current_car.is_none() {
                     self.engine_swap_tab.update_status(String::from("Please select an Assetto Corsa car"));
                     return;
-                } else if self.engine_swap_tab.current_mod.is_none() {
-                    self.engine_swap_tab.update_status(String::from("Please select an BeamNG mod"));
-                    return;
+                }
+
+                match self.engine_swap_tab.current_source {
+                    EngineSource::BeamNGMod => {
+                        if self.engine_swap_tab.current_mod.is_none() {
+                            self.engine_swap_tab.update_status(String::from("Please select an BeamNG mod"));
+                            return;
+                        }
+                    }
+                    EngineSource::CrateEngine => {
+                        if self.engine_swap_tab.current_crate_eng.is_none() {
+                            self.engine_swap_tab.update_status(String::from("Please select a crate engine"));
+                            return;
+                        }
+                    }
                 }
 
                 let new_spec_name = self.engine_swap_tab.current_new_spec_name.as_str();
+                if new_spec_name.is_empty() {
+                    self.engine_swap_tab.update_status(String::from("Please enter a spec name"));
+                    return;
+                }
                 let new_car_path = {
                     let span = span!(Level::INFO, "Creating new car spec");
                     let _enter = span.enter();
-                    let ac_install = assetto_corsa::Installation::from_path(
-                        self.app_data.get_ac_install_path().as_ref().unwrap().clone()
-                    );
+
                     match assetto_corsa::car::create_new_car_spec(&ac_install,
                                                                   self.engine_swap_tab.current_car.as_ref().unwrap(),
                                                                   new_spec_name,
@@ -476,44 +395,104 @@ impl Sandbox for UIMain {
                     }
                 };
 
-                if let Some(mod_path) = self.engine_swap_tab.current_mod.as_ref() {
-                    let span = span!(Level::INFO, "Updating car physics");
-                    let _enter = span.enter();
-                    let current_engine_weight =
-                        if let Some(weight_string) = &self.engine_swap_tab.current_engine_weight {
-                            match weight_string.parse::<u32>() {
-                                Ok(val) => {
-                                    Some(val)
-                                }
-                                Err(_) => {
-                                    None
-                                }
+                let mut car_settings = AssettoCorsaCarSettings::default();
+                car_settings.minimum_physics_level = self.engine_swap_tab.current_minimum_physics;
+                let current_engine_weight =
+                    if let Some(weight_string) = &self.engine_swap_tab.current_engine_weight {
+                        match weight_string.parse::<u32>() {
+                            Ok(val) => {
+                                Some(val)
                             }
-                        } else {
-                            None
-                        };
-                    let mut car_settings = AssettoCorsaCarSettings::default();
-                    car_settings.minimum_physics_level = self.engine_swap_tab.current_minimum_physics;
-                    match fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
-                                                                         new_car_path.as_path(),
-                                                                         car_settings,
-                                                                         AdditionalAcCarData::new(current_engine_weight)) {
-                        Ok(_) => {
-                            self.engine_swap_tab.update_status(format!("Created {} successfully", new_car_path.display()));
-                            self.app_data.refresh_available_cars();
-                            self.notify_app_data_update(&message);
+                            Err(_) => {
+                                None
+                            }
                         }
-                        Err(err_str) => {
-                            error!("{}", &err_str);
-                            self.engine_swap_tab.update_status(err_str)
+                    } else {
+                        None
+                    };
+                let additional_car_settings = AdditionalAcCarData::new(current_engine_weight);
+
+                let res = match self.engine_swap_tab.current_source {
+                    EngineSource::BeamNGMod => {
+                        let mod_path = match self.engine_swap_tab.current_mod.as_ref() {
+                            Some(p) => p,
+                            None => {
+                                let err_str = "Swap failed: Couldn't get ref to current mod";
+                                error!(err_str);
+                                self.engine_swap_tab.update_status(format!("{}", err_str));
+                                return;
+                            }
+                        };
+                        let span = span!(Level::INFO, "Updating car physics from BeamNG mod");
+                        let _enter = span.enter();
+                        fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
+                                                                       new_car_path.as_path(),
+                                                                       car_settings,
+                                                                       additional_car_settings)
+                    }
+                    EngineSource::CrateEngine => {
+                        let crate_eng_name = match self.engine_swap_tab.current_crate_eng.as_ref() {
+                            Some(c) => c,
+                            None => {
+                                let err_str = "Couldn't get currently selected crate engine name";
+                                error!(err_str);
+                                self.engine_swap_tab.update_status(format!("{}", err_str));
+                                return;
+                            }
+                        };
+                        let crate_path = match self.app_data.crate_engine_data.get_path_for(crate_eng_name) {
+                            Some(p) => p,
+                            None => {
+                                let err_str = format!("Path for crate engine {} not found", crate_eng_name);
+                                error!(err_str);
+                                self.engine_swap_tab.update_status(format!("{}", err_str));
+                                return;
+                            }
+                        };
+                        let span = span!(Level::INFO, "Updating car physics from crate engine");
+                        let _enter = span.enter();
+                        fabricator::swap_crate_engine_into_ac_car(crate_path.as_path(),
+                                                                  new_car_path.as_path(),
+                                                                  car_settings,
+                                                                  additional_car_settings)
+                    }
+                };
+                match res {
+                    Ok(_) => {
+                        self.engine_swap_tab.update_status(format!("Created {} successfully", new_car_path.display()));
+                        self.app_data.refresh_available_cars();
+                        self.notify_app_data_update(&message);
+                    }
+                    Err(err_str) => {
+                        if let Some(car_folder_name) = new_car_path.file_name() {
+                            delete_car(&ac_install, Path::new(car_folder_name)).unwrap_or_else(|e|{
+                                error!("Failed to delete {}. {}", new_car_path.display(), e.to_string());
+                            });
+                        } else {
+                            error!("Failed to delete {}. Couldn't get car folder name", new_car_path.display());
+                        }
+                        error!("{}", &err_str);
+                        self.engine_swap_tab.update_status(err_str.to_string())
+                    }
+                }
+            },
+            Message::RefreshCrateEngines => {
+                self.app_data.refresh_crate_engines();
+                self.notify_app_data_update(&message);
+            }
+            Message::DeleteCrateEngine(ref eng_id) => {
+                if let Some(path) = self.app_data.crate_engine_data.get_location_for(eng_id.as_str()) {
+                    match std::fs::remove_file(path) {
+                        Ok(_) => {
+                            self.notify_action_success(&message);
+                            self.app_data.refresh_crate_engines();
+                        },
+                        Err(e) => {
+                            self.notify_action_failure(&message, e.to_string());
                         }
                     }
-                } else {
-                    let err_str = "Swap failed: Couldn't get ref to current mod";
-                    error!(err_str);
-                    self.engine_swap_tab.update_status(format!("{}", err_str));
-                    return;
                 }
+                self.notify_app_data_update(&message);
             }
         }
     }
@@ -523,6 +502,10 @@ impl Sandbox for UIMain {
             .push(
                 self.engine_swap_tab.tab_label(),
                 self.engine_swap_tab.view(&self.app_data)
+            )
+            .push(
+                self.crate_engine_tab.tab_label(),
+                self.crate_engine_tab.view(&self.app_data)
             )
             .push(
                 self.edit_tab.tab_label(),
@@ -536,6 +519,14 @@ impl Sandbox for UIMain {
             .tab_bar_position(iced_aw::TabBarPosition::Top)
             .into()
     }
+}
+
+fn open_dir_select_dialog(starting_path: Option<&PathBuf>) -> Option<PathBuf> {
+    let root_dir = PathBuf::from("/");
+    let path = starting_path.unwrap_or(&root_dir);
+    FileDialog::new()
+        .set_directory(path)
+        .pick_folder()
 }
 
 

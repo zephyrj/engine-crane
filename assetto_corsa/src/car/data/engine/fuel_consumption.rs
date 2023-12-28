@@ -93,7 +93,7 @@ pub struct FuelConsumptionFlowRate {
 }
 
 impl FuelConsumptionFlowRate {
-    const SECTION_NAME: &'static str = "FUEL_CONSUMPTION";
+    pub const SECTION_NAME: &'static str = "FUEL_CONSUMPTION";
 
     pub fn new(idle_throttle: f64,
                idle_cutoff: i32,

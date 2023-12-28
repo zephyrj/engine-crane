@@ -35,6 +35,8 @@ pub struct CoastCurve {
 }
 
 impl CoastCurve {
+    pub const COAST_REF_SECTION_NAME: &'static str = "COAST_REF";
+
     pub fn new_from_coast_ref(reference_rpm: i32, torque: i32, non_linearity: f64) -> CoastCurve {
         CoastCurve {
             curve_data_source: CoastSource::FromCoastRef,

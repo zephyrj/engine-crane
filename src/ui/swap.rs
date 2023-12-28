@@ -19,31 +19,69 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::fmt::{Display, Formatter};
 use super::{Message, Tab};
 use std::path::{PathBuf};
 use iced::{Alignment, Element, Length, Padding, Renderer};
 use iced::widget::{Button, checkbox, Column, Container, pick_list, PickList, Row, Text, TextInput};
 use iced_aw::{TabLabel};
 use iced::alignment::Horizontal;
+use iced_native::widget::radio;
 
 use crate::fabricator::{AssettoCorsaPhysicsLevel};
+use crate::ui;
 use crate::ui::{ApplicationData, ListPath};
 
 #[derive(Debug, Clone)]
 pub enum EngineSwapMessage {
     CarSelected(ListPath),
+    SourceChanged(EngineSource),
     NameEntered(String),
     ModSelected(ListPath),
+    CrateEngineSelected(String),
     PhysicsLevelSelected(AssettoCorsaPhysicsLevel),
     OldEngineWeightEntered(String),
     UnpackToggled(bool),
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum EngineSource {
+    BeamNGMod,
+    CrateEngine
+}
+
+impl EngineSource {
+    pub fn all_options() -> [EngineSource; 2] {
+        [EngineSource::BeamNGMod, EngineSource::CrateEngine]
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EngineSource::BeamNGMod => "BeamNG Mod",
+            EngineSource::CrateEngine => "Crate Engine"
+        }
+    }
+}
+
+impl Default for EngineSource {
+    fn default() -> Self {
+        EngineSource::BeamNGMod
+    }
+}
+
+impl Display for EngineSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 #[derive(Default)]
 pub struct EngineSwapTab {
     available_physics: Vec<AssettoCorsaPhysicsLevel>,
+    pub(crate) current_source: EngineSource,
     pub(crate) current_car: Option<PathBuf>,
     pub(crate) current_mod: Option<PathBuf>,
+    pub(crate) current_crate_eng: Option<String>,
     pub(crate) current_new_spec_name: String,
     pub(crate) current_engine_weight: Option<String>,
     pub(crate) current_minimum_physics: AssettoCorsaPhysicsLevel,
@@ -55,8 +93,10 @@ impl EngineSwapTab {
     pub(crate) fn new() -> Self {
         EngineSwapTab {
             available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame],
+            current_source: EngineSource::BeamNGMod,
             current_car: None,
             current_mod: None,
+            current_crate_eng: None,
             current_new_spec_name: "".to_string(),
             current_engine_weight: None,
             current_minimum_physics: Default::default(),
@@ -78,9 +118,20 @@ impl EngineSwapTab {
             EngineSwapMessage::CarSelected(path_ref) => {
                 self.current_car = Some(path_ref.full_path.clone());
             },
+            EngineSwapMessage::SourceChanged(e) => {
+                self.current_source = e;
+            },
             EngineSwapMessage::ModSelected(path_ref) => {
                 self.current_new_spec_name = String::from(path_ref.to_string().strip_suffix(".zip").unwrap());
                 self.current_mod = Some(path_ref.full_path.clone())
+            },
+            EngineSwapMessage::CrateEngineSelected(name) => {
+                if let Some(metadata) = _app_data.crate_engine_data.get_metadata_for(&name) {
+                    self.current_new_spec_name = metadata.name().to_string()
+                } else {
+                    self.current_new_spec_name = name.clone();
+                }
+                self.current_crate_eng = Some(name)
             },
             EngineSwapMessage::NameEntered(new_car_name) => {
                 self.current_new_spec_name = new_car_name
@@ -98,7 +149,7 @@ impl EngineSwapTab {
                         self.current_engine_weight = Some(old_weight);
                     }
                     Err(_) => {
-                        self.status_message = format!("Old weight must be an integer");
+                        self.status_message = "Old weight must be an integer".to_string();
                         self.current_engine_weight = None;
                     }
                 }
@@ -107,6 +158,21 @@ impl EngineSwapTab {
                 self.unpack_physics_data = bool_val;
             }
         }
+    }
+
+    pub fn notify_action_success(&mut self, action_event: &Message) {
+        match action_event {
+            Message::DeleteCrateEngine(eng_name) => {
+                self.current_crate_eng = None;
+                if self.current_source == EngineSource::CrateEngine {
+                    self.current_new_spec_name.clear();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn notify_action_failure(&mut self, action_event: &Message, reason: &str) {
     }
 
     pub fn update_status(&mut self, status: String) {
@@ -140,27 +206,66 @@ impl Tab for EngineSwapTab {
             }
         };
         let car_select_container = Column::new()
-            //.align_items(Alignment::Center)
             .push(Text::new("Assetto Corsa car"))
             .push(pick_list(
                 &app_data.assetto_corsa_data.available_cars,
                 current_car,
                 move |val| { Message::EngineSwap(EngineSwapMessage::CarSelected(val)) },
             ));
-        let current_mod = match &self.current_mod {
-            None => { None }
-            Some(path) => {
-                Some(ListPath {full_path: path.clone()})
+
+        let mut source_select_container = Column::new()
+            .spacing(3)
+            .push(Text::new("Source"));
+        let selected_option = self.current_source;
+        let source_select_row =
+            EngineSource::all_options().iter().fold(
+                Row::new()
+                    //.padding(Padding::from([0, 10]))
+                    .spacing(20)
+                    .align_items(Alignment::Start),
+                |row, config_choice| {
+                    row.push(radio(
+                        format!("{config_choice}"),
+                        *config_choice,
+                        Some(selected_option),
+                        move |val| { Message::EngineSwap(EngineSwapMessage::SourceChanged(val)) })
+                        .spacing(3).size(20).text_size(18))
+                }
+            );
+        source_select_container = source_select_container.push(source_select_row);
+
+        let engine_source_selector = match self.current_source {
+            EngineSource::BeamNGMod => {
+                let current_mod = match &self.current_mod {
+                    None => { None }
+                    Some(path) => {
+                        Some(ListPath {full_path: path.clone()})
+                    }
+                };
+                Column::new()
+                    .push(Text::new("BeamNG mod"))
+                    .push(PickList::new(
+                        &app_data.beam_ng_data.available_mods,
+                        current_mod,
+                        move |val| { Message::EngineSwap(EngineSwapMessage::ModSelected(val)) }
+                    ))
+            }
+            EngineSource::CrateEngine => {
+                let current_crate_eng = match &self.current_crate_eng {
+                    None => { None }
+                    Some(path) => {
+                        Some(path.clone())
+                    }
+                };
+                Column::new()
+                    .push(Text::new("Crate Engine"))
+                    .push(PickList::new(
+                        &app_data.crate_engine_data.available_engines,
+                        current_crate_eng,
+                        move |val| { Message::EngineSwap(EngineSwapMessage::CrateEngineSelected(val)) }
+                    ))
             }
         };
-        let mod_select_container = Column::new()
-            //.align_items(Alignment::Center)
-            .push(Text::new("BeamNG mod"))
-            .push(PickList::new(
-                &app_data.beam_ng_data.available_mods,
-                current_mod,
-                move |val| { Message::EngineSwap(EngineSwapMessage::ModSelected(val)) }
-            ));
 
         let placeholder = match self.current_new_spec_name.as_str() {
             "" => { "Enter new spec name" }
@@ -172,7 +277,6 @@ impl Tab for EngineSwapTab {
             move|val| { Message::EngineSwap(EngineSwapMessage::NameEntered(val)) },
         ).width(Length::Units(500));
         let car_name_container = Column::new()
-            //.align_items(Alignment::Center)
             .push(Text::new("New spec name (this will be appended to the created car)"))
             .push(new_spec_input);
 
@@ -183,7 +287,6 @@ impl Tab for EngineSwapTab {
             }
         };
         let weight_input_container = Column::new()
-            //.align_items(Align::Center)
             .push(Text::new("Existing engine weight in Kgs (Optional)"))
             .push(TextInput::new(
                 "",
@@ -191,11 +294,10 @@ impl Tab for EngineSwapTab {
                 move |val| { Message::EngineSwap(EngineSwapMessage::OldEngineWeightEntered(val)) },
             ).width(Length::Units(100)));
         let select_container = Column::new()
-            //.align_items(Align::)
-            //.padding(10)
             .spacing(20)
             .push(car_select_container)
-            .push(mod_select_container)
+            .push(source_select_container)
+            .push(engine_source_selector)
             .push(car_name_container)
             .push(weight_input_container);
 
