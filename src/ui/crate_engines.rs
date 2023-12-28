@@ -45,14 +45,18 @@ pub enum CrateTabMessage {
     VerifyImport,
     ImportCancelled,
     ImportCompleted,
-    ImportConfirmation
+    ImportConfirmation,
+    DeleteCrateEngineRequest,
+    DeleteCancelled,
+    DeleteCompleted
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum ModalState {
     Hidden,
     VerifyImport,
-    ShowImportResult
+    VerifyDelete,
+    ShowActionResult
 }
 
 impl Default for ModalState {
@@ -66,7 +70,7 @@ pub struct CrateEngineTab {
     selected_engine: Option<String>,
     pub(crate) selected_beam_ng_mod: Option<ListPath>,
     modal: ModalState,
-    import_result_str: Option<String>
+    action_result_string: Option<String>
 }
 
 impl CrateEngineTab {
@@ -75,7 +79,7 @@ impl CrateEngineTab {
             selected_engine: None,
             selected_beam_ng_mod: None,
             modal: ModalState::Hidden,
-            import_result_str: None
+            action_result_string: None
         }
     }
 
@@ -95,9 +99,18 @@ impl CrateEngineTab {
             }
             CrateTabMessage::ImportConfirmation => {
                 self.import_crate_engine(app_data);
-                self.modal = ModalState::ShowImportResult
+                self.modal = ModalState::ShowActionResult
             }
             CrateTabMessage::ImportCompleted => {
+                self.modal = ModalState::Hidden
+            }
+            CrateTabMessage::DeleteCrateEngineRequest => {
+                self.modal = ModalState::VerifyDelete
+            }
+            CrateTabMessage::DeleteCancelled => {
+                self.modal = ModalState::Hidden
+            }
+            CrateTabMessage::DeleteCompleted => {
                 self.modal = ModalState::Hidden
             }
         }
@@ -106,7 +119,7 @@ impl CrateEngineTab {
     pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
         match update_event {
             Message::RefreshCrateEngines => {
-                if self.modal == ModalState::ShowImportResult {
+                if self.modal == ModalState::ShowActionResult {
                     self.modal = ModalState::Hidden
                 }
             }
@@ -121,6 +134,31 @@ impl CrateEngineTab {
             if !app_data.crate_engine_data.available_engines.contains(name) {
                 self.selected_engine = None;
             }
+        }
+    }
+
+    pub fn notify_action_success(&mut self, action_event: &Message) {
+        match action_event {
+            Message::DeleteCrateEngine(eng_name) => {
+                self.selected_engine = None;
+                if self.modal == ModalState::VerifyDelete {
+                    self.set_error_status(format!("Successfully deleted {}", eng_name));
+                    self.modal = ModalState::ShowActionResult
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn notify_action_failure(&mut self, action_event: &Message, reason: &str) {
+        match action_event {
+            Message::DeleteCrateEngine(eng_name) => {
+                if self.modal == ModalState::VerifyDelete {
+                    self.set_error_status(format!("Failed to delete {}. {}", eng_name, reason));
+                    self.modal = ModalState::ShowActionResult;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -172,6 +210,11 @@ impl CrateEngineTab {
                 };
                 metadata_container = metadata_container.push(Text::new(format!("Version: {}", version_string)));
                 metadata_container = metadata_container.push(Text::new(format!("Automation Version: {}", m.automation_version())));
+                metadata_container = metadata_container.push(
+                    Button::new("Delete")
+                        .style(theme::Button::Destructive)
+                        .on_press(Message::CrateTab(CrateTabMessage::DeleteCrateEngineRequest))
+                );
             }
         };
         metadata_container
@@ -226,7 +269,7 @@ impl CrateEngineTab {
                 )).padding(20);
                 Some(modal_contents.into())
             }
-            ModalState::ShowImportResult => {
+            ModalState::ShowActionResult => {
                 let f: fn(&Theme) -> container::Appearance = |_theme: &Theme| {
                     container::Appearance{
                         text_color: None,
@@ -237,7 +280,7 @@ impl CrateEngineTab {
                     }
                 };
                 let default_message = String::from("Unknown status");
-                let modal_message = self.import_result_str.as_ref().unwrap_or(&default_message);
+                let modal_message = self.action_result_string.as_ref().unwrap_or(&default_message);
                 let modal_contents = container(
                     Column::new()
                         .align_items(Alignment::Center)
@@ -248,6 +291,52 @@ impl CrateEngineTab {
                                 .style(theme::Button::Positive)
                                 .on_press(Message::RefreshCrateEngines)
                         )
+                ).style(theme::Container::Custom(
+                    Box::new(f)
+                )).padding(20);
+                Some(modal_contents.into())
+            }
+            ModalState::VerifyDelete => {
+                let f: fn(&Theme) -> container::Appearance = |_theme: &Theme| {
+                    container::Appearance{
+                        text_color: None,
+                        background: Some(Background::Color(WHITE)),
+                        border_radius: 1.0,
+                        border_width: 1.0,
+                        border_color: Color::BLACK,
+                    }
+                };
+                let default_val = String::from("unknown");
+                let crate_name = self.selected_engine.as_ref().unwrap_or(&default_val);
+                let modal_message = format!("This will delete crate engine {}", crate_name);
+                let confirm_content =
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .width(Length::Units(50))
+                        .push(Text::new("Ok").size(20).width(Fill));
+                let mut confirm_button =
+                    button(confirm_content)
+                        .style(theme::Button::Positive)
+                        .on_press(Message::DeleteCrateEngine(crate_name.to_string()));
+                let cancel_content =
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .width(Length::Units(75))
+                        .push(Text::new("Cancel").size(20).width(Fill));
+                let cancel_button =
+                    button(cancel_content)
+                        .style(theme::Button::Destructive)
+                        .on_press(Message::CrateTab(CrateTabMessage::DeleteCancelled));
+                let button_rom =
+                    Row::with_children(vec![confirm_button.into(), cancel_button.into()])
+                        .width(Length::Shrink)
+                        .spacing(5);
+                let modal_contents = container(
+                    Column::new()
+                        .align_items(Alignment::Center)
+                        .spacing(5)
+                        .push(container(text(modal_message)))
+                        .push(button_rom)
                 ).style(theme::Container::Custom(
                     Box::new(f)
                 )).padding(20);
@@ -299,16 +388,16 @@ impl CrateEngineTab {
 
     fn set_success_status(&mut self, error_str: String) {
         info!("{}",&error_str);
-        self.import_result_str = Some(error_str);
+        self.action_result_string = Some(error_str);
     }
 
     fn set_error_status(&mut self, error_str: String) {
         error!("{}",&error_str);
-        self.import_result_str = Some(error_str);
+        self.action_result_string = Some(error_str);
     }
 
     fn clear_status_string(&mut self) {
-        self.import_result_str = None
+        self.action_result_string = None
     }
 }
 

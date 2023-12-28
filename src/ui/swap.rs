@@ -160,6 +160,21 @@ impl EngineSwapTab {
         }
     }
 
+    pub fn notify_action_success(&mut self, action_event: &Message) {
+        match action_event {
+            Message::DeleteCrateEngine(eng_name) => {
+                self.current_crate_eng = None;
+                if self.current_source == EngineSource::CrateEngine {
+                    self.current_new_spec_name.clear();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn notify_action_failure(&mut self, action_event: &Message, reason: &str) {
+    }
+
     pub fn update_status(&mut self, status: String) {
         self.status_message = status;
     }

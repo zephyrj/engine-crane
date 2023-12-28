@@ -49,6 +49,12 @@ impl SettingsTab {
 
     pub fn app_data_update(&mut self, _app_data: &ApplicationData, _update_event: &Message) {
     }
+
+    pub fn notify_action_success(&mut self, _action_event: &Message) {
+    }
+
+    pub fn notify_action_failure(&mut self, action_event: &Message, reason: &str) {
+    }
 }
 
 impl Tab for SettingsTab {

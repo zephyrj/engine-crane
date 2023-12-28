@@ -73,6 +73,7 @@ pub enum Message {
     CrateTab(CrateTabMessage),
     Edit(EditMessage),
     Settings(SettingsMessage),
+    DeleteCrateEngine(String),
     RefreshCrateEngines
 }
 
@@ -269,6 +270,20 @@ impl UIMain {
         self.crate_engine_tab.app_data_update(&self.app_data, update_event);
         self.edit_tab.app_data_update(&self.app_data, update_event);
     }
+
+    pub fn notify_action_success(&mut self, action_event: &Message) {
+        self.settings_tab.notify_action_success(action_event);
+        self.engine_swap_tab.notify_action_success(action_event);
+        self.crate_engine_tab.notify_action_success(action_event);
+        self.edit_tab.notify_action_success(action_event);
+    }
+
+    pub fn notify_action_failure(&mut self, action_event: &Message, reason: String) {
+        self.settings_tab.notify_action_failure(action_event, &reason);
+        self.engine_swap_tab.notify_action_failure(action_event, &reason);
+        self.crate_engine_tab.notify_action_failure(action_event, &reason);
+        self.edit_tab.notify_action_failure(action_event, &reason);
+    }
 }
 
 impl Sandbox for UIMain {
@@ -463,6 +478,20 @@ impl Sandbox for UIMain {
             },
             Message::RefreshCrateEngines => {
                 self.app_data.refresh_crate_engines();
+                self.notify_app_data_update(&message);
+            }
+            Message::DeleteCrateEngine(ref eng_id) => {
+                if let Some(path) = self.app_data.crate_engine_data.get_location_for(eng_id.as_str()) {
+                    match std::fs::remove_file(path) {
+                        Ok(_) => {
+                            self.notify_action_success(&message);
+                            self.app_data.refresh_crate_engines();
+                        },
+                        Err(e) => {
+                            self.notify_action_failure(&message, e.to_string());
+                        }
+                    }
+                }
                 self.notify_app_data_update(&message);
             }
         }

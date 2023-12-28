@@ -21,7 +21,9 @@
 
 use std::collections::BTreeMap;
 use std::fs::create_dir;
+use std::io;
 use std::path::PathBuf;
+use itertools::Itertools;
 use tracing::{error, info, Level, span, warn};
 use crate::data::{CrateEngineMetadata, find_crate_engines_in_path, get_default_crate_engine_path, get_local_app_data_path};
 use crate::ui::{GlobalSettings, ListPath};
@@ -254,6 +256,10 @@ impl CrateEngineData {
 
     pub fn get_metadata_for(&self, name: &str) -> Option<&CrateEngineMetadata> {
         self.metadata.get(name)
+    }
+
+    pub fn get_location_for(&self, name: &str) -> Option<&PathBuf> {
+        self.locations.get(name)
     }
 
     fn clear_data(&mut self) {

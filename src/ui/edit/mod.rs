@@ -259,6 +259,12 @@ impl EditTab {
         }
     }
 
+    pub fn notify_action_success(&mut self, _action_event: &Message) {
+    }
+
+    pub fn notify_action_failure(&mut self, action_event: &Message, reason: &str) {
+    }
+
     fn get_modal_content(&self) -> Option<Element<'_, EditMessage>> {
         match self.modal_state {
             ModalState::Hidden => None,
