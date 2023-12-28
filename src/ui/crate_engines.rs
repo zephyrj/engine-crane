@@ -142,7 +142,7 @@ impl CrateEngineTab {
             Message::DeleteCrateEngine(eng_name) => {
                 self.selected_engine = None;
                 if self.modal == ModalState::VerifyDelete {
-                    self.set_error_status(format!("Successfully deleted {}", eng_name));
+                    self.set_success_status(format!("Successfully deleted {}", eng_name));
                     self.modal = ModalState::ShowActionResult
                 }
             }
