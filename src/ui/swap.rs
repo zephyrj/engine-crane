@@ -126,7 +126,11 @@ impl EngineSwapTab {
                 self.current_mod = Some(path_ref.full_path.clone())
             },
             EngineSwapMessage::CrateEngineSelected(name) => {
-                self.current_new_spec_name = name.clone();
+                if let Some(metadata) = _app_data.crate_engine_data.get_metadata_for(&name) {
+                    self.current_new_spec_name = metadata.name().to_string()
+                } else {
+                    self.current_new_spec_name = name.clone();
+                }
                 self.current_crate_eng = Some(name)
             },
             EngineSwapMessage::NameEntered(new_car_name) => {
