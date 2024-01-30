@@ -22,10 +22,8 @@
 
 
 mod ui;
-
-mod fabricator;
 mod data;
-
+mod fabricator;
 
 use std::env;
 use std::path::PathBuf;

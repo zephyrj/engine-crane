@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2023 zephyrj
+ * 2024 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -19,6 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod numeric;
-pub mod filesystem;
-pub mod units;
+pub fn kw_to_bhp(power_kw: f64) -> f64 {
+    power_kw * 1.341
+}
+

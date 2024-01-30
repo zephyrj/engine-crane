@@ -1,0 +1,239 @@
+/*
+ * Copyright (c):
+ * 2024 zephyrj
+ * zephyrj@protonmail.com
+ *
+ * This file is part of engine-crane.
+ *
+ * engine-crane is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * engine-crane is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+use std::io::{Read, Write};
+use std::mem;
+use bincode::{deserialize_from, serialize_into};
+use serde::{Deserialize, Serialize};
+use automation::sandbox::{AspirationType, BlockConfig, HeadConfig, Valves};
+use crate::data::crate_engine::{CurrentMetadataType};
+use crate::data::crate_engine::data::DataVersion;
+use crate::data::crate_engine::source::DataSource;
+
+pub enum CrateEngineMetadata {
+    MetadataV1(MetadataV1),
+    MetadataV2(MetadataV2)
+}
+
+impl CrateEngineMetadata {
+    pub fn from_current_version(inner_type: CurrentMetadataType) -> CrateEngineMetadata {
+        return CrateEngineMetadata::MetadataV1(inner_type)
+    }
+
+    pub fn from_reader(reader: &mut impl Read) -> Result<CrateEngineMetadata, String> {
+        let mut buf = [0u8; mem::size_of::<u16>()];
+        reader.read_exact(&mut buf).map_err(|e| format!("Failed to read metadata. {}", e.to_string()))?;
+        let metadata_version = u16::from_le_bytes(buf);
+        match metadata_version {
+            MetadataV1::VERSION_U16 => {
+                Ok(CrateEngineMetadata::MetadataV1(_deserialize_metadata(reader)?))
+            },
+            MetadataV2::VERSION_U16 => {
+                Ok(CrateEngineMetadata::MetadataV2(_deserialize_metadata(reader)?))
+            },
+            _ => Err(format!("Unknown metadata version {}", metadata_version))
+        }
+    }
+
+    pub fn get_metadata_version_u16(&self) -> u16 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.get_version_u16(),
+            CrateEngineMetadata::MetadataV2(m) => m.get_version_u16()
+        }
+    }
+
+    pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
+        writer.write(&self.get_metadata_version_u16().to_le_bytes())?;
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => serialize_into(writer, &m),
+            CrateEngineMetadata::MetadataV2(m) => serialize_into(writer, &m),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            CrateEngineMetadata::MetadataV1(d) => { &d.name }
+            CrateEngineMetadata::MetadataV2(d) => { &d.name }
+        }
+    }
+
+    pub fn data_version(&self) -> Result<DataVersion, String> {
+        let val = match self {
+            CrateEngineMetadata::MetadataV1(d) => { &d.data_version }
+            CrateEngineMetadata::MetadataV2(d) => { &d.data_version }
+        };
+        DataVersion::from_u16(*val)
+    }
+
+    pub fn automation_version(&self) -> u64 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => { m.automation_version }
+            CrateEngineMetadata::MetadataV2(m) => { m.automation_version }
+        }
+    }
+
+    pub fn build_year(&self) -> u16 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.build_year,
+            CrateEngineMetadata::MetadataV2(m) => m.build_year
+        }
+    }
+
+    pub fn block_config(&self) -> &BlockConfig {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.block_config,
+            CrateEngineMetadata::MetadataV2(m) => &m.block_config
+        }
+    }
+
+    pub fn head_config(&self) -> &HeadConfig {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.head_config,
+            CrateEngineMetadata::MetadataV2(m) => &m.head_config
+        }
+    }
+
+    pub fn valves(&self) -> &Valves {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.valves,
+            CrateEngineMetadata::MetadataV2(m) => &m.valves
+        }
+    }
+
+    pub fn capacity(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.capacity,
+            CrateEngineMetadata::MetadataV2(m) => m.capacity
+        }
+    }
+
+    pub fn aspiration(&self) -> &AspirationType {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.aspiration,
+            CrateEngineMetadata::MetadataV2(m) => &m.aspiration
+        }
+    }
+
+    pub fn fuel(&self) -> &str {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => &m.fuel,
+            CrateEngineMetadata::MetadataV2(m) => &m.fuel
+        }
+    }
+
+    pub fn peak_power(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.peak_power,
+            CrateEngineMetadata::MetadataV2(m) => m.peak_power
+        }
+    }
+
+    pub fn peak_power_rpm(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.peak_power_rpm,
+            CrateEngineMetadata::MetadataV2(m) => m.peak_power_rpm
+        }
+    }
+
+    pub fn peak_torque(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.peak_torque,
+            CrateEngineMetadata::MetadataV2(m) => m.peak_torque
+        }
+    }
+
+    pub fn peak_torque_rpm(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.peak_torque_rpm,
+            CrateEngineMetadata::MetadataV2(m) => m.peak_torque_rpm
+        }
+    }
+
+    pub fn max_rpm(&self) -> u32 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.max_rpm,
+            CrateEngineMetadata::MetadataV2(m) => m.max_rpm
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MetadataV1 {
+    pub data_version: u16,
+    pub automation_version: u64,
+    pub name: String,
+    pub engine_jbeam_hash: Option<[u8; 32]>,
+    pub automation_data_hash: Option<[u8; 32]>,
+    pub build_year: u16,
+    pub block_config: BlockConfig,
+    pub head_config: HeadConfig,
+    pub valves: Valves,
+    pub capacity: u32,
+    pub aspiration: AspirationType,
+    pub fuel: String,
+    pub peak_power: u32,
+    pub peak_power_rpm: u32,
+    pub peak_torque: u32,
+    pub peak_torque_rpm: u32,
+    pub max_rpm: u32
+}
+
+impl MetadataV1 {
+    const VERSION_U16: u16 = 1_u16;
+    pub fn get_version_u16(&self) -> u16 {
+        Self::VERSION_U16
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MetadataV2 {
+    data_version: u16,
+    automation_version: u64,
+    name: String,
+    source: DataSource,
+    build_year: u16,
+    block_config: BlockConfig,
+    head_config: HeadConfig,
+    valves: Valves,
+    capacity: u32,
+    aspiration: AspirationType,
+    fuel: String,
+    peak_power: u32,
+    peak_power_rpm: u32,
+    peak_torque: u32,
+    peak_torque_rpm: u32,
+    max_rpm: u32
+}
+
+impl MetadataV2 {
+    const VERSION_U16: u16 = 2_u16;
+    pub fn get_version_u16(&self) -> u16 {
+        Self::VERSION_U16
+    }
+}
+
+fn _deserialize_metadata<R, T>(reader: R) -> Result<T, String>
+    where
+        R: Read,
+        T: serde::de::DeserializeOwned,
+{
+    deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?
+}

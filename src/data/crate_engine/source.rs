@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2023 zephyrj
+ * 2024 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -18,7 +18,21 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
+use serde::{Deserialize, Serialize};
 
-pub mod numeric;
-pub mod filesystem;
-pub mod units;
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub enum DataSource {
+    BeamNGMod(BeamNGHashData),
+    TomlExport(TomlHashData)
+}
+
+#[derive(Debug, Deserialize, Serialize, Ord, PartialOrd, Eq, PartialEq)]
+struct BeamNGHashData {
+    engine_jbeam_hash: Option<[u8; 32]>,
+    automation_data_hash: Option<[u8; 32]>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Ord, PartialOrd, Eq, PartialEq)]
+struct TomlHashData {
+    hash: Option<[u8; 32]>
+}
