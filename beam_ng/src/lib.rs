@@ -266,7 +266,7 @@ impl ModData {
         }
 
         for filename in self.archive_data.file_names() {
-            if let Some(expected_name) = &expected_eng_key {
+            if let Some(expected_name) = &expected_filename {
                 if filename.ends_with(expected_name) {
                     found_filename = Some(filename.to_string());
                     info!("Found expected engine.jbeam file at {}", filename);
@@ -278,13 +278,18 @@ impl ModData {
                 info!("Found legacy engine.jbeam file at {}", filename);
                 break;
             }
-            if filename.contains("camso_engine_") {
-                if !filename.contains("structure") &&
-                    !filename.contains("internals") &&
-                    !filename.contains("balancing") {
-                    found_filename = Some(filename.to_string());
-                    info!("Found engine.jbeam file at {}", filename);
-                    break;
+        }
+
+        if found_filename.is_none() {
+            for filename in self.archive_data.file_names() {
+                if filename.contains("camso_engine_") {
+                    if !filename.contains("structure") &&
+                        !filename.contains("internals") &&
+                        !filename.contains("balancing") {
+                        found_filename = Some(filename.to_string());
+                        info!("Found engine.jbeam file at {}", filename);
+                        break;
+                    }
                 }
             }
         }
