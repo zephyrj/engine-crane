@@ -27,21 +27,20 @@ use std::fmt::{Display};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use bincode::{deserialize_from, Options, serialize_into};
+use bincode::{Options};
 use serde::{Deserialize, Serialize};
 use tracing::{warn};
-use automation::sandbox::{EngineV1};
 use beam_ng::jbeam;
-use metadata::MetadataV1;
-use crate::data::crate_engine::data::{DataV1, DataVersion};
 
-pub use metadata::{CrateEngineMetadata};
+pub use metadata::CrateEngineMetadata;
+pub use data::CrateEngineData;
+pub use data::beam_ng_mod;
+pub use data::direct_export;
+
+pub type FromBeamNGModOptions = beam_ng_mod::CreationOptions;
 
 
-pub(crate) const CRATE_ENGINE_FILE_SUFFIX: &'static str = "eng";
-
-type CurrentMetadataType = MetadataV1;
-type CurrentDataType = DataV1;
+pub const CRATE_ENGINE_FILE_SUFFIX: &'static str = "eng";
 
 
 pub struct CrateEngine {
@@ -50,8 +49,14 @@ pub struct CrateEngine {
 }
 
 impl CrateEngine {
-    pub fn from_beamng_mod_zip(mod_path: &Path, options: CreationOptions) -> Result<CrateEngine, String> {
-        let data = DataV1::from_beamng_mod_zip(mod_path, options)?;
+    pub fn from_beamng_mod_zip(mod_path: &Path, options: FromBeamNGModOptions) -> Result<CrateEngine, String> {
+        let crate_data = CrateEngineData::from_beamng_mod_zip(mod_path, options)?;
+        let data = match crate_data {
+            CrateEngineData::BeamNGMod(ref d) => match d {
+                beam_ng_mod::Data::V1(d) => d
+            }
+            _ => return Err("Should have created crate engine from beamng data".to_string())
+        };
         let engine_data = data.main_engine_jbeam_data().unwrap();
         let name =
             _get_name_from_jbeam_data(engine_data).unwrap_or_else(
@@ -74,8 +79,8 @@ impl CrateEngine {
             None => "Unknown".to_string(),
             Some(f) => f.clone()
         };
-        let metadata = CurrentMetadataType {
-            data_version: CurrentDataType::VERSION.as_u16(),
+        let metadata = metadata::CurrentMetadataType {
+            data_version: crate_data.version_int(),
             automation_version: data.automation_data().variant_version,
             name,
             automation_data_hash,
@@ -96,7 +101,7 @@ impl CrateEngine {
 
         Ok(CrateEngine{
             metadata: CrateEngineMetadata::from_current_version(metadata),
-            data: CrateEngineData::from_current_version(data)
+            data: crate_data
         })
     }
 
@@ -115,85 +120,12 @@ impl CrateEngine {
         self.metadata.name()
     }
 
-    pub fn version(&self) -> DataVersion {
-        self.metadata.data_version().unwrap()
+    pub fn version(&self) -> u16 {
+        self.metadata.data_version()
     }
 
-    pub fn get_automation_car_file_data(&self) -> &Vec<u8> {
-        self.data.get_automation_car_file_data()
-    }
-
-    pub fn get_automation_engine_data(&self) -> &EngineV1 {
-        self.data.get_automation_engine_data()
-    }
-
-    pub fn get_engine_jbeam_data(&self) -> Option<&Vec<u8>> {
-        self.data.get_engine_jbeam_data()
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct CreationOptions {
-    pub xref_mod_with_sandbox: bool
-}
-
-impl CreationOptions {
-    pub fn default() -> CreationOptions {
-        CreationOptions { xref_mod_with_sandbox: true }
-    }
-}
-
-pub enum CrateEngineData {
-    DataV1(DataV1)
-}
-
-impl CrateEngineData {
-    fn from_current_version(inner_type: CurrentDataType) -> CrateEngineData {
-        return CrateEngineData::DataV1(inner_type)
-    }
-
-    pub fn from_reader(metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<CrateEngineData, String> {
-        match metadata.data_version()? {
-            DataVersion::V1 => {
-                let internal_data =
-                    deserialize_from(reader).map_err(|e| {
-                        format!("Failed to deserialise {} crate engine. {}", DataVersion::V1, e.to_string())
-                    })?;
-                Ok(CrateEngineData::DataV1(internal_data))
-            }
-        }
-    }
-
-    pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
-        match self {
-            CrateEngineData::DataV1(d) => {
-                serialize_into(writer, d)
-            }
-        }
-    }
-
-    pub fn get_automation_car_file_data(&self) -> &Vec<u8> {
-        match self {
-            CrateEngineData::DataV1(d) => {
-                &d.car_file_data()
-            }
-        }
-    }
-
-    pub fn get_automation_engine_data(&self) -> &EngineV1 {
-        match self {
-            CrateEngineData::DataV1(d) => {
-                &d.automation_data()
-            }
-        }
-    }
-
-    pub fn get_engine_jbeam_data(&self) -> Option<&Vec<u8>> {
-        match self {
-            CrateEngineData::DataV1(d) => {
-                d.main_engine_jbeam_data()
-            }
-        }
+    pub fn data(&self) -> &CrateEngineData {
+        &self.data
     }
 }
 
@@ -215,10 +147,11 @@ fn _get_name_from_jbeam_data(engine_data: &Vec<u8>) -> Option<String> {
     Some(eng_info.get("name")?.as_str()?.to_string())
 }
 
+
 #[test]
 fn create_crate_engine() -> Result<(), String> {
     let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods/dawnv6.zip");
-    let eng = CrateEngine::from_beamng_mod_zip(&path, CreationOptions::default())?;
+    let eng = CrateEngine::from_beamng_mod_zip(&path, data::beam_ng_mod::CreationOptions::default())?;
     println!("Loaded {} from mod", eng.name());
     let crate_path = PathBuf::from(format!("{}.eng", eng.name()));
     {
@@ -229,13 +162,6 @@ fn create_crate_engine() -> Result<(), String> {
                 Err(e.to_string())
             }
         }?
-    }
-
-    {
-        let calc = crate::fabricator::AcEngineParameterCalculatorV1::from_crate_engine(&crate_path)?;
-        println!("Limiter {}", calc.limiter());
-        println!("Torque {}", calc.peak_torque());
-        println!("BHP {}", calc.peak_bhp());
     }
     Ok(())
 }

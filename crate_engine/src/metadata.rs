@@ -24,9 +24,9 @@ use std::mem;
 use bincode::{deserialize_from, serialize_into};
 use serde::{Deserialize, Serialize};
 use automation::sandbox::{AspirationType, BlockConfig, HeadConfig, Valves};
-use crate::data::crate_engine::{CurrentMetadataType};
-use crate::data::crate_engine::data::DataVersion;
-use crate::data::crate_engine::source::DataSource;
+use crate::source::DataSource;
+
+pub(crate) type CurrentMetadataType = MetadataV1;
 
 pub enum CrateEngineMetadata {
     MetadataV1(MetadataV1),
@@ -44,12 +44,22 @@ impl CrateEngineMetadata {
         let metadata_version = u16::from_le_bytes(buf);
         match metadata_version {
             MetadataV1::VERSION_U16 => {
-                Ok(CrateEngineMetadata::MetadataV1(_deserialize_metadata(reader)?))
+                let metadata = deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
+                Ok(CrateEngineMetadata::MetadataV1(metadata))
             },
             MetadataV2::VERSION_U16 => {
                 Ok(CrateEngineMetadata::MetadataV2(_deserialize_metadata(reader)?))
             },
             _ => Err(format!("Unknown metadata version {}", metadata_version))
+        }
+    }
+
+    pub fn get_source(&self) -> DataSource {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => {
+                DataSource::create_as_beam_ng(vec![m.engine_jbeam_hash, m.automation_data_hash])
+            },
+            CrateEngineMetadata::MetadataV2(m) => m.source.clone()
         }
     }
 
@@ -75,12 +85,11 @@ impl CrateEngineMetadata {
         }
     }
 
-    pub fn data_version(&self) -> Result<DataVersion, String> {
-        let val = match self {
-            CrateEngineMetadata::MetadataV1(d) => { &d.data_version }
-            CrateEngineMetadata::MetadataV2(d) => { &d.data_version }
-        };
-        DataVersion::from_u16(*val)
+    pub fn data_version(&self) -> u16 {
+        match self {
+            CrateEngineMetadata::MetadataV1(d) => { *&d.data_version }
+            CrateEngineMetadata::MetadataV2(d) => { *&d.data_version }
+        }
     }
 
     pub fn automation_version(&self) -> u64 {
@@ -205,10 +214,10 @@ impl MetadataV1 {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MetadataV2 {
-    data_version: u16,
+    source: DataSource,
+    pub data_version: u16,
     automation_version: u64,
     name: String,
-    source: DataSource,
     build_year: u16,
     block_config: BlockConfig,
     head_config: HeadConfig,

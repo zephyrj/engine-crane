@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2023 zephyrj
+ * 2024 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -21,8 +21,8 @@
 
 use sha2::{Digest, Sha256};
 use tracing::info;
-use automation::car::{CarFile, Section};
-use automation::sandbox::EngineV1;
+use crate::car::{CarFile, Section};
+use crate::sandbox::EngineV1;
 use utils::numeric::round_float_to;
 
 pub struct AutomationSandboxCrossChecker<'a, 'b> {
@@ -32,12 +32,12 @@ pub struct AutomationSandboxCrossChecker<'a, 'b> {
 }
 
 impl<'a, 'b> AutomationSandboxCrossChecker<'a, 'b> {
-    pub(crate) fn new(car_file: &'a CarFile,
-                      sandbox_data: &'b EngineV1) -> AutomationSandboxCrossChecker<'a, 'b> {
+    pub fn new(car_file: &'a CarFile,
+               sandbox_data: &'b EngineV1) -> AutomationSandboxCrossChecker<'a, 'b> {
         AutomationSandboxCrossChecker {car_file, sandbox_data, float_precision: 10}
     }
 
-    pub(crate) fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         let version = self.car_file.get_section("Car").unwrap().get_attribute("Version");
         if let Some(attribute) = version {
             if (attribute.value.as_num()?.round() as u64) < 2200000000 {

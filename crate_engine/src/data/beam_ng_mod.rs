@@ -20,48 +20,95 @@
  */
 
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display};
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::Path;
-use bincode::{Options, serialize_into};
+use bincode::{deserialize_from, Options, serialize_into};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
+
 use automation::sandbox::{EngineV1, SandboxVersion};
-use crate::data::{AutomationSandboxCrossChecker, crate_engine, CreationOptions};
+use automation::validation::{AutomationSandboxCrossChecker};
+use utils::hash::create_sha256_hash_array;
+use crate::CrateEngineMetadata;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub enum DataVersion {
-    V1
+#[derive(Debug)]
+pub struct CreationOptions {
+    pub xref_mod_with_sandbox: bool
 }
 
-impl DataVersion {
-    pub const VERSION_1_STRING: &'static str = "v1";
-
-    pub fn from_u16(val: u16) -> Result<DataVersion, String> {
-        match val {
-            1 => Ok(DataVersion::V1),
-            _ => Err(format!("Unknown data version {}", val))
-        }
-    }
-
-    pub fn as_u16(&self) -> u16 {
-        match self {
-            DataVersion::V1 => 1
-        }
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            DataVersion::V1 => DataVersion::VERSION_1_STRING
-        }
+impl CreationOptions {
+    pub fn default() -> CreationOptions {
+        CreationOptions { xref_mod_with_sandbox: true }
     }
 }
 
-impl Display for DataVersion {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.as_str())
+#[derive(Debug)]
+pub enum Data {
+    V1(DataV1)
+}
+
+impl Data {
+    pub fn from_beamng_mod_zip(mod_path: &Path, options: CreationOptions) -> Result<Data, String> {
+        Ok(Data::V1(DataV1::from_beamng_mod_zip(mod_path, options)?))
+    }
+
+    pub fn from_reader(metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<Data, String> {
+        let internal_data =
+            deserialize_from(reader).map_err(|e| {
+                format!("Failed to deserialise {} crate engine. {}", 1, e.to_string())
+            })?;
+        Ok(Data::V1(internal_data))
+    }
+
+    pub fn version_int(&self) -> u16 {
+        match &self {
+            Data::V1(d) => d.version()
+        }
+    }
+
+    pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
+        match self {
+            Data::V1(d) => serialize_into(writer, d)
+        }
+    }
+
+    pub fn jbeam_data(&self) -> &HashMap<String, Vec<u8>> {
+        match self {
+            Data::V1(d) => d.jbeam_data()
+        }
+    }
+
+    pub fn main_engine_jbeam_data(&self) -> Option<&Vec<u8>> {
+        match self {
+            Data::V1(d) => d.main_engine_jbeam_data()
+        }
+    }
+
+    pub fn automation_data(&self) -> &EngineV1 {
+        match self {
+            Data::V1(d) => d.automation_data()
+        }
+    }
+
+    pub fn automation_data_hash(&self) -> Option<[u8; 32]> {
+        match self {
+            Data::V1(d) => d.automation_data_hash()
+        }
+    }
+
+    pub fn jbeam_data_hash(&self) -> Option<[u8; 32]> {
+        match self {
+            Data::V1(d) => d.jbeam_data_hash()
+        }
+    }
+
+    pub fn car_file_data(&self) -> &Vec<u8> {
+        match self {
+            Data::V1(d) => d.car_file_data()
+        }
     }
 }
 
@@ -76,9 +123,9 @@ pub struct DataV1 {
 }
 
 impl DataV1 {
-    pub const VERSION: DataVersion = DataVersion::V1;
+    pub const VERSION: u16 = 1;
 
-    pub fn version(&self) -> DataVersion {
+    pub fn version(&self) -> u16 {
         Self::VERSION
     }
 
@@ -249,14 +296,4 @@ fn _get_engine_uuid_from_car_file(automation_car_file: &automation::car::CarFile
     let uid =
         variant_info.get_attribute("UID").ok_or("No UID in Car.Variant section".to_string())?.value.as_str();
     Ok(uid.to_string())
-}
-
-fn create_sha256_hash_array(hasher: impl Digest) -> Option<[u8; 32]> {
-    let hash: Vec<u8> = hasher.finalize().iter().map(|b| *b).collect();
-    match <[u8; 32]>::try_from(hash) {
-        Ok(hash_array) => Some(hash_array),
-        Err(_) => {
-            None
-        }
-    }
 }

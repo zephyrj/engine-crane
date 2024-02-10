@@ -1,0 +1,14 @@
+[package]
+name = "crate-engine"
+version = "0.3.1-alpha"
+edition = "2021"
+authors = ["zephyrj <zephyrj@protonmail.com>"]
+
+[dependencies]
+automation = { workspace = true }
+beam_ng = { workspace = true }
+utils = { workspace = true }
+tracing =  { workspace = true }
+sha2 = { workspace = true }
+bincode = { workspace = true }
+serde = { version = "1.0.152", features = ["derive"] }

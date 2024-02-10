@@ -4,13 +4,17 @@ version = "0.3.1-alpha"
 edition = "2021"
 build = "build.rs"
 authors = ["zephyrj <zephyrj@protonmail.com>"]
+default-run = "engine-crane"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = ["assetto_corsa", "automation", "beam_ng", "steam", "utils"]
+members = ["assetto_corsa", "automation", "beam_ng", "crate_engine", "steam", "utils", "crate_engine/ccrate_engine_builder"]
 
 [workspace.dependencies]
+automation = { path = "automation" }
+beam_ng = { path = "beam_ng" }
+crate-engine = { path = "crate_engine" }
 steam = { path = "steam" }
 utils = { path = "utils" }
 iced_native = { version = "0.8" }
@@ -34,8 +38,9 @@ thiserror = "1.0.51"
 
 [dependencies]
 assetto_corsa = { path = "assetto_corsa" }
-automation = { path = "automation" }
-beam_ng = { path = "beam_ng" }
+automation = { workspace = true }
+beam_ng = { workspace = true }
+crate-engine = { workspace = true }
 steam = { workspace = true }
 utils = { workspace = true }
 

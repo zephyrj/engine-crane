@@ -22,7 +22,7 @@
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use itertools::Itertools;
 use tracing::{debug, info};
 use assetto_corsa::car::data;
@@ -30,7 +30,9 @@ use assetto_corsa::car::data::engine;
 use automation::car::CarFile;
 use automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
 use utils::units::kw_to_bhp;
-use crate::data::{AutomationSandboxCrossChecker, CrateEngine};
+use automation::validation::AutomationSandboxCrossChecker;
+use crate_engine::{CrateEngine, CrateEngineData};
+use crate_engine::beam_ng_mod;
 use crate::fabricator::{FabricationError};
 use crate::fabricator::FabricationError::{BeamNGModDataError, FailedToLoad, InvalidData, MissingDataSection, MissingDataSource, ValidationError};
 use crate::utils::numeric::{round_float_to};
@@ -49,24 +51,33 @@ impl EngineParameterCalculator {
         })?;
         info!("Loaded {} from eng file", crate_eng.name());
 
-        info!("Loading Automation car file");
-        let automation_car_file_data = crate_eng.get_automation_car_file_data().clone();
-        if automation_car_file_data.is_empty() {
-            return Err(MissingDataSource("Automation car file".to_string()))
-        }
-        let automation_car_file = CarFile::from_bytes(automation_car_file_data).map_err(|reason|{
-            FailedToLoad("Automation car file".to_string(), reason)
-        })?;
+        match crate_eng.data() {
+            CrateEngineData::BeamNGMod(data_version) => match data_version {
+                beam_ng_mod::Data::V1(data) => {
+                    info!("Loading Automation car file");
+                    let automation_car_file_data = data.car_file_data().clone();
+                    if automation_car_file_data.is_empty() {
+                        return Err(MissingDataSource("Automation car file".to_string()))
+                    }
+                    let automation_car_file = CarFile::from_bytes(automation_car_file_data).map_err(|reason|{
+                        FailedToLoad("Automation car file".to_string(), reason)
+                    })?;
 
-        info!("Loading main engine JBeam file");
-        let engine_jbeam_bytes = crate_eng.get_engine_jbeam_data().ok_or_else(||{
-            MissingDataSource("Main engine JBeam file".to_string())
-        })?;
-        Ok(EngineParameterCalculator::V1(EngineParameterCalculatorV1 {
-            automation_car_file,
-            engine_jbeam_data: serde_hjson::from_slice(engine_jbeam_bytes)?,
-            engine_sqlite_data: crate_eng.get_automation_engine_data().clone()
-        }))
+                    info!("Loading main engine JBeam file");
+                    let engine_jbeam_bytes = data.main_engine_jbeam_data().ok_or_else(||{
+                        MissingDataSource("Main engine JBeam file".to_string())
+                    })?;
+                    Ok(EngineParameterCalculator::V1(EngineParameterCalculatorV1 {
+                        automation_car_file,
+                        engine_jbeam_data: serde_hjson::from_slice(engine_jbeam_bytes)?,
+                        engine_sqlite_data: data.automation_data().clone()
+                    }))
+                }
+            }
+            _ => {
+                Err(Other("Can only currently create EngineParameterCalculator from BeamNG mods".to_string()))
+            }
+        }
     }
 
     pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<EngineParameterCalculator, FabricationError> {

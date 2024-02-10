@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2023 zephyrj
+ * 2024 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -19,20 +19,40 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod car;
-pub mod sandbox;
-pub mod validation;
+use std::collections::BTreeMap;
+use serde::{Deserialize, Serialize};
 
-use std::path::PathBuf;
-use steam;
-
-pub const STEAM_GAME_NAME: &str = "Automation";
-pub const STEAM_GAME_ID: i64 = 293760;
-
-pub fn is_installed() -> bool {
-    get_install_path().is_dir()
+#[derive(Debug)]
+pub struct CreationOptions {
 }
 
-pub fn get_install_path() -> PathBuf {
-    steam::get_game_install_path(STEAM_GAME_NAME)
+impl CreationOptions {
+    pub fn default() -> CreationOptions {
+        CreationOptions {}
+    }
+}
+
+#[derive(Debug)]
+pub enum Data {
+    V1(DataV1)
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct DataV1 {
+    pub exporter_script_version: u32,
+    pub string_data: BTreeMap<String, String>,
+    pub float_data: BTreeMap<String, f64>,
+    pub curve_data: BTreeMap<String, Vec<f64>>,
+    _car_file_data: Option<Vec<u8>>,
+}
+
+impl DataV1 {
+    pub const VERSION: u16 = 1;
+    pub fn version_int(&self) -> u16 {
+        Self::VERSION
+    }
+
+    pub fn new() -> DataV1 {
+        DataV1::default()
+    }
 }

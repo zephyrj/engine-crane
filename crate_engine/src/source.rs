@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2023 zephyrj
+ * 2024 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -18,8 +18,27 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
+use serde::{Deserialize, Serialize};
 
-pub mod numeric;
-pub mod filesystem;
-pub mod units;
-pub mod hash;
+pub const BEAM_NG_MOD_SOURCE_ID: u16 = 1;
+pub const DIRECT_EXPORT_SOURCE_ID: u16 = 2;
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
+pub struct DataSource {
+    pub source_id: u16,
+    pub hashes: Vec<Option<[u8; 32]>>
+}
+
+impl DataSource {
+    pub fn create_as_beam_ng(hashes: Vec<Option<[u8; 32]>>) -> Self {
+        DataSource { source_id: BEAM_NG_MOD_SOURCE_ID, hashes }
+    }
+
+    pub fn source_name(&self) -> String {
+        match self.source_id {
+            BEAM_NG_MOD_SOURCE_ID => String::from("BeamNG Mod"),
+            DIRECT_EXPORT_SOURCE_ID => String::from("Direct Automation Export"),
+            _ => String::from("Unknown")
+        }
+    }
+}

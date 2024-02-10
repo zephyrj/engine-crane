@@ -49,7 +49,7 @@ use tracing::{span, Level, info, error, warn};
 use rfd::FileDialog;
 use serde::{Serialize, Deserialize};
 use assetto_corsa::car::delete_car;
-use crate::data::{CrateEngine, CreationOptions};
+
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 use crate::ui::crate_engines::{CrateEngineTab, CrateTabMessage};
 use crate::ui::data::{ApplicationData, AssettoCorsaData, BeamNGData, CrateEngineData};

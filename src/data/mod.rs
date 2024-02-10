@@ -18,25 +18,20 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
-mod validation;
-mod crate_engine;
 
 
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fs::File;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use directories::BaseDirs;
 use iced::futures::io;
-use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use tracing::warn;
 
 use utils::filesystem::get_filetypes_in_path;
 
-pub use crate::data::validation::AutomationSandboxCrossChecker;
-pub use crate_engine::{CrateEngine, CrateEngineMetadata, CreationOptions};
+pub use crate_engine::{CrateEngine, CrateEngineMetadata, CrateEngineData, FromBeamNGModOptions};
 
 const LOCAL_DATA_DIRNAME: &'static str = "EngineCrane";
 const DEFAULT_CRATE_ENGINE_DIRNAME: &'static str = "crate";
@@ -51,7 +46,7 @@ pub fn find_crate_engines_in_path(path: &Path) -> io::Result<BTreeMap<PathBuf, C
                     found_metadata.insert(path, m);
                 }
                 Err(e) => {
-                    warn!("Error occured for {}. {}", path.display(), e);
+                    warn!("Error occurred for {}. {}", path.display(), e);
                 }
             }
             Err(e) => warn!("Couldn't open {}. {}", path.display(), e.to_string())

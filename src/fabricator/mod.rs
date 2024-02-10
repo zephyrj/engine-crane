@@ -32,7 +32,6 @@ use utils::numeric::{round_float_to, round_up_to_nearest_multiple};
 
 use crate::assetto_corsa::car::data::engine::{CoastCurve, Damage, EngineData, PowerCurve};
 
-use crate::beam_ng;
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::data;
 use crate::assetto_corsa::car::data::ai::Ai;

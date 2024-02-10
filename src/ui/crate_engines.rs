@@ -29,7 +29,8 @@ use iced_aw::style::colors::WHITE;
 use iced_aw::TabLabel;
 use iced_native::widget::{button, container, text, vertical_rule};
 use tracing::{error, info, metadata};
-use crate::data::{CrateEngine, CrateEngineMetadata, CreationOptions};
+
+use crate::data::{CrateEngine, CrateEngineMetadata, FromBeamNGModOptions};
 
 use crate::ui::{ListPath, Message, Tab};
 use crate::ui::data::ApplicationData;
@@ -204,10 +205,9 @@ impl CrateEngineTab {
                 let table_holder =
                     Row::with_children(vec![title_col.into(), value_col.into()]).spacing(10).padding([0, 0, 10, 0]);
                 metadata_container = metadata_container.push(table_holder);
-                let version_string = match m.data_version() {
-                    Ok(v) => v.to_string(),
-                    Err(_) => "Unknown".to_string()
-                };
+                let source_string = m.get_source().source_name();
+                metadata_container = metadata_container.push(Text::new(format!("Data Source: {}", source_string)));
+                let version_string = m.data_version().to_string();
                 metadata_container = metadata_container.push(Text::new(format!("Version: {}", version_string)));
                 metadata_container = metadata_container.push(Text::new(format!("Automation Version: {}", m.automation_version())));
                 metadata_container = metadata_container.push(
@@ -348,7 +348,7 @@ impl CrateEngineTab {
     fn import_crate_engine(&mut self, app_data: &ApplicationData) {
         if let Some(mod_path) = &self.selected_beam_ng_mod {
             if let Some(crate_engine_path) = app_data.settings.crate_engine_path() {
-                match CrateEngine::from_beamng_mod_zip(&mod_path.full_path, CreationOptions::default()) {
+                match CrateEngine::from_beamng_mod_zip(&mod_path.full_path, FromBeamNGModOptions::default()) {
                     Ok(crate_eng) => {
                         let mut sanitized_name = sanitize_filename::sanitize(crate_eng.name());
                         sanitized_name = sanitized_name.replace(" ", "_");

@@ -18,21 +18,14 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
-use serde::{Deserialize, Serialize};
+use sha2::Digest;
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub enum DataSource {
-    BeamNGMod(BeamNGHashData),
-    TomlExport(TomlHashData)
-}
-
-#[derive(Debug, Deserialize, Serialize, Ord, PartialOrd, Eq, PartialEq)]
-struct BeamNGHashData {
-    engine_jbeam_hash: Option<[u8; 32]>,
-    automation_data_hash: Option<[u8; 32]>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Ord, PartialOrd, Eq, PartialEq)]
-struct TomlHashData {
-    hash: Option<[u8; 32]>
+pub fn create_sha256_hash_array(hasher: impl Digest) -> Option<[u8; 32]> {
+    let hash: Vec<u8> = hasher.finalize().iter().map(|b| *b).collect();
+    match <[u8; 32]>::try_from(hash) {
+        Ok(hash_array) => Some(hash_array),
+        Err(_) => {
+            None
+        }
+    }
 }
