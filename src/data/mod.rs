@@ -21,12 +21,10 @@
 
 
 use std::collections::BTreeMap;
-use std::fmt::Display;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use directories::BaseDirs;
 use iced::futures::io;
-use sha2::Digest;
 use tracing::warn;
 
 use utils::filesystem::get_filetypes_in_path;

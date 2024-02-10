@@ -29,7 +29,6 @@ mod crate_engines;
 mod elements;
 
 use std::fs;
-use std::fs::File;
 use swap::{EngineSwapMessage, EngineSwapTab};
 use edit::{EditMessage, EditTab};
 use settings::{SettingsMessage, SettingsTab};

@@ -22,7 +22,6 @@
 use std::collections::BTreeMap;
 use std::fs::create_dir;
 use std::path::PathBuf;
-use itertools::Itertools;
 use tracing::{error, info, Level, span, warn};
 use crate::data::{CrateEngineMetadata, find_crate_engines_in_path, get_default_crate_engine_path, get_local_app_data_path};
 use crate::ui::{GlobalSettings, ListPath};

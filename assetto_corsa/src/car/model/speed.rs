@@ -1,12 +1,7 @@
 extern crate ndarray;
 
 use ndarray::Array1;
-use crate::Car;
-use crate::car::data::Drivetrain;
-use crate::Result;
-use crate::car::data::drivetrain::Gearbox;
 use crate::car::model::{AIR_DENSITY, GRAVITY, STATIC_FRICTION_COEFFICIENT};
-use crate::traits::MandatoryDataSection;
 
 
 pub struct SpeedApproximator {

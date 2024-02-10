@@ -20,9 +20,8 @@
  */
 
 use std::collections::{BTreeMap};
-use std::num::ParseIntError;
 use tracing::warn;
-use crate::error::{Error, ErrorKind, Result};
+use crate::error::Result;
 use crate::ini_utils;
 use crate::ini_utils::Ini;
 use crate::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
@@ -178,7 +177,7 @@ impl MandatoryDataSection for TyreCompounds {
 }
 
 impl CarDataUpdater for TyreCompounds {
-    fn update_car_data(&self, car_data: &mut dyn CarDataFile) -> Result<()> {
+    fn update_car_data(&self, _car_data: &mut dyn CarDataFile) -> Result<()> {
         Ok(())
     }
 }

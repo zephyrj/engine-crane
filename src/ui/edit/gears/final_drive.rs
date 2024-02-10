@@ -31,7 +31,7 @@ use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::gears::final_drive::FinalDriveUpdate::RemoveRatioPressed;
-use crate::ui::edit::gears::ratio_set::{RatioEntry, RatioSet};
+use crate::ui::edit::gears::ratio_set::{RatioSet};
 
 
 #[derive(Debug, Clone)]

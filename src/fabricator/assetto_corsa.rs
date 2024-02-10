@@ -22,7 +22,7 @@
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use itertools::Itertools;
 use tracing::{debug, info};
 use assetto_corsa::car::data;
@@ -34,7 +34,7 @@ use automation::validation::AutomationSandboxCrossChecker;
 use crate_engine::{CrateEngine, CrateEngineData};
 use crate_engine::beam_ng_mod;
 use crate::fabricator::{FabricationError};
-use crate::fabricator::FabricationError::{BeamNGModDataError, FailedToLoad, InvalidData, MissingDataSection, MissingDataSource, ValidationError};
+use crate::fabricator::FabricationError::{InvalidData, MissingDataSection};
 use crate::utils::numeric::{round_float_to};
 
 pub enum EngineParameterCalculator {

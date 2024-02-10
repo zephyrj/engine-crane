@@ -20,7 +20,6 @@
  */
 
 use std::collections::BTreeMap;
-use std::num::ParseFloatError;
 use iced::{Alignment, Length, Padding};
 use iced::alignment::{Vertical};
 use iced::widget::{Column, Container, Row, Text};
@@ -189,7 +188,6 @@ impl FixedGears {
                 .width(Length::Shrink)
                 .spacing(5)
                 .padding(Padding::from([0, 10, 12, 10]));
-        let mut max_gear_idx = 0;
         for (gear_idx, (placeholder, new_ratio)) in row_vals.iter().enumerate() {
             let mut gear_row = Row::new()
                 .width(Length::Shrink)
@@ -214,7 +212,6 @@ impl FixedGears {
                 gear_row = gear_row.push(create_max_ratio_speed_element(ratio_str, calc));
             }
             gear_list = gear_list.push(gear_row);
-            max_gear_idx = gear_idx;
         }
 
         let mut add_remove_row =

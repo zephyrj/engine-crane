@@ -22,10 +22,10 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use iced::{Alignment, Color, Length, Padding, theme, Theme};
+use iced::{Alignment, Color, Length, Padding, Theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::theme::Button;
-use iced::widget::{Column, Container, container, Radio, Row, svg, Text};
+use iced::widget::{Column, Container, container, Radio, Row, Text};
 use iced_native::widget::{scrollable, text, text_input, vertical_rule};
 use iced_native::widget::scrollable::Properties;
 use itertools::Itertools;

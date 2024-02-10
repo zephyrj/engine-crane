@@ -24,7 +24,7 @@ use std::fmt::{Display, Formatter};
 use iced::{Alignment, Length, Padding, theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, Radio, Row, Text};
-use iced_native::widget::{column, text, text_input, vertical_rule};
+use iced_native::widget::{text, text_input, vertical_rule};
 use assetto_corsa::car::model::GearingCalculator;
 use crate::assetto_corsa::car;
 

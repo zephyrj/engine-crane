@@ -279,7 +279,7 @@ impl CarFile {
             }
 
             if parsing_attribute || parsing_int_pair {
-                let mut attribute_name :String;
+                let attribute_name :String;
                 if !parsing_int_pair {
                     let len: usize = self.parse_length();
                     if self.peek_is_blob() {

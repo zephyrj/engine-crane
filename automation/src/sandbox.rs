@@ -35,7 +35,6 @@ use directories::{BaseDirs, UserDirs};
 use crate::STEAM_GAME_ID;
 
 use utils::numeric::round_float_to;
-use crate::STEAM_GAME_ID;
 
 pub enum SandboxVersion {
     Legacy,

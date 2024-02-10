@@ -28,11 +28,9 @@ use std::rc::Weak;
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
-use std::num::ParseIntError;
 use std::path::Path;
 use indexmap::IndexMap;
 use crate::error::{Error, ErrorKind};
-//use std::collections::HashMap as IndexMap;
 
 pub trait IniUpdater {
     fn update_ini(&self, ini_data: &mut Ini) -> std::result::Result<(), String>;

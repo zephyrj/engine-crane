@@ -21,14 +21,14 @@
 
 use std::fs::File;
 use std::path::PathBuf;
-use iced::{Alignment, Background, Color, Element, Length, Padding, Renderer, Theme, theme};
+use iced::{Alignment, Background, Color, Element, Length, Renderer, Theme, theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::Length::Fill;
-use iced::widget::{Button, Column, Container, PickList, Row, Text, TextInput};
+use iced::widget::{Button, Column, Container, Row, Text};
 use iced_aw::style::colors::WHITE;
 use iced_aw::TabLabel;
 use iced_native::widget::{button, container, text, vertical_rule};
-use tracing::{error, info, metadata};
+use tracing::{error, info};
 
 use crate::data::{CrateEngine, CrateEngineMetadata, FromBeamNGModOptions};
 
@@ -75,7 +75,7 @@ pub struct CrateEngineTab {
 }
 
 impl CrateEngineTab {
-    pub(crate) fn new(app_data: &ApplicationData) -> Self {
+    pub(crate) fn new(_app_data: &ApplicationData) -> Self {
         CrateEngineTab {
             selected_engine: None,
             selected_beam_ng_mod: None,
@@ -241,7 +241,7 @@ impl CrateEngineTab {
                         .align_items(Alignment::Center)
                         .width(Length::Units(50))
                         .push(Text::new("Ok").size(20).width(Fill));
-                let mut confirm_button =
+                let confirm_button =
                     button(confirm_content)
                         .style(theme::Button::Positive)
                         .on_press(Message::CrateTab(CrateTabMessage::ImportConfirmation));
@@ -314,7 +314,7 @@ impl CrateEngineTab {
                         .align_items(Alignment::Center)
                         .width(Length::Units(50))
                         .push(Text::new("Ok").size(20).width(Fill));
-                let mut confirm_button =
+                let confirm_button =
                     button(confirm_content)
                         .style(theme::Button::Positive)
                         .on_press(Message::DeleteCrateEngine(crate_name.to_string()));
