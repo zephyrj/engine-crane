@@ -57,7 +57,10 @@ impl CrateEngine {
             }
             _ => return Err("Should have created crate engine from beamng data".to_string())
         };
-        let engine_data = data.main_engine_jbeam_data().unwrap();
+        let engine_data = match data.main_engine_jbeam_data() {
+            None => return Err("Missing main engine jbeam data".to_string()),
+            Some(data) => data
+        };
         let name =
             _get_name_from_jbeam_data(engine_data).unwrap_or_else(
                 || {

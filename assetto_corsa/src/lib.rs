@@ -121,10 +121,8 @@ impl Installation {
                     if sfx_line.starts_with("event") {
                         let temp: Vec<_> = sfx_line.split(":").collect::<Vec<_>>()[1].split("/").collect();
                         let folder_name = temp[2];
-                        if !sfx_data.sfx_by_folder_map.contains_key(folder_name) {
-                            sfx_data.sfx_by_folder_map.insert(String::from(folder_name), Vec::new());
-                        }
-                        sfx_data.sfx_by_folder_map.get_mut(folder_name).unwrap().push(line)
+                        let data_vec = sfx_data.sfx_by_folder_map.entry(folder_name.to_string()).or_insert_with(|| Vec::new());
+                        data_vec.push(line);
                     } else if sfx_line.starts_with("bank") {
                         sfx_data.sfx_bank_map.insert(String::from(sfx_line.split("/").collect::<Vec<_>>()[1]),
                                                      String::from(guid));
