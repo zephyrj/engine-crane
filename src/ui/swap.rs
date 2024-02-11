@@ -119,9 +119,17 @@ impl EngineSwapTab {
             },
             EngineSwapMessage::SourceChanged(e) => {
                 self.current_source = e;
+                self.current_mod = None;
+                self.current_crate_eng = None;
+                self.current_new_spec_name = String::from("");
             },
             EngineSwapMessage::ModSelected(path_ref) => {
-                self.current_new_spec_name = String::from(path_ref.to_string().strip_suffix(".zip").unwrap());
+                const ZIP_PREFIX: &str = ".zip";
+                let mut spec_name = path_ref.to_string();
+                if spec_name.ends_with(ZIP_PREFIX) {
+                    spec_name.truncate(spec_name.len() - ZIP_PREFIX.len())
+                }
+                self.current_new_spec_name = spec_name;
                 self.current_mod = Some(path_ref.full_path.clone())
             },
             EngineSwapMessage::CrateEngineSelected(name) => {

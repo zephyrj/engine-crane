@@ -28,6 +28,7 @@ use bincode::{deserialize_from, Options, serialize_into};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
+use automation::car::Attribute;
 
 use automation::sandbox::{EngineV1, SandboxVersion};
 use automation::validation::{AutomationSandboxCrossChecker};
@@ -287,8 +288,15 @@ fn _get_variant_section_from_car_file(automation_car_file: &automation::car::Car
 
 fn _get_engine_version_from_car_file(automation_car_file: &automation::car::CarFile) -> Result<u64, String> {
     let variant_info = _get_variant_section_from_car_file(automation_car_file)?;
-    let version_num = variant_info.get_attribute("GameVersion").unwrap().value.as_num().unwrap();
-    Ok(version_num as u64)
+    let version_opt = variant_info.get_attribute("GameVersion");
+    match version_opt {
+        None => {
+            Err("Missing GameVersion attribute from Variant info".to_string())
+        }
+        Some(version_attr) => {
+            Ok(version_attr.value.as_num()? as u64)
+        }
+    }
 }
 
 fn _get_engine_uuid_from_car_file(automation_car_file: &automation::car::CarFile) -> Result<String, String> {

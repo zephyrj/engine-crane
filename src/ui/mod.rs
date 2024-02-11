@@ -380,8 +380,20 @@ impl Sandbox for UIMain {
                     let span = span!(Level::INFO, "Creating new car spec");
                     let _enter = span.enter();
 
+                    let current_car_path = match self.engine_swap_tab.current_car.as_ref() {
+                        None => {
+                            let err_str = "Swap failed: Cannot determine current car path";
+                            error!("{}", &err_str);
+                            self.engine_swap_tab.update_status(err_str.to_string());
+                            return;
+                        }
+                        Some(path_ref) => {
+                            path_ref
+                        }
+                    };
+
                     match assetto_corsa::car::create_new_car_spec(&ac_install,
-                                                                  self.engine_swap_tab.current_car.as_ref().unwrap(),
+                                                                  current_car_path,
                                                                   new_spec_name,
                                                                   self.engine_swap_tab.unpack_physics_data)
                     {
