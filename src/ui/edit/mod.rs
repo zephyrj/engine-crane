@@ -118,6 +118,7 @@ impl EditTab {
                     Err(_) => skip_count += 1
                 }
             }
+            info!("Skipped over {} cars", skip_count);
         }
     }
 

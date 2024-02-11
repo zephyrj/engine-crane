@@ -32,6 +32,7 @@ use crate::error::{Error, ErrorKind, Result};
 
 #[derive(Debug)]
 pub struct CarUiData<'a> {
+    #[allow(dead_code)]
     car: &'a mut Car,
     pub ui_info: UiInfo
 }

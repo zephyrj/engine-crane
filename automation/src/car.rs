@@ -131,6 +131,7 @@ impl Display for Attribute {
 #[derive(Debug)]
 pub struct Section {
     name: String,
+    #[allow(dead_code)]
     section_type: u32,
     num_children: usize,
     attributes: HashMap<String, Attribute>,
@@ -357,7 +358,7 @@ impl CarFile {
 
     fn parse_section(&mut self, name: String) -> Section {
         let section_type_len = mem::size_of::<u32>();
-        let section_type = u32::from_le_bytes(self.peek_byte_slice(section_type_len).try_into().expect("Failed to determine num_children"));
+        let section_type = u32::from_le_bytes(self.peek_byte_slice(section_type_len).try_into().expect("Failed to determine section type"));
         self.increment_position(section_type_len);
 
         let num_children_len  = mem::size_of::<u32>();

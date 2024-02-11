@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use crate::Car;
-use crate::error::{Result, Error, ErrorKind};
+use crate::error::Result;
 use crate::ini_utils::Ini;
 use crate::traits::{CarDataFile, DataInterface};
 
@@ -84,11 +84,4 @@ impl<'a> CarDataFile for Setup<'a> {
     fn mut_data_interface(&mut self) -> &mut dyn DataInterface {
         self.car.mut_data_interface()
     }
-}
-
-fn mandatory_field_error(section: &str, key: &str) -> Error {
-    return Error::new(
-        ErrorKind::InvalidCar,
-        format!("Missing {}.{} in {}", section, key, Setup::INI_FILENAME)
-    )
 }

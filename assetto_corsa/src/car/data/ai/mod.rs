@@ -24,7 +24,7 @@ pub use gears::Gears;
 
 use crate::car::Car;
 use crate::ini_utils::Ini;
-use crate::error::{Result, Error, ErrorKind};
+use crate::error::Result;
 use crate::traits::{CarDataFile, DataInterface};
 
 
@@ -74,11 +74,3 @@ impl<'a> CarDataFile for Ai<'a> {
         self.car.mut_data_interface()
     }
 }
-
-fn mandatory_field_error(section: &str, key: &str) -> Error {
-    return Error::new(
-        ErrorKind::InvalidCar,
-        format!("Missing {}.{} in {}", section, key, Ai::INI_FILENAME)
-    )
-}
-

@@ -58,14 +58,16 @@ impl Display for Source {
     }
 }
 
-
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Metadata {
     toml_config: toml::Value,
     boost_curve_data: Option<Vec<(i32, f64)>>,
+
     fuel_flow_data: Option<Vec<(i32, f64)>>
 }
 
+#[allow(dead_code)]
 impl Metadata {
     pub fn new() -> Metadata {
         Metadata {

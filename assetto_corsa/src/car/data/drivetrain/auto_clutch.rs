@@ -26,6 +26,7 @@ use crate::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::error::Result;
 
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ShiftProfile {
     name: String,
@@ -45,7 +46,9 @@ impl ShiftProfile {
 
 #[derive(Debug)]
 pub struct AutoClutch {
+    #[allow(dead_code)]
     upshift_profile: Option<ShiftProfile>,
+    #[allow(dead_code)]
     downshift_profile: Option<ShiftProfile>,
     pub use_on_changes: i32,
     pub min_rpm: i32,

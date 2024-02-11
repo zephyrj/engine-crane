@@ -19,7 +19,6 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use sha2::{Digest, Sha256};
 use tracing::info;
 use crate::car::{CarFile, Section};
 use crate::sandbox::EngineV1;

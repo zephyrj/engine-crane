@@ -77,6 +77,7 @@ impl CarDataUpdater for ExtendedFuelConsumptionBaseData {
     }
 }
 
+#[allow(dead_code)]
 struct FuelConsumptionEfficiency {
     base_data: ExtendedFuelConsumptionBaseData,
     thermal_efficiency: f64,

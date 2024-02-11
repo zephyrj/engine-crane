@@ -24,9 +24,7 @@ mod assetto_corsa;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::Path;
-use itertools::Itertools;
 use serde_hjson;
-use sha2::{Digest};
 use tracing::{error, info, warn};
 use utils::numeric::{round_float_to, round_up_to_nearest_multiple};
 
@@ -46,7 +44,6 @@ use crate::assetto_corsa::car::data::engine;
 use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
-use crate::fabricator::FabricationError::MissingDataSection;
 
 
 #[derive(thiserror::Error, Debug)]
@@ -120,6 +117,7 @@ impl Display for ACEngineParameterVersion {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AssettoCorsaPhysicsLevel {
     BaseGame,
+    #[allow(dead_code)]
     CspExtendedPhysics
 }
 
@@ -167,6 +165,7 @@ impl AdditionalAcCarData {
         AdditionalAcCarData { engine_weight }
     }
 
+    #[allow(dead_code)]
     pub fn default() -> AdditionalAcCarData {
         AdditionalAcCarData { engine_weight: None }
     }
@@ -192,7 +191,7 @@ pub fn update_ac_engine_parameters(ac_car_path: &Path,
         let drivetrain = Drivetrain::from_car(&mut car).map_err(|e|{
             FailedToLoad(Drivetrain::INI_FILENAME.to_string(), e.to_string())
         })?;
-        drive_type = extract_mandatory_section::<data::drivetrain::Traction>(&drivetrain).map_err(|err|{
+        drive_type = extract_mandatory_section::<data::drivetrain::Traction>(&drivetrain).map_err(|_|{
             MissingDataSection("Traction".to_string(), Drivetrain::INI_FILENAME.to_string())
         })?.drive_type
     }
@@ -300,7 +299,7 @@ pub fn update_ac_engine_parameters(ac_car_path: &Path,
                            err.to_string())
         })?;
 
-        let mut power_curve = extract_mandatory_section::<engine::PowerCurve>(&engine).map_err(|err|{
+        let mut power_curve = extract_mandatory_section::<engine::PowerCurve>(&engine).map_err(|_|{
             MissingDataSection(PowerCurve::SECTION_NAME.to_string(),
                                Engine::INI_FILENAME.to_string())
         })?;

@@ -22,12 +22,9 @@
 pub mod beam_ng_mod;
 pub mod direct_export;
 
-use std::fmt::{Display};
 use std::io::{Read, Write};
 use std::path::Path;
-use bincode::{deserialize_from, Options, serialize_into};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest};
+use bincode::{deserialize_from, serialize_into};
 use crate::source::{BEAM_NG_MOD_SOURCE_ID, DIRECT_EXPORT_SOURCE_ID};
 use crate::CrateEngineMetadata;
 

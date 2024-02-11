@@ -20,7 +20,6 @@
  */
 
 use std::collections::HashMap;
-use std::fmt::{Display};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -28,7 +27,6 @@ use bincode::{deserialize_from, Options, serialize_into};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
-use automation::car::Attribute;
 
 use automation::sandbox::{EngineV1, SandboxVersion};
 use automation::validation::{AutomationSandboxCrossChecker};
@@ -56,7 +54,7 @@ impl Data {
         Ok(Data::V1(DataV1::from_beamng_mod_zip(mod_path, options)?))
     }
 
-    pub fn from_reader(metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<Data, String> {
+    pub fn from_reader(_metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<Data, String> {
         let internal_data =
             deserialize_from(reader).map_err(|e| {
                 format!("Failed to deserialise {} crate engine. {}", 1, e.to_string())
@@ -199,7 +197,7 @@ impl DataV1 {
             })?;
         }
 
-        let mut mod_info_json_data = match mod_data.get_info_json() {
+        let mod_info_json_data = match mod_data.get_info_json() {
             Ok(data_str) => {
                 Some(data_str.into_bytes())
             }

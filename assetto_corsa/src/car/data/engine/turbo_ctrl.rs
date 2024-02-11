@@ -206,10 +206,9 @@ impl TurboController {
         self.index
     }
 
-    pub fn delete(&self, controller_file: &mut TurboControllerFile) -> Result<()> {
+    pub fn delete(&self, controller_file: &mut TurboControllerFile) {
         self.lut.delete_from_car_data(controller_file);
-        controller_file.mut_ini_data().remove_section(&self.section_name());
-        Ok(())
+        controller_file.mut_ini_data().remove_section(&self.section_name())
     }
 
     pub fn section_name(&self) -> String {
@@ -296,11 +295,6 @@ impl ControllerCombinator {
             ControllerCombinator::Mult => ControllerCombinator::MULT_VALUE
         }
     }
-}
-
-#[derive(Debug)]
-pub struct ControllerCombinatorParseError{
-    invalid_value: String
 }
 
 impl FromStr for ControllerCombinator {

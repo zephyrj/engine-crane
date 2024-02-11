@@ -99,7 +99,7 @@ impl SpeedApproximator {
         }
 
         // If RPM is higher than the provided values, return the torque at the highest RPM
-        if !found {
+        if found == false {
             return prev_torque;
         }
 

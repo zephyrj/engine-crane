@@ -27,6 +27,7 @@ use crate::ini_utils::Ini;
 use crate::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct TyreData {
     section_name: String,
