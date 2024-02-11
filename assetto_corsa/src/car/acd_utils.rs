@@ -22,6 +22,7 @@
 use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::{fs, io, mem};
+use std::array::TryFromSliceError;
 use indexmap::IndexMap;
 use std::path::{Path, PathBuf};
 use tracing::debug;
@@ -33,6 +34,8 @@ pub type Result<T> = std::result::Result<T, AcdError>;
 pub enum AcdError {
     #[error("io error")]
     IoError(#[from] io::Error),
+    #[error("Data size error")]
+    DataSizeError(#[from] TryFromSliceError),
     #[error("Failed to generate key from {parent}. {reason}")]
     ExtractionKeyGenerationError {
         parent: String,
@@ -73,6 +76,7 @@ fn get_parent_folder_str(path: &Path) -> Result<&str> {
 #[derive(Debug)]
 pub struct AcdArchive {
     acd_path: PathBuf,
+    #[allow(dead_code)]
     extract_key: String,
     contents: AcdFileContents
 }
@@ -297,6 +301,76 @@ impl AcdFileContents {
     }
 }
 
+struct PackedData {
+    path: String,
+    buffer: Vec<u8>,
+    current_pos: usize,
+}
+
+fn throw_error_if_out_of_bounds(requested_idx: usize, max_idx: usize, path: &String, op_id: &str) -> Result<()> {
+    if requested_idx > max_idx {
+        return Err(
+            AcdError::DecodeError {
+                path: path.clone(),
+                reason: format!("Failed to parse {}. Reached end of data", op_id)
+            }
+        );
+    }
+    Ok(())
+}
+
+impl PackedData {
+    fn new(path: &Path, buffer: Vec<u8>) -> PackedData {
+        let path_str = path.to_string_lossy().to_string();
+        PackedData{ path: path_str, buffer, current_pos: 0 }
+    }
+
+    fn peek_bytes(&mut self, num_bytes: usize, peek_id: &str) -> Result<&[u8]> {
+        throw_error_if_out_of_bounds(self.current_pos+num_bytes, self.buffer.len(), &self.path, peek_id)?;
+        Ok(&self.buffer[self.current_pos..(self.current_pos+num_bytes)])
+    }
+
+    fn skip_bytes(&mut self, num_bytes: usize) {
+        self.current_pos += num_bytes;
+    }
+
+    fn read_bytes(&mut self, num_bytes: usize, read_id: &str) -> Result<&[u8]> {
+        throw_error_if_out_of_bounds(self.current_pos+num_bytes, self.buffer.len(), &self.path, read_id)?;
+        let data = &self.buffer[self.current_pos..(self.current_pos+num_bytes)];
+        self.current_pos += num_bytes;
+        Ok(data)
+    }
+
+    fn parse_length(&mut self, length_id: &str) -> Result<u32> {
+        Ok(u32::from_le_bytes(self.read_bytes(mem::size_of::<u32>(), length_id)?.try_into()?))
+    }
+
+    fn parse_utf8_string(&mut self, string_len: usize, string_id: &str) -> Result<String> {
+        match String::from_utf8(self.read_bytes(string_len, string_id)?.to_owned()) {
+            Ok(s) => Ok(s),
+            Err(err) => {
+                Err(
+                    AcdError::DecodeError {
+                        path: self.path.clone(),
+                        reason: format!("Failed to parse {} from UTF-8. {}", string_id, err.to_string())
+                    }
+                )
+            }
+        }
+    }
+
+    fn has_bytes_remaining(&self) -> bool {
+        return self.current_pos < self.buffer.len()
+    }
+}
+
+fn acd_extraction_error(path: &Path, reason: String) -> AcdError {
+    AcdError::DecodeError {
+        path: path.to_string_lossy().to_string(),
+        reason
+    }
+}
+
 /// Credit for this goes to Luigi Auriemma (me@aluigi.org)
 /// This is derived from his quickBMS script which can be found at:
 /// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143
@@ -307,28 +381,25 @@ pub fn extract_acd(acd_path: &Path,
     let mut packed_buffer = Vec::new();
     reader.read_to_end(&mut packed_buffer)?;
 
+    let mut buffer = PackedData::new(acd_path, packed_buffer);
     let mut out_map = IndexMap::new();
-    type LengthField = u32;
-    let mut current_pos: usize = 0;
 
     let mut dlc_pack = None;
-    if &packed_buffer[current_pos..(current_pos+4)] == DLC_BYTE_MARKER {
-        current_pos += 4;
-        dlc_pack = Some(DlcPack::from_bytes(&packed_buffer[current_pos..(current_pos+4)]));
-        current_pos += 4;
+    if buffer.peek_bytes(DLC_BYTE_MARKER.len(), "DLC byte marker")? == DLC_BYTE_MARKER {
+        buffer.skip_bytes(DLC_BYTE_MARKER.len());
+        dlc_pack = Some(
+            DlcPack::from_bytes(buffer.read_bytes(4, "DLC Pack id")?)
+        );
     }
-    while current_pos < packed_buffer.len() {
+    while buffer.has_bytes_remaining() {
         // 4 bytes contain the length of filename
-        let filename_len = LengthField::from_le_bytes(packed_buffer[current_pos..(current_pos+mem::size_of::<LengthField>())].try_into().expect("Failed to parse filename length"));
-        current_pos += mem::size_of::<LengthField>();
+        let filename_len = buffer.parse_length("filename length")?;
 
         // The next 'filename_len' bytes are the filename
-        let filename = String::from_utf8(packed_buffer[current_pos..(current_pos + filename_len as usize)].to_owned()).expect("Failed to parse filename");
-        current_pos += filename_len as usize;
+        let filename = buffer.parse_utf8_string(filename_len as usize, "filename")?;
 
         // The next 4 bytes contain the length of the file content
-        let content_length = LengthField::from_le_bytes(packed_buffer[current_pos..(current_pos+mem::size_of::<LengthField>())].try_into().expect("Failed to parse filename length"));
-        current_pos += mem::size_of::<LengthField>();
+        let content_length = buffer.parse_length(&format!("{} content length", &filename))?;
 
         // The file content is spread out such that each byte of content is stored in 4 bytes.
         // Read each single byte of content, subtract the value of the extraction key from it and store the result
@@ -337,12 +408,12 @@ pub fn extract_acd(acd_path: &Path,
         // Repeat until we have read the full content for the file
         let mut unpacked_buffer: Vec<u8> = Vec::new();
         let mut key_byte_iter = extraction_key.chars().cycle();
-        packed_buffer[current_pos..current_pos+(content_length*4) as usize].iter().step_by(4).for_each(|byte|{
+        let content_data = buffer.read_bytes((content_length * 4) as usize, &format!("{} content", &filename))?;
+        content_data.iter().step_by(4).for_each(|byte|{
             unpacked_buffer.push(byte.wrapping_sub(u32::from(key_byte_iter.next().unwrap()) as u8));
         });
         debug!("{} - {} bytes", filename, content_length);
         out_map.insert(filename, unpacked_buffer);
-        current_pos += (content_length*4) as usize;
     }
     Ok(AcdFileContents{dlc_pack, files: out_map})
 }
@@ -372,15 +443,13 @@ mod tests {
 
     #[test]
     fn extract_acd() {
-        //
-        // /home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/ks_ferrari_f2004/data.acd
-        let path = Path::new("/home/josykes/Downloads/car/RSS_Formula_Hybrid_X_2022-Assetto_Corsa-v4/content/cars/rss_formula_hybrid_x/data.acd");
+        let path = Path::new("C:/Program Files (x86)/Steam/steamapps/common/assettocorsa/content/cars/ks_ferrari_f2004/data.acd");
         AcdArchive::load_from_acd_file(path).unwrap().unpack().unwrap();
     }
 
     #[test]
     fn extract_all_acd_in_folder() {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/");
+        let path = Path::new("C:/Program Files (x86)/Steam/steamapps/common/assettocorsa/content/cars/");
         if let Ok(res) = std::fs::read_dir(path) {
             res.for_each(|p| {
                 let mut x = p.unwrap().path();
@@ -396,8 +465,8 @@ mod tests {
 
     #[test]
     fn read_and_write() {
-        let path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/data.acd");
-        let out_path = Path::new("/home/josykes/.steam/debian-installation/steamapps/common/assettocorsa/content/cars/abarth500_s1/testdata.acd");
+        let path = Path::new("C:/Program Files (x86)/Steam/steamapps/common/assettocorsa/content/cars/abarth500_s1/data.acd");
+        let out_path = Path::new("C:/Program Files (x86)/Steam/steamapps/common/assettocorsa/content/cars/abarth500_s1/testdata.acd");
         let archive = AcdArchive::load_from_acd_file(path).unwrap();
         archive.write_to(out_path).unwrap();
         let mut a = Vec::new();
