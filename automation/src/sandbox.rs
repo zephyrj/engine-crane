@@ -823,6 +823,7 @@ fn sandbox_dir_ellisbury() -> Vec<&'static str> {
     vec!["AutomationGame", "Saved", "UserData", "Sandbox_230915.db"]
 }
 
+#[cfg(test)]
 mod tests {
     use std::path::PathBuf;
     use crate::sandbox::{get_db_path, get_db_path_4_2, SandboxVersion};

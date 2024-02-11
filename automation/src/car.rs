@@ -57,6 +57,7 @@ struct ByteChunk<'a> {
 }
 
 impl<'a> ByteChunk<'a> {
+    #[allow(dead_code)]
     pub fn hex(&self) {
         format!("{:x?}", self.byte_stream);
     }
@@ -209,6 +210,7 @@ impl Section {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Blob {
     chunk: Vec<u8>,
