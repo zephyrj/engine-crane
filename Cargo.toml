@@ -69,3 +69,8 @@ uuid = { version = "1.6.1", features = ["v4"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
+
+[profile.release]
+strip = true
+lto = true
+panic = "abort"
