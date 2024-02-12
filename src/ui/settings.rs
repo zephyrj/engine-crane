@@ -33,6 +33,7 @@ pub struct SettingsTab {
 
 #[derive(Debug, Clone)]
 pub enum SettingsMessage {
+    #[allow(dead_code)]
     ThingSelected(String)
 }
 
@@ -53,7 +54,7 @@ impl SettingsTab {
     pub fn notify_action_success(&mut self, _action_event: &Message) {
     }
 
-    pub fn notify_action_failure(&mut self, action_event: &Message, reason: &str) {
+    pub fn notify_action_failure(&mut self, _action_event: &Message, _reason: &str) {
     }
 }
 

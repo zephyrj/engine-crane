@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "assetto_corsa"
-version = "0.3.1-alpha"
+version = "0.3.2-alpha"
 dependencies = [
  "csv",
  "fs_extra",
@@ -222,7 +222,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "automation"
-version = "0.3.1-alpha"
+version = "0.3.2-alpha"
 dependencies = [
  "bincode",
  "directories",
@@ -263,7 +263,7 @@ checksum = "b645a089122eccb6111b4f81cbc1a49f5900ac4666bb93ac027feaecf15607bf"
 
 [[package]]
 name = "beam_ng"
-version = "0.3.1-alpha"
+version = "0.3.2-alpha"
 dependencies = [
  "directories",
  "parselnk",
@@ -771,7 +771,7 @@ dependencies = [
 
 [[package]]
 name = "crate-engine"
-version = "0.3.1-alpha"
+version = "0.3.2-alpha"
 dependencies = [
  "automation",
  "beam_ng",
@@ -1162,7 +1162,7 @@ dependencies = [
 
 [[package]]
 name = "engine-crane"
-version = "0.3.1-alpha"
+version = "0.3.2-alpha"
 dependencies = [
  "assetto_corsa",
  "automation",
@@ -4424,7 +4424,7 @@ dependencies = [
 
 [[package]]
 name = "steam"
-version = "0.3.1-alpha"
+version = "0.3.2-alpha"
 dependencies = [
  "directories",
 ]
@@ -4926,7 +4926,7 @@ dependencies = [
 
 [[package]]
 name = "utils"
-version = "0.3.1-alpha"
+version = "0.3.2-alpha"
 dependencies = [
  "sha2",
 ]

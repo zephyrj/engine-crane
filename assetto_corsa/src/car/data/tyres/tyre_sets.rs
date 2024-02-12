@@ -71,6 +71,7 @@ enum TyreType {
 }
 
 impl TyreType {
+    #[allow(dead_code)]
     pub fn idx_to_section_name(&self, idx: usize) -> String {
         match idx {
             0 => self.ini_section_prefix().to_string(),

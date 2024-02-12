@@ -45,11 +45,9 @@ pub enum CrateTabMessage {
     BeamNGModSelected(ListPath),
     VerifyImport,
     ImportCancelled,
-    ImportCompleted,
     ImportConfirmation,
     DeleteCrateEngineRequest,
-    DeleteCancelled,
-    DeleteCompleted
+    DeleteCancelled
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -102,16 +100,10 @@ impl CrateEngineTab {
                 self.import_crate_engine(app_data);
                 self.modal = ModalState::ShowActionResult
             }
-            CrateTabMessage::ImportCompleted => {
-                self.modal = ModalState::Hidden
-            }
             CrateTabMessage::DeleteCrateEngineRequest => {
                 self.modal = ModalState::VerifyDelete
             }
             CrateTabMessage::DeleteCancelled => {
-                self.modal = ModalState::Hidden
-            }
-            CrateTabMessage::DeleteCompleted => {
                 self.modal = ModalState::Hidden
             }
         }
@@ -394,10 +386,6 @@ impl CrateEngineTab {
     fn set_error_status(&mut self, error_str: String) {
         error!("{}",&error_str);
         self.action_result_string = Some(error_str);
-    }
-
-    fn clear_status_string(&mut self) {
-        self.action_result_string = None
     }
 }
 

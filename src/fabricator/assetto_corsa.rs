@@ -214,6 +214,7 @@ impl EngineParameterCalculator {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_max_boost_params(&self, decimal_place_precision: u32) -> (i32, f64) {
         match self {
             EngineParameterCalculator::V1(c) => {
@@ -419,7 +420,7 @@ impl EngineParameterCalculatorV1 {
             }
         }
         // Taper curve down to 0
-        let mut rpm_increment = 100;
+        let rpm_increment;
         {
             let last_item = out_vec.last().unwrap();
             let penultimate_item = out_vec.get(out_vec.len()-2).unwrap();
@@ -582,6 +583,7 @@ impl EngineParameterCalculatorV1 {
         )
     }
 
+    #[allow(dead_code)]
     pub fn create_metadata(&self) -> engine::Metadata {
         let mut m = engine::Metadata::new();
         m.set_version(2);
@@ -594,6 +596,7 @@ impl EngineParameterCalculatorV1 {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AssettoCorsaPhysicsLevel {
     BaseGame,
+    #[allow(dead_code)]
     CspExtendedPhysics
 }
 

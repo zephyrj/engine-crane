@@ -34,7 +34,6 @@ use iced_native::widget::scrollable::Properties;
 use iced_native::widget::{button, checkbox, container, Svg, text};
 use iced_native::svg::Handle;
 use tracing::{error, info};
-use assetto_corsa::car::model::GearingCalculator;
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;
@@ -47,11 +46,9 @@ use crate::ui::image_data::ICE_CREAM_SVG;
 
 pub struct EditTab {
     status_message: String,
-    modal_message: String,
     editable_car_paths: Vec<ListPath>,
     current_car_path: Option<PathBuf>,
     gear_configuration: Option<GearConfig>,
-    gear_calculator: Option<GearingCalculator>,
     update_successful: bool,
     modal_state: ModalState,
     show_all_cars: bool
@@ -82,11 +79,9 @@ impl EditTab {
     pub(crate) fn new(app_data: &ApplicationData) -> Self {
         let mut e = EditTab {
             status_message: String::new(),
-            modal_message: "Updating...".to_string(),
             editable_car_paths: Vec::new(),
             current_car_path: None,
             gear_configuration: None,
-            gear_calculator: None,
             update_successful: true,
             modal_state: ModalState::Hidden,
             show_all_cars: false
@@ -263,7 +258,7 @@ impl EditTab {
     pub fn notify_action_success(&mut self, _action_event: &Message) {
     }
 
-    pub fn notify_action_failure(&mut self, action_event: &Message, reason: &str) {
+    pub fn notify_action_failure(&mut self, _action_event: &Message, _reason: &str) {
     }
 
     fn get_modal_content(&self) -> Option<Element<'_, EditMessage>> {

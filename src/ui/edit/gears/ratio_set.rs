@@ -78,12 +78,6 @@ impl RatioSet {
         v
     }
 
-    pub fn mut_entries(&mut self) -> Vec<&mut RatioEntry> {
-        let mut v = Vec::from_iter(self.entries.values_mut());
-        v.sort();
-        v
-    }
-
     pub fn insert(&mut self, ratio_name: String, ratio: f64) -> usize {
         self.max_name_length = max(self.max_name_length , ratio_name.len());
         let idx = self.next_idx;
@@ -112,10 +106,7 @@ impl RatioSet {
         }
     }
 
-    pub fn remove_entry(&mut self, entry: &RatioEntry) -> bool {
-        self.remove(entry.idx)
-    }
-
+    #[allow(dead_code)]
     pub fn update_ratio_name(&mut self, idx: usize, new_name: String) {
         match self.entries.get_mut(&idx) {
             None => {}
@@ -123,6 +114,7 @@ impl RatioSet {
         }
     }
 
+    #[allow(dead_code)]
     pub fn update_ratio_value(&mut self, idx: usize, new_value: f64) {
         match self.entries.get_mut(&idx) {
             None => {}

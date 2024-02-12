@@ -94,26 +94,6 @@ pub fn swap_crate_engine_into_ac_car(crate_engine_path: &Path,
     )
 }
 
-enum ACEngineParameterVersion {
-    V1
-}
-
-impl ACEngineParameterVersion {
-    pub const VERSION_1_STRING: &'static str = "v1";
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ACEngineParameterVersion::V1 => ACEngineParameterVersion::VERSION_1_STRING
-        }
-    }
-}
-
-impl Display for ACEngineParameterVersion {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AssettoCorsaPhysicsLevel {
     BaseGame,
@@ -197,10 +177,8 @@ pub fn update_ac_engine_parameters(ac_car_path: &Path,
     }
     info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, drive_type.mechanical_efficiency());
 
-    let mut mass = None;
-    let mut old_limiter = 0;
+    let mass;
     let new_limiter = calculator.limiter().round() as i32;
-
     {
         let mut ini_data = CarIniData::from_car(&mut car).map_err(|err|{
             FailedToLoad(CarIniData::FILENAME.to_string(), err.to_string())
@@ -246,6 +224,7 @@ pub fn update_ac_engine_parameters(ac_car_path: &Path,
         warn!("Failed to clear turbo controllers. {}", err.to_string());
     }
 
+    let old_limiter;
     {
         let mut engine = Engine::from_car(&mut car).map_err(|err| {
             FailedToLoad(Engine::INI_FILENAME.to_string(), err.to_string())

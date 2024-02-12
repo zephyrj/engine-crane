@@ -77,6 +77,7 @@ impl<'a> CarDataFile for Tyres<'a> {
     }
 }
 
+#[allow(dead_code)]
 fn get_mandatory_field<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> Result<T> {
     let res: T = match ini_utils::get_value(ini_data, section_name, key) {
         Some(val) => val,
@@ -85,6 +86,7 @@ fn get_mandatory_field<T: std::str::FromStr>(ini_data: &Ini, section_name: &str,
     Ok(res)
 }
 
+#[allow(dead_code)]
 fn mandatory_field_error(section: &str, key: &str) -> Error {
     return Error::new(
         ErrorKind::InvalidCar,

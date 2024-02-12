@@ -77,18 +77,14 @@ impl SpeedApproximator {
         // Linear interpolation to find torque at a given RPM
         let mut prev_rpm = 0.0;
         let mut prev_torque = 0.0;
-        let mut found = false;
 
         for (i, &rpm_value) in self.rpm_values.iter().enumerate() {
             if rpm_value >= rpm {
-                found = true;
                 let next_torque = self.torque_values[i];
                 let next_rpm = rpm_value;
-
                 if i == 0 {
                     return next_torque;
                 }
-
                 // Linear interpolation
                 let slope = (next_torque - prev_torque) / (next_rpm - prev_rpm);
                 return prev_torque + slope * (rpm - prev_rpm);
@@ -99,11 +95,7 @@ impl SpeedApproximator {
         }
 
         // If RPM is higher than the provided values, return the torque at the highest RPM
-        if found == false {
-            return prev_torque;
-        }
-
-        0.0
+        prev_torque
     }
 
     pub fn wheel_torque_at(&self, rpm: f64, gear_index: usize) -> f64 {
@@ -185,11 +177,9 @@ fn interpolate_torque(rpm_values: &Array1<f64>, torque_values: &Array1<f64>, rpm
     // Linear interpolation to find torque at a given RPM
     let mut prev_rpm = 0.0;
     let mut prev_torque = 0.0;
-    let mut found = false;
 
     for (i, &rpm_value) in rpm_values.iter().enumerate() {
         if rpm_value >= rpm {
-            found = true;
             let next_torque = torque_values[i];
             let next_rpm = rpm_value;
 
@@ -207,9 +197,5 @@ fn interpolate_torque(rpm_values: &Array1<f64>, torque_values: &Array1<f64>, rpm
     }
 
     // If RPM is higher than the provided values, return the torque at the highest RPM
-    if !found {
-        return prev_torque;
-    }
-
-    0.0
+    prev_torque
 }

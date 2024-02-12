@@ -364,13 +364,6 @@ impl PackedData {
     }
 }
 
-fn acd_extraction_error(path: &Path, reason: String) -> AcdError {
-    AcdError::DecodeError {
-        path: path.to_string_lossy().to_string(),
-        reason
-    }
-}
-
 /// Credit for this goes to Luigi Auriemma (me@aluigi.org)
 /// This is derived from his quickBMS script which can be found at:
 /// https://zenhax.com/viewtopic.php?f=9&t=90&sid=330e7fe17c78d2bfe2d7e8b7227c6143

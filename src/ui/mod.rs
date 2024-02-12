@@ -71,6 +71,7 @@ pub enum Message {
     EngineSwapRequested,
     CrateTab(CrateTabMessage),
     Edit(EditMessage),
+    #[allow(dead_code)]
     Settings(SettingsMessage),
     DeleteCrateEngine(String),
     RefreshCrateEngines
@@ -245,18 +246,22 @@ pub struct UIMain {
 }
 
 impl UIMain {
+    #[allow(dead_code)]
     pub fn get_settings(&self) -> &GlobalSettings {
         &self.app_data.settings
     }
 
+    #[allow(dead_code)]
     pub fn get_ac_data(&self) -> &AssettoCorsaData {
         &self.app_data.assetto_corsa_data
     }
 
+    #[allow(dead_code)]
     pub fn get_beam_ng_data(&self) -> &BeamNGData {
         &self.app_data.beam_ng_data
     }
 
+    #[allow(dead_code)]
     pub fn get_crate_engine_data(&self) -> &CrateEngineData { &self.app_data.crate_engine_data }
 
     pub fn notify_app_data_update(&mut self, update_event: &Message) {

@@ -215,10 +215,6 @@ impl CustomizableGears {
         self.gearing_calculator.take()
     }
 
-    pub(crate) fn clear_gearing_calculator(&mut self) {
-        self.gearing_calculator = None
-    }
-
     fn create_gear_ratio_column(&self, gear_idx: &GearLabel, ratio_set: &RatioSet ) -> Column<'static, EditMessage>
     {
         let mut inner_col = Column::new()

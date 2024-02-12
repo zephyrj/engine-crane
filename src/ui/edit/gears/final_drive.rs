@@ -30,7 +30,6 @@ use crate::assetto_corsa::car::data::setup::gears::{GearData, SingleGear};
 use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
-use crate::ui::edit::gears::final_drive::FinalDriveUpdate::RemoveRatioPressed;
 use crate::ui::edit::gears::ratio_set::{RatioSet};
 
 
@@ -47,7 +46,6 @@ pub enum FinalDriveUpdate {
 
 #[derive(Debug, Default)]
 pub struct FinalDrive {
-    setup_data: Option<SingleGear>,
     new_setup_data: RatioSet,
     new_ratio_data: Option<(String, String)>
 }
@@ -69,7 +67,7 @@ impl FinalDrive {
                 });
             }
         };
-        FinalDrive { setup_data, new_setup_data, new_ratio_data: None }
+        FinalDrive { new_setup_data, new_ratio_data: None }
     }
 
     pub fn get_default_ratio_val(&self) -> f64 {
@@ -153,7 +151,7 @@ impl FinalDrive {
                 ).size(10)
             );
             let del_but = match self.new_setup_data.len() > 1 {
-                true => create_delete_button(EditMessage::FinalDriveUpdate(RemoveRatioPressed(ratio_entry.idx))),
+                true => create_delete_button(EditMessage::FinalDriveUpdate(FinalDriveUpdate::RemoveRatioPressed(ratio_entry.idx))),
                 false => create_disabled_delete_button()
             };
             r = r.push(del_but.height(Length::Units(15)).width(Length::Units(15)));

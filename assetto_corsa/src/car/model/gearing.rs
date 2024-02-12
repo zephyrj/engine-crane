@@ -179,11 +179,9 @@ impl GearingCalculator {
         // Linear interpolation to find torque at a given RPM
         let mut prev_rpm = 0.0;
         let mut prev_torque = 0.0;
-        let mut found = false;
 
         for (i, rpm_value) in self.power_curve_data.keys().enumerate() {
             if *rpm_value >= rpm {
-                found = true;
                 let next_torque = self.power_curve_data[rpm_value];
                 let next_rpm = *rpm_value as f64;
                 if i == 0 {
@@ -199,9 +197,6 @@ impl GearingCalculator {
             prev_torque = self.power_curve_data[rpm_value];
         }
 
-        if !found {
-            return prev_torque;
-        }
-        0.0
+        prev_torque
     }
 }

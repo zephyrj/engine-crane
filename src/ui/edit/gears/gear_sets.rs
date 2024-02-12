@@ -62,6 +62,7 @@ pub struct GearSetContainer {
 }
 
 impl GearSetContainer {
+    #[allow(dead_code)]
     fn new(num_gears: usize,
            default: Option<GearsetLabel>,
            entries: BTreeMap<GearsetLabel, BTreeMap<usize, Option<String>>>,
@@ -143,21 +144,10 @@ impl GearSetContainer {
         self.gearing_calculator.take()
     }
 
-    pub(crate) fn clear_gearing_calculator(&mut self) {
-        self.gearing_calculator = None
-    }
-
-    fn num_gearsets(&self) -> usize {
-        self.entries.len()
-    }
-
     fn is_empty(&self) -> bool {
         self.entries.len() == 0
     }
 
-    fn default_gearset(&self) -> &Option<GearsetLabel> {
-        &self.default
-    }
 
     fn set_default_gearset(&mut self, label: &GearsetLabel) {
         if self.entries.contains_key(label) {
@@ -186,10 +176,6 @@ impl GearSetContainer {
                 Some(_) => ratio_opt.clone()
             }
         }).collect()
-    }
-
-    fn clear_default_gearset(&mut self) {
-        self.default = None;
     }
 
     fn update_ratio(&mut self, gearset: &GearsetLabel, gear_idx: usize, ratio: Option<String>) {
@@ -391,8 +377,7 @@ pub struct GearSets {
     original_drivetrain_data: Vec<f64>,
     original_setup_data: Option<setup::gears::GearConfig>,
     updated_gearsets: GearSetContainer,
-    final_drive_data: FinalDrive,
-    gearing_calculator: Option<GearingCalculator>
+    final_drive_data: FinalDrive
 }
 
 impl From<FixedGears> for GearSets {
@@ -495,8 +480,7 @@ impl GearSets {
             original_drivetrain_data,
             original_setup_data,
             updated_gearsets,
-            final_drive_data,
-            gearing_calculator: None
+            final_drive_data
         }
     }
 
@@ -515,10 +499,6 @@ impl GearSets {
 
     pub(crate) fn extract_gearing_calculator(&mut self) -> Option<GearingCalculator> {
         self.updated_gearsets.extract_gearing_calculator()
-    }
-
-    pub(crate) fn clear_gearing_calculator(&mut self) {
-        self.updated_gearsets.clear_gearing_calculator()
     }
 
     pub(crate) fn extract_original_drivetrain_data(&mut self) -> Vec<f64> {
