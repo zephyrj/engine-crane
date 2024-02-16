@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
-use automation::sandbox::{EngineV1, SandboxVersion};
+use automation::sandbox::{EngineV1, SandboxFinder};
 use automation::validation::{AutomationSandboxCrossChecker};
 use utils::hash::create_sha256_hash_array;
 use crate::CrateEngineMetadata;
@@ -182,9 +182,10 @@ impl DataV1 {
 
         let version = _get_engine_version_from_car_file(&automation_car_file)?;
         info!("Engine version number: {}", version);
-        let version = SandboxVersion::from_version_number(version);
-        info!("Deduced as {}", version);
-        let automation_variant_data = match automation::sandbox::load_engine_by_uuid(&uid, version)? {
+        let sandbox_finder = SandboxFinder::default();
+        let sandbox_data = sandbox_finder.find_sandbox_db_for_version(version);
+        info!("Deduced as {}", sandbox_data.version);
+        let automation_variant_data = match automation::sandbox::load_engine_by_uuid(&uid, sandbox_data)? {
             None => {
                 return Err(format!("No engine found with uuid {}", uid));
             }

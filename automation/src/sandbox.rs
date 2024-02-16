@@ -21,7 +21,7 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
+use std::path::{PathBuf};
 use std::str::FromStr;
 use rusqlite::{Connection, Row};
 use sha2::{Sha256, Digest};
@@ -36,6 +36,73 @@ use crate::STEAM_GAME_ID;
 
 use utils::numeric::round_float_to;
 
+pub struct SandboxLookupData {
+    pub path: Option<PathBuf>,
+    pub version: SandboxVersion
+}
+
+pub struct SandboxFinder {
+    legacy_userdata_path: Option<PathBuf>,
+    userdata_path: Option<PathBuf>
+}
+
+impl SandboxFinder {
+    pub fn default() -> SandboxFinder {
+        SandboxFinder {
+            legacy_userdata_path: get_default_legacy_user_data_path(),
+            userdata_path: get_default_user_data_path()
+        }
+    }
+
+    pub fn legacy_userdata_path_is_valid(&self) -> bool {
+        return match &self.legacy_userdata_path {
+            None => false,
+            Some(path) => path.is_dir()
+        }
+    }
+
+    pub fn userdata_path_is_valid(&self) -> bool {
+        return match &self.userdata_path {
+            None => false,
+            Some(path) => path.is_dir()
+        }
+    }
+
+    pub fn set_legacy_userdata_path(&mut self, new_legacy_path: PathBuf) {
+        self.legacy_userdata_path = Some(new_legacy_path)
+    }
+
+
+    pub fn set_userdata_path(&mut self, new_path: PathBuf) {
+        self.userdata_path = Some(new_path)
+    }
+
+    pub fn find_sandbox_db_for_version(&self, version_num: u64) -> SandboxLookupData {
+        let version =  SandboxVersion::from_version_number(version_num);
+        if version == SandboxVersion::Legacy {
+            return match &self.legacy_userdata_path {
+                None => SandboxLookupData { path: None, version },
+                Some(path) => {
+                    SandboxLookupData {
+                        path: Some(path.join(version.get_path())),
+                        version
+                    }
+                }
+            }
+        }
+        match &self.userdata_path {
+            None => SandboxLookupData { path: None, version },
+            Some(path) => {
+                SandboxLookupData {
+                    path: Some(path.join(version.get_path())),
+                    version
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum SandboxVersion {
     Legacy,
     FourDotTwo,
@@ -52,12 +119,12 @@ impl SandboxVersion {
         return SandboxVersion::FourDotTwo;
     }
 
-    pub fn get_path(&self) -> Option<OsString> {
-        return match self {
-            SandboxVersion::Legacy => { get_db_path() }
-            SandboxVersion::FourDotTwo => { get_db_path_4_2() }
-            SandboxVersion::Ellisbury => { get_db_path_ellisbury() }
-        }
+    pub fn get_path(&self) -> String {
+        return String::from(match self {
+            SandboxVersion::Legacy => { "Sandbox_openbeta.db" }
+            SandboxVersion::FourDotTwo => { "Sandbox_211122.db" }
+            SandboxVersion::Ellisbury => { "Sandbox_230915.db" }
+        })
     }
 
     pub fn as_str(&self) -> &'static str {
@@ -670,7 +737,7 @@ fn internal_days_to_year(days: i32) -> u16 {
 }
 
 pub fn load_engines() -> HashMap<String, EngineV1> {
-    let conn = Connection::open(get_db_path_4_2().unwrap()).unwrap();
+    let conn = Connection::open(get_default_db_path_4_2().unwrap()).unwrap();
     let mut stmt = conn.prepare(load_all_engines_query()).unwrap();
     let engs = stmt.query_map([], EngineV1::load_from_row).unwrap();
     let mut out_map = HashMap::new();
@@ -683,10 +750,11 @@ pub fn load_engines() -> HashMap<String, EngineV1> {
     out_map
 }
 
-pub fn load_engine_by_uuid(uuid: &str, version: SandboxVersion) -> Result<Option<EngineV1>, String> {
-    let db_path = version.get_path().ok_or_else(||{
-        format!("No sandbox db file available for {}", version)
-    })?;
+pub fn load_engine_by_uuid(uuid: &str, sandbox_data: SandboxLookupData) -> Result<Option<EngineV1>, String> {
+    let db_path = match sandbox_data.path {
+        None => return Err(format!("No sandbox db file available for {}", sandbox_data.version.as_str())),
+        Some(p) => p
+    };
     info!("Loading {} from {}", uuid, PathBuf::from(&db_path).display());
     let conn = Connection::open(&db_path).map_err(|e|{
         format!("Failed to connect to {}. {}", db_path.to_string_lossy(), e.to_string())
@@ -730,7 +798,7 @@ fn load_engine_by_uuid_query() -> &'static str {
 }
 
 #[cfg(target_os = "windows")]
-pub fn get_db_path() -> Option<OsString> {
+pub fn get_default_legacy_db_path() -> Option<OsString> {
     let sandbox_path = UserDirs::new()?.document_dir()?.join(PathBuf::from_iter(legacy_sandbox_path()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
@@ -739,7 +807,7 @@ pub fn get_db_path() -> Option<OsString> {
 }
 
 #[cfg(target_os = "windows")]
-pub fn get_db_path_4_2() -> Option<OsString> {
+pub fn get_default_db_path_4_2() -> Option<OsString> {
     let sandbox_path = BaseDirs::new()?.cache_dir().join(PathBuf::from_iter(sandbox_dir_4_2()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
@@ -748,7 +816,7 @@ pub fn get_db_path_4_2() -> Option<OsString> {
 }
 
 #[cfg(target_os = "windows")]
-pub fn get_db_path_ellisbury() -> Option<OsString> {
+pub fn get_default_db_path_ellisbury() -> Option<OsString> {
     let sandbox_path = BaseDirs::new()?.cache_dir().join(PathBuf::from_iter(sandbox_dir_ellisbury()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
@@ -756,8 +824,29 @@ pub fn get_db_path_ellisbury() -> Option<OsString> {
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn get_default_legacy_user_data_path() -> Option<PathBuf> {
+    Some(UserDirs::new()?.document_dir()?.join(PathBuf::from_iter(vec!["My Games", "Automation"])))
+}
+
 #[cfg(target_os = "linux")]
-pub fn get_db_path() -> Option<OsString> {
+pub fn get_default_legacy_user_data_path() -> Option<PathBuf> {
+    Some(steam::get_wine_documents_dir(STEAM_GAME_ID).join(PathBuf::from_iter(vec!["My Games", "Automation"])))
+}
+
+#[cfg(target_os = "windows")]
+pub fn get_default_user_data_path() -> Option<PathBuf> {
+    Some(BaseDirs::new()?.cache_dir().join(PathBuf::from_iter(vec!["AutomationGame", "Saved", "UserData"])))
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_default_user_data_path() -> Option<PathBuf> {
+    Some(steam::get_wine_appdata_local_dir(STEAM_GAME_ID).join(PathBuf::from_iter(vec!["AutomationGame", "Saved", "UserData"])))
+}
+
+
+#[cfg(target_os = "linux")]
+pub fn get_default_legacy_db_path() -> Option<OsString> {
     let sandbox_path = steam::get_wine_documents_dir(STEAM_GAME_ID).join(PathBuf::from_iter(legacy_sandbox_path()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
@@ -766,7 +855,7 @@ pub fn get_db_path() -> Option<OsString> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn get_db_path_4_2() -> Option<OsString> {
+pub fn get_default_db_path_4_2() -> Option<OsString> {
     let sandbox_path = steam::get_wine_appdata_local_dir(STEAM_GAME_ID).join(PathBuf::from_iter(sandbox_dir_4_2()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
@@ -775,7 +864,7 @@ pub fn get_db_path_4_2() -> Option<OsString> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn get_db_path_ellisbury() -> Option<OsString> {
+pub fn get_default_db_path_ellisbury() -> Option<OsString> {
     let sandbox_path = steam::get_wine_appdata_local_dir(STEAM_GAME_ID).join(PathBuf::from_iter(sandbox_dir_ellisbury()));
     match sandbox_path.is_file() {
         true => Some(sandbox_path.into_os_string()),
@@ -786,7 +875,7 @@ pub fn get_db_path_ellisbury() -> Option<OsString> {
 
 pub fn get_engine_names() -> Option<Vec<String>>
 {
-    let conn = Connection::open(get_db_path()?).unwrap();
+    let conn = Connection::open(get_default_legacy_db_path()?).unwrap();
     let mut stmt = conn.prepare("select f.name || \" - \" || v.name as \"Full Name\" \
                                           from \"Variants\" as v inner join \"Families\" as f \
                                           on v.FUID = f.UID;").unwrap();
@@ -826,13 +915,17 @@ fn sandbox_dir_ellisbury() -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use crate::sandbox::{get_db_path, get_db_path_4_2, SandboxVersion};
+    use crate::sandbox::{get_default_legacy_db_path, get_default_db_path_4_2, SandboxVersion, SandboxLookupData};
 
     #[test]
     fn get_sandbox_db_path() -> Result<(), String> {
-        let path = PathBuf::from(get_db_path_4_2().unwrap());
+        let path = PathBuf::from(get_default_db_path_4_2().unwrap());
         println!("Sandbox path is {}", path.display());
-        let engine_data = crate::sandbox::load_engine_by_uuid("7F98B2EA4A9E928278F355860DF3B4DF", SandboxVersion::FourDotTwo)?;
+        let engine_data =
+            crate::sandbox::load_engine_by_uuid(
+                "7F98B2EA4A9E928278F355860DF3B4DF",
+                SandboxLookupData { path: Some(path), version: SandboxVersion::FourDotTwo }
+            )?;
         if let Some(engine) = engine_data {
             println!("Econ data {:?}", engine.econ_eff_curve);
         }
@@ -841,7 +934,7 @@ mod tests {
 
     #[test]
     fn get_legacy_sandbox_db_path() -> Result<(), String> {
-        let path = PathBuf::from(get_db_path().unwrap());
+        let path = PathBuf::from(get_default_legacy_db_path().unwrap());
         println!("Sandbox path is {}", path.display());
         Ok(())
     }

@@ -28,7 +28,7 @@ use tracing::{debug, info};
 use assetto_corsa::car::data;
 use assetto_corsa::car::data::engine;
 use automation::car::CarFile;
-use automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxVersion};
+use automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxFinder};
 use utils::units::kw_to_bhp;
 use automation::validation::AutomationSandboxCrossChecker;
 use crate_engine::{CrateEngine, CrateEngineData};
@@ -109,8 +109,9 @@ impl EngineParameterCalculator {
         })?;
 
         info!("Engine version number: {}", version_num);
-        let version = SandboxVersion::from_version_number(version_num as u64);
-        info!("Deduced as {}", version);
+        let sandbox_finder = SandboxFinder::default();
+        let sandbox_data = sandbox_finder.find_sandbox_db_for_version(version_num as u64);
+        info!("Deduced as {}", sandbox_data.version);
 
         let uid_attr = variant_info.get_attribute("UID").ok_or_else(||{
             MissingDataSection("'Car.Variant.UID'".to_string(), format!("Automation .car file in {}", beam_ng_mod_path.display()))
@@ -122,7 +123,7 @@ impl EngineParameterCalculator {
             FailedToLoad("Main engine JBeam".to_string(), e)
         })?;
 
-        let engine_sqlite_data = load_engine_by_uuid(uid, version).map_err(|e|{
+        let engine_sqlite_data = load_engine_by_uuid(uid, sandbox_data).map_err(|e|{
             FailedToLoad(format!("Sandbox db engine {}", uid), e)
         })?.ok_or_else(||{
             MissingDataSection(format!("engine {}", uid), format!("sandbox db"))

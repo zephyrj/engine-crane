@@ -19,8 +19,6 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-
-
 mod ui;
 mod data;
 mod fabricator;
@@ -61,13 +59,13 @@ fn main() -> Result<(), iced::Error> {
         }
     }
 
-    if let Some(legacy_db_path) = automation::sandbox::get_db_path() {
+    if let Some(legacy_db_path) = automation::sandbox::get_default_legacy_db_path() {
         info!("Automation sandbox.db for game version < 4.2 found at {}", PathBuf::from(legacy_db_path).display())
     }
-    if let Some(db_path) = automation::sandbox::get_db_path_4_2() {
+    if let Some(db_path) = automation::sandbox::get_default_db_path_4_2() {
         info!("Automation sandbox.db for game version == 4.2 found at {}", PathBuf::from(db_path).display())
     }
-    if let Some(db_path) = automation::sandbox::get_db_path_ellisbury() {
+    if let Some(db_path) = automation::sandbox::get_default_db_path_ellisbury() {
         info!("Automation sandbox.db for game version >= 4.3 found at {}", PathBuf::from(db_path).display())
     }
 
