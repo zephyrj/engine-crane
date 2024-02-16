@@ -22,6 +22,8 @@
 mod ui;
 mod data;
 mod fabricator;
+mod settings;
+
 
 use std::env;
 use std::path::PathBuf;
@@ -31,7 +33,6 @@ use tracing::{info};
 
 use assetto_corsa;
 use automation;
-use beam_ng;
 use utils;
 
 
@@ -72,43 +73,3 @@ fn main() -> Result<(), iced::Error> {
     info!("Launching UI");
     ui::launch()
 }
-
-
-// println!("BeamNG mod folder resolved to {}", beam_ng::get_mod_path().unwrap().display());
-// match beam_ng::get_mod_list() {
-//     Some(list) => {
-//         println!("Found BeamNG mods:");
-//         for beam_mod in list {
-//             println!("{}", Path::new(beam_mod.as_os_str()).display());
-//             let x = beam_ng::extract_mod_data(&beam_mod).unwrap();
-//             for (filename, data) in x {
-//                 println!("{}: {:x?}", filename, data);
-//                 if filename.ends_with(".car") {
-//                     let c = automation::car::CarFile::from_bytes(data);
-//                     println!("Car file: {:?}", c);
-//                 } else if filename.ends_with(".jbeam") {
-//                     let jbeam_data = beam_ng::jbeam::from_slice(&*data).unwrap();
-//                     println!("inertia: {:?}", jbeam_data["Camso_Engine"].as_object().unwrap()["mainEngine"].as_object().unwrap()["inertia"]);
-//                 }
-//             }
-//         }
-//     },
-//     None => println!("No BeamNG mods found")
-// };
-
-
-//
-// if let Some(variants) = automation::sandbox::get_engine_names() {
-//     for name in variants {
-//         println!("Found variant: {}", name);
-//     }
-// }
-//
-//
-//
-
-//
-// let eng_results = automation::sandbox::load_engines();
-// for (uuid, eng) in eng_results {
-//     println!("Found engine: {:?}", eng);
-// }

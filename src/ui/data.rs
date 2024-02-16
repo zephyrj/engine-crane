@@ -117,11 +117,11 @@ impl ApplicationData {
     }
 
     pub(crate) fn refresh_available_cars(&mut self) {
-        self.assetto_corsa_data.refresh_available_cars(&PathBuf::from(&self.settings.ac_install_path))
+        self.assetto_corsa_data.refresh_available_cars(self.settings.ac_install_path())
     }
 
     pub(crate) fn refresh_crate_engines(&mut self) {
-        self.crate_engine_data.refresh_available_engines(&PathBuf::from(&self.settings.crate_engine_path))
+        self.crate_engine_data.refresh_available_engines(self.settings.crate_engine_path())
     }
 }
 
@@ -143,19 +143,21 @@ impl AssettoCorsaData {
     }
 
     pub fn property_update(&mut self, settings: &GlobalSettings) {
-        if let Some(path) = &settings.ac_install_path() {
-            self.refresh_available_cars(path);
-        } else {
-            info!("Update to GlobalSettings contains no AC install path");
-            self.available_cars.clear();
-        }
+        self.refresh_available_cars(settings.ac_install_path());
     }
 
-    pub fn refresh_available_cars(&mut self, ac_install_path: &PathBuf) {
+    pub fn refresh_available_cars(&mut self, ac_install_path: Option<PathBuf>) {
         self.available_cars.clear();
-        if ac_install_path.is_dir() {
-            self.available_cars = Self::load_available_cars(ac_install_path);
-            self.available_cars.sort();
+        match ac_install_path {
+            None => warn!("No AC install path set when refreshing car list"),
+            Some(path) => {
+                if path.is_dir() {
+                    self.available_cars = Self::load_available_cars(&path);
+                    self.available_cars.sort();
+                } else {
+                    warn!("Invalid AC install path set when refreshing car list. {}", path.display())
+                }
+            }
         }
     }
 
@@ -240,12 +242,7 @@ impl CrateEngineData {
     }
 
     pub fn property_update(&mut self, settings: &GlobalSettings) {
-        if let Some(path) = &settings.crate_engine_path() {
-            self.refresh_available_engines(path);
-        } else {
-            info!("Update to GlobalSettings contains no crate engine path");
-            self.clear_data();
-        }
+        self.refresh_available_engines(settings.crate_engine_path());
     }
 
     pub fn get_path_for(&self, name: &str) -> Option<&PathBuf> {
@@ -266,10 +263,17 @@ impl CrateEngineData {
         self.metadata.clear();
     }
 
-    fn refresh_available_engines(&mut self, crate_engine_path: &PathBuf) {
+    fn refresh_available_engines(&mut self, crate_engine_path: Option<PathBuf>) {
         self.clear_data();
-        if crate_engine_path.is_dir() {
-            self.load_available_engines(crate_engine_path);
+        match crate_engine_path {
+            None => warn!("No crate engine path set when refreshing engines"),
+            Some(path) => {
+                if path.is_dir() {
+                    self.load_available_engines(&path);
+                } else {
+                    warn!("Invalid crate engine path set when refreshing engines. {}", path.display())
+                }
+            }
         }
     }
 
