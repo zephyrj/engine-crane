@@ -37,13 +37,19 @@ use crate::STEAM_GAME_ID;
 use utils::numeric::round_float_to;
 
 pub struct SandboxLookupData {
-    pub path: Option<PathBuf>,
+    pub path: PathBuf,
     pub version: SandboxVersion
 }
 
+impl SandboxLookupData {
+    pub fn found(&self) -> bool {
+        self.path.is_file()
+    }
+}
+
 pub struct SandboxFinder {
-    legacy_userdata_path: Option<PathBuf>,
-    userdata_path: Option<PathBuf>
+    legacy_userdata_path: PathBuf,
+    userdata_path: PathBuf
 }
 
 impl SandboxFinder {
@@ -55,49 +61,33 @@ impl SandboxFinder {
     }
 
     pub fn legacy_userdata_path_is_valid(&self) -> bool {
-        return match &self.legacy_userdata_path {
-            None => false,
-            Some(path) => path.is_dir()
-        }
+        self.legacy_userdata_path.is_dir()
     }
 
     pub fn userdata_path_is_valid(&self) -> bool {
-        return match &self.userdata_path {
-            None => false,
-            Some(path) => path.is_dir()
-        }
+        self.userdata_path.is_dir()
     }
 
     pub fn set_legacy_userdata_path(&mut self, new_legacy_path: PathBuf) {
-        self.legacy_userdata_path = Some(new_legacy_path)
+        self.legacy_userdata_path = new_legacy_path
     }
 
 
     pub fn set_userdata_path(&mut self, new_path: PathBuf) {
-        self.userdata_path = Some(new_path)
+        self.userdata_path = new_path
     }
 
     pub fn find_sandbox_db_for_version(&self, version_num: u64) -> SandboxLookupData {
         let version =  SandboxVersion::from_version_number(version_num);
         if version == SandboxVersion::Legacy {
-            return match &self.legacy_userdata_path {
-                None => SandboxLookupData { path: None, version },
-                Some(path) => {
-                    SandboxLookupData {
-                        path: Some(path.join(version.get_path())),
-                        version
-                    }
-                }
+            return SandboxLookupData {
+                path: self.legacy_userdata_path.join(version.get_path()),
+                version
             }
         }
-        match &self.userdata_path {
-            None => SandboxLookupData { path: None, version },
-            Some(path) => {
-                SandboxLookupData {
-                    path: Some(path.join(version.get_path())),
-                    version
-                }
-            }
+        SandboxLookupData {
+            path: self.userdata_path.join(version.get_path()),
+            version
         }
     }
 }
@@ -750,11 +740,11 @@ pub fn load_engines() -> HashMap<String, EngineV1> {
     out_map
 }
 
-pub fn load_engine_by_uuid(uuid: &str, sandbox_data: SandboxLookupData) -> Result<Option<EngineV1>, String> {
-    let db_path = match sandbox_data.path {
-        None => return Err(format!("No sandbox db file available for {}", sandbox_data.version.as_str())),
-        Some(p) => p
-    };
+pub fn load_engine_by_uuid(uuid: &str, sandbox_lookup: SandboxLookupData) -> Result<Option<EngineV1>, String> {
+    if !sandbox_lookup.found() {
+        return Err(format!("No sandbox db file available for {}", sandbox_lookup.version.as_str()));
+    }
+    let db_path = sandbox_lookup.path;
     info!("Loading {} from {}", uuid, PathBuf::from(&db_path).display());
     let conn = Connection::open(&db_path).map_err(|e|{
         format!("Failed to connect to {}. {}", db_path.to_string_lossy(), e.to_string())
@@ -825,23 +815,47 @@ pub fn get_default_db_path_ellisbury() -> Option<OsString> {
 }
 
 #[cfg(target_os = "windows")]
-pub fn get_default_legacy_user_data_path() -> Option<PathBuf> {
-    Some(UserDirs::new()?.document_dir()?.join(PathBuf::from_iter(vec!["My Games", "Automation"])))
+pub fn get_default_legacy_user_data_path() -> PathBuf {
+    let mut path : PathBuf = match UserDirs::new() {
+        None => {
+            let username = whoami::username();
+            PathBuf::from_iter(["C:", "Users", &username, "Documents"])
+        }
+        Some(user_dirs) => match user_dirs.document_dir() {
+            None => {
+                let username = whoami::username();
+                PathBuf::from_iter(["C:", "Users", &username, "Documents"])
+            }
+            Some(dir) => {
+                dir.to_path_buf()
+            }
+        }
+    };
+    path.join(PathBuf::from_iter(vec!["My Games", "Automation"]))
 }
 
 #[cfg(target_os = "linux")]
-pub fn get_default_legacy_user_data_path() -> Option<PathBuf> {
-    Some(steam::get_wine_documents_dir(STEAM_GAME_ID).join(PathBuf::from_iter(vec!["My Games", "Automation"])))
+pub fn get_default_legacy_user_data_path() -> PathBuf {
+    steam::get_wine_documents_dir(STEAM_GAME_ID).join(PathBuf::from_iter(vec!["My Games", "Automation"]))
 }
 
 #[cfg(target_os = "windows")]
-pub fn get_default_user_data_path() -> Option<PathBuf> {
-    Some(BaseDirs::new()?.cache_dir().join(PathBuf::from_iter(vec!["AutomationGame", "Saved", "UserData"])))
+pub fn get_default_user_data_path() -> PathBuf {
+    let mut path: PathBuf = match BaseDirs::new() {
+        None => {
+            let username = whoami::username();
+            PathBuf::from_iter(["C:", "Users", &username, "AppData"])
+        },
+        Some(base_dirs) => {
+            base_dirs.cache_dir().to_path_buf()
+        }
+    };
+    path.join(PathBuf::from_iter(vec!["AutomationGame", "Saved", "UserData"]))
 }
 
 #[cfg(target_os = "linux")]
-pub fn get_default_user_data_path() -> Option<PathBuf> {
-    Some(steam::get_wine_appdata_local_dir(STEAM_GAME_ID).join(PathBuf::from_iter(vec!["AutomationGame", "Saved", "UserData"])))
+pub fn get_default_user_data_path() -> PathBuf {
+    steam::get_wine_appdata_local_dir(STEAM_GAME_ID).join(PathBuf::from_iter(vec!["AutomationGame", "Saved", "UserData"]))
 }
 
 
@@ -924,7 +938,7 @@ mod tests {
         let engine_data =
             crate::sandbox::load_engine_by_uuid(
                 "7F98B2EA4A9E928278F355860DF3B4DF",
-                SandboxLookupData { path: Some(path), version: SandboxVersion::FourDotTwo }
+                SandboxLookupData { path, version: SandboxVersion::FourDotTwo }
             )?;
         if let Some(engine) = engine_data {
             println!("Econ data {:?}", engine.econ_eff_curve);
