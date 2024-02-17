@@ -742,7 +742,8 @@ pub fn load_engines() -> HashMap<String, EngineV1> {
 
 pub fn load_engine_by_uuid(uuid: &str, sandbox_lookup: SandboxLookupData) -> Result<Option<EngineV1>, String> {
     if !sandbox_lookup.found() {
-        return Err(format!("No sandbox db file available for {}", sandbox_lookup.version.as_str()));
+        return Err(format!("No sandbox db file available for {}. Expected to find it at {}",
+                           sandbox_lookup.version.as_str(), sandbox_lookup.path.display()));
     }
     let db_path = sandbox_lookup.path;
     info!("Loading {} from {}", uuid, PathBuf::from(&db_path).display());

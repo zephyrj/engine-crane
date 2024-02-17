@@ -26,6 +26,7 @@ use std::io;
 use std::path::Path;
 use serde_hjson;
 use tracing::{error, info, warn};
+use automation::sandbox::SandboxFinder;
 use utils::numeric::{round_float_to, round_up_to_nearest_multiple};
 
 use crate::assetto_corsa::car::data::engine::{CoastCurve, Damage, EngineData, PowerCurve};
@@ -76,10 +77,11 @@ pub enum FabricationError {
 
 pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                                           ac_car_path: &Path,
+                                          sandbox_finder: SandboxFinder,
                                           settings: AssettoCorsaCarSettings,
                                           additional_car_data: AdditionalAcCarData) -> Result<(), FabricationError> {
     update_ac_engine_parameters(ac_car_path,
-                                assetto_corsa::EngineParameterCalculator::from_beam_ng_mod(beam_ng_mod_path)?,
+                                assetto_corsa::EngineParameterCalculator::from_beam_ng_mod(beam_ng_mod_path, sandbox_finder)?,
                                 settings, additional_car_data
     )
 }

@@ -116,6 +116,22 @@ impl ApplicationData {
         self.crate_engine_data.property_update(&self.settings)
     }
 
+    pub(crate) fn get_legacy_automation_userdata_path(&self) -> Option<PathBuf> {
+        self.settings.legacy_automation_userdata_path()
+    }
+
+    pub(crate) fn update_legacy_automation_userdata_path(&mut self, new_path: PathBuf) {
+        self.settings.set_legacy_automation_userdata_path(&new_path);
+    }
+
+    pub(crate) fn get_automation_userdata_path(&self) -> Option<PathBuf> {
+        self.settings.automation_userdata_path()
+    }
+
+    pub(crate) fn update_automation_userdata_path(&mut self, new_path: PathBuf) {
+        self.settings.set_automation_userdata_path(&new_path);
+    }
+
     pub(crate) fn refresh_available_cars(&mut self) {
         self.assetto_corsa_data.refresh_available_cars(self.settings.ac_install_path())
     }

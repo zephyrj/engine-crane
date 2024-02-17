@@ -80,7 +80,7 @@ impl EngineParameterCalculator {
         }
     }
 
-    pub fn from_beam_ng_mod(beam_ng_mod_path: &Path) -> Result<EngineParameterCalculator, FabricationError> {
+    pub fn from_beam_ng_mod(beam_ng_mod_path: &Path, sandbox_finder: SandboxFinder) -> Result<EngineParameterCalculator, FabricationError> {
         use crate::fabricator::FabricationError::*;
         info!("Creating AC parameter calculator for BeamNG mod {}", beam_ng_mod_path.to_path_buf().display());
         let mut mod_data = beam_ng::ModData::from_path(beam_ng_mod_path).map_err(
@@ -109,9 +109,8 @@ impl EngineParameterCalculator {
         })?;
 
         info!("Engine version number: {}", version_num);
-        let sandbox_finder = SandboxFinder::default();
-        let sandbox_data = sandbox_finder.find_sandbox_db_for_version(version_num as u64);
-        info!("Deduced as {}", sandbox_data.version);
+        let sandbox_lookup_data = sandbox_finder.find_sandbox_db_for_version(version_num as u64);
+        info!("Deduced as {}", sandbox_lookup_data.version);
 
         let uid_attr = variant_info.get_attribute("UID").ok_or_else(||{
             MissingDataSection("'Car.Variant.UID'".to_string(), format!("Automation .car file in {}", beam_ng_mod_path.display()))
@@ -123,7 +122,7 @@ impl EngineParameterCalculator {
             FailedToLoad("Main engine JBeam".to_string(), e)
         })?;
 
-        let engine_sqlite_data = load_engine_by_uuid(uid, sandbox_data).map_err(|e|{
+        let engine_sqlite_data = load_engine_by_uuid(uid, sandbox_lookup_data).map_err(|e|{
             FailedToLoad(format!("Sandbox db engine {}", uid), e)
         })?.ok_or_else(||{
             MissingDataSection(format!("engine {}", uid), format!("sandbox db"))

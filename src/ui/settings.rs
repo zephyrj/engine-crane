@@ -114,11 +114,34 @@ impl Tab for SettingsTab {
                                crate_path_str)
                 .padding(Padding::from([0, 3, 0, 3]));
 
+        let legacy_auto_path_str = match &app_data.get_legacy_automation_userdata_path() {
+            None => "Not Set".to_string(),
+            Some(path) => format!("{}", path.display())
+        };
+        let legacy_auto_path_selector =
+            create_path_select(Message::LegacyAutomationPathSelectPressed,
+                               "Legacy automation data path",
+                               legacy_auto_path_str)
+                .padding(Padding::from([0, 3, 0, 3]));
+
+        let auto_path_str = match &app_data.get_automation_userdata_path() {
+            None => "Not Set".to_string(),
+            Some(path) => format!("{}", path.display())
+        };
+        let auto_path_selector =
+            create_path_select(Message::AutomationPathSelectPressed,
+                               "Automation data path",
+                               auto_path_str)
+                .padding(Padding::from([0, 3, 0, 3]));
+
+
         let container : Container<'_, Message> = Container::new(
             Column::new()
                 .push(ac_path_select_row)
                 .push(mod_path_select_row)
                 .push(crate_path_selector)
+                .push(legacy_auto_path_selector)
+                .push(auto_path_selector)
                 .spacing(25)
         );
         container.into()

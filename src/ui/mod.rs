@@ -45,6 +45,7 @@ use crate::{assetto_corsa, fabricator};
 use tracing::{span, Level, info, error};
 use rfd::FileDialog;
 use assetto_corsa::car::delete_car;
+use automation::sandbox::SandboxFinder;
 
 use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 use crate::settings::GlobalSettings;
@@ -65,6 +66,8 @@ pub enum Message {
     AcPathSelectPressed,
     BeamNGModPathSelectPressed,
     CrateEnginePathSelectPressed,
+    LegacyAutomationPathSelectPressed,
+    AutomationPathSelectPressed,
     EngineSwap(EngineSwapMessage),
     EngineSwapRequested,
     CrateTab(CrateTabMessage),
@@ -247,6 +250,20 @@ impl Sandbox for UIMain {
                     self.notify_app_data_update(&message);
                 }
             }
+            Message::LegacyAutomationPathSelectPressed => {
+                let userdata_path = open_dir_select_dialog(self.app_data.get_legacy_automation_userdata_path().as_ref());
+                if let Some(path) = userdata_path {
+                    self.app_data.update_legacy_automation_userdata_path(path);
+                    self.notify_app_data_update(&message);
+                }
+            }
+            Message::AutomationPathSelectPressed => {
+                let userdata_path = open_dir_select_dialog(self.app_data.get_automation_userdata_path().as_ref());
+                if let Some(path) = userdata_path {
+                    self.app_data.update_automation_userdata_path(path);
+                    self.notify_app_data_update(&message);
+                }
+            }
             Message::CrateEnginePathSelectPressed => {
                 let eng_path = open_dir_select_dialog(self.app_data.get_crate_engine_path().as_ref());
                 if let Some(path) = eng_path {
@@ -335,7 +352,7 @@ impl Sandbox for UIMain {
                     };
                 let additional_car_settings = AdditionalAcCarData::new(current_engine_weight);
 
-                let res = match self.engine_swap_tab.current_source {
+                                let res = match self.engine_swap_tab.current_source {
                     EngineSource::BeamNGMod => {
                         let mod_path = match self.engine_swap_tab.current_mod.as_ref() {
                             Some(p) => p,
@@ -348,8 +365,17 @@ impl Sandbox for UIMain {
                         };
                         let span = span!(Level::INFO, "Updating car physics from BeamNG mod");
                         let _enter = span.enter();
+
+                        let mut sandbox_finder = SandboxFinder::default();
+                        if let Some(path) = self.app_data.settings.legacy_automation_userdata_path() {
+                            sandbox_finder.set_legacy_userdata_path(path)
+                        }
+                        if let Some(path) = self.app_data.settings.automation_userdata_path() {
+                            sandbox_finder.set_userdata_path(path)
+                        }
                         fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),
                                                                        new_car_path.as_path(),
+                                                                       sandbox_finder,
                                                                        car_settings,
                                                                        additional_car_settings)
                     }
