@@ -42,6 +42,7 @@ use crate::ui::{ApplicationData, ListPath};
 use crate::ui::edit::gears::{gear_configuration_builder, convert_gear_configuration, FinalDriveUpdate, GearConfig, GearConfigType, GearUpdateType, GearConfiguration};
 use crate::ui::elements::modal::Modal;
 use crate::ui::image_data::ICE_CREAM_SVG;
+use crate::ui::settings::Setting;
 
 
 pub struct EditTab {
@@ -248,8 +249,10 @@ impl EditTab {
 
     pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
         match update_event {
-            Message::AcPathSelectPressed | Message::EngineSwapRequested => {
-                self.load_car_list(app_data)
+            Message::AcPathSelectPressed | Message::EngineSwapRequested => self.load_car_list(app_data),
+            Message::RevertSettingToDefault(setting) => match setting {
+                Setting::AcPath => self.load_car_list(app_data),
+                _ => {}
             }
             _ => {}
         }

@@ -51,6 +51,7 @@ use crate::fabricator::{AdditionalAcCarData, AssettoCorsaCarSettings};
 use crate::settings::GlobalSettings;
 use crate::ui::crate_engines::{CrateEngineTab, CrateTabMessage};
 use crate::ui::data::{ApplicationData, AssettoCorsaData, BeamNGData, CrateEngineData};
+use crate::ui::settings::Setting;
 use crate::ui::swap::EngineSource;
 
 const HEADER_SIZE: u16 = 32;
@@ -68,6 +69,7 @@ pub enum Message {
     CrateEnginePathSelectPressed,
     LegacyAutomationPathSelectPressed,
     AutomationPathSelectPressed,
+    RevertSettingToDefault(Setting),
     EngineSwap(EngineSwapMessage),
     EngineSwapRequested,
     CrateTab(CrateTabMessage),
@@ -236,6 +238,10 @@ impl Sandbox for UIMain {
             Message::CrateTab(message) => self.crate_engine_tab.update(message, &self.app_data),
             Message::Edit(message) => self.edit_tab.update(message, &self.app_data),
             Message::Settings(message) => self.settings_tab.update(message, &self.app_data),
+            Message::RevertSettingToDefault(setting) => {
+                self.app_data.revert_to_default(setting);
+                self.notify_app_data_update(&message);
+            }
             Message::AcPathSelectPressed => {
                 let install_path = open_dir_select_dialog(self.app_data.get_ac_install_path().as_ref());
                 if let Some(path) = install_path {
@@ -367,10 +373,10 @@ impl Sandbox for UIMain {
                         let _enter = span.enter();
 
                         let mut sandbox_finder = SandboxFinder::default();
-                        if let Some(path) = self.app_data.settings.legacy_automation_userdata_path() {
+                        if let Some(path) = self.app_data.get_legacy_automation_userdata_path() {
                             sandbox_finder.set_legacy_userdata_path(path)
                         }
-                        if let Some(path) = self.app_data.settings.automation_userdata_path() {
+                        if let Some(path) = self.app_data.get_automation_userdata_path() {
                             sandbox_finder.set_userdata_path(path)
                         }
                         fabricator::swap_automation_engine_into_ac_car(mod_path.as_path(),

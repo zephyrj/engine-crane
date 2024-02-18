@@ -20,9 +20,10 @@
  */
 
 use super::{Message, Tab};
-use iced::{Alignment,Element, Padding};
+use iced::{Alignment, Element, Padding, theme};
 use iced::widget::{Button, Column, Container, Text};
 use iced_aw::{TabLabel};
+use iced_native::widget::Row;
 use crate::ui::{ApplicationData};
 
 
@@ -35,6 +36,15 @@ pub struct SettingsTab {
 pub enum SettingsMessage {
     #[allow(dead_code)]
     ThingSelected(String)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Setting {
+    AcPath,
+    BeamNGModPath,
+    CrateEnginePath,
+    LegacyAutomationUserdataPath,
+    AutomationUserdataPath
 }
 
 impl SettingsTab {
@@ -79,30 +89,24 @@ impl Tab for SettingsTab {
             None => format!("Not Set"),
             Some(path) => format!("{}", path.display())
         };
-        let path_select_button =
-            Button::new(Text::new("Browse"))
-                .on_press(Message::AcPathSelectPressed);
-        let ac_path_select_row = Column::new()
-            .align_items(Alignment::Start)
-            .push(Text::new("Assetto Corsa install path:").size(24))
-            .push(Text::new(base_path_str))
-            .push(path_select_button)
-            .spacing(5)
-            .padding(Padding::from([15, 3, 0, 3]));
+        let ac_path_selector =
+            create_path_select(Message::AcPathSelectPressed,
+                               Message::RevertSettingToDefault(Setting::AcPath),
+                               "Assetto Corsa install path",
+                               base_path_str)
+                .spacing(5)
+                .padding(Padding::from([15, 3, 0, 3]));
 
         let mod_path_str = match &app_data.get_beam_ng_mod_path() {
             None => format!("Not Set"),
             Some(path) => format!("{}", path.display())
         };
-        let mod_path_select_button =
-            Button::new( Text::new("Browse"))
-                .on_press(Message::BeamNGModPathSelectPressed);
-        let mod_path_select_row = Column::new()
-            .align_items(Alignment::Start)
-            .push(Text::new("BeamNG mod path:").size(24))
-            .push(Text::new(mod_path_str))
-            .push(mod_path_select_button)
-            .padding(Padding::from([0, 3, 0, 3]));
+        let mod_path_selector =
+            create_path_select(Message::BeamNGModPathSelectPressed,
+                               Message::RevertSettingToDefault(Setting::BeamNGModPath),
+                               "BeamNG mod path",
+                               mod_path_str)
+                .padding(Padding::from([0, 3, 0, 3]));
 
         let crate_path_str = match &app_data.get_crate_engine_path() {
             None => "Not Set".to_string(),
@@ -110,6 +114,7 @@ impl Tab for SettingsTab {
         };
         let crate_path_selector =
             create_path_select(Message::CrateEnginePathSelectPressed,
+                               Message::RevertSettingToDefault(Setting::CrateEnginePath),
                                "Crate engine path",
                                crate_path_str)
                 .padding(Padding::from([0, 3, 0, 3]));
@@ -120,6 +125,7 @@ impl Tab for SettingsTab {
         };
         let legacy_auto_path_selector =
             create_path_select(Message::LegacyAutomationPathSelectPressed,
+                               Message::RevertSettingToDefault(Setting::LegacyAutomationUserdataPath),
                                "Legacy automation data path",
                                legacy_auto_path_str)
                 .padding(Padding::from([0, 3, 0, 3]));
@@ -130,6 +136,7 @@ impl Tab for SettingsTab {
         };
         let auto_path_selector =
             create_path_select(Message::AutomationPathSelectPressed,
+                               Message::RevertSettingToDefault(Setting::AutomationUserdataPath),
                                "Automation data path",
                                auto_path_str)
                 .padding(Padding::from([0, 3, 0, 3]));
@@ -137,8 +144,8 @@ impl Tab for SettingsTab {
 
         let container : Container<'_, Message> = Container::new(
             Column::new()
-                .push(ac_path_select_row)
-                .push(mod_path_select_row)
+                .push(ac_path_selector)
+                .push(mod_path_selector)
                 .push(crate_path_selector)
                 .push(legacy_auto_path_selector)
                 .push(auto_path_selector)
@@ -149,15 +156,18 @@ impl Tab for SettingsTab {
     }
 }
 
-fn create_path_select(on_select: Message, title: &str, current_val: String) -> Column<Message> {
+fn create_path_select(on_select: Message, on_default: Message, title: &str, current_val: String) -> Column<Message> {
     let select =
         Button::new( Text::new("Browse"))
             .on_press(on_select);
+    let default=
+        Button::new( Text::new("Revert to default")).style(theme::Button::Destructive)
+            .on_press(on_default);
     Column::new()
         .align_items(Alignment::Start)
         .push(Text::new(title).size(24))
         .push(Text::new(current_val))
-        .push(select)
+        .push(Row::new().spacing(5).push(select).push(default))
         .spacing(5)
 }
 

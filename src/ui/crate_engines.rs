@@ -339,7 +339,7 @@ impl CrateEngineTab {
 
     fn import_crate_engine(&mut self, app_data: &ApplicationData) {
         if let Some(mod_path) = &self.selected_beam_ng_mod {
-            if let Some(crate_engine_path) = app_data.settings.crate_engine_path() {
+            if let Some(crate_engine_path) = app_data.get_crate_engine_path() {
                 match CrateEngine::from_beamng_mod_zip(&mod_path.full_path, FromBeamNGModOptions::default()) {
                     Ok(crate_eng) => {
                         let mut sanitized_name = sanitize_filename::sanitize(crate_eng.name());

@@ -24,7 +24,9 @@ use std::fs::create_dir;
 use std::path::PathBuf;
 use tracing::{error, info, Level, span, warn};
 use crate::data::{CrateEngineMetadata, find_crate_engines_in_path, get_default_crate_engine_path, get_local_app_data_path};
-use crate::ui::{GlobalSettings, ListPath};
+use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, CrateEnginePath, LegacyAutomationUserdataPath};
+use crate::ui::{GlobalSettings, ListPath, settings};
+use crate::ui::settings::Setting;
 
 fn create_local_data_dirs_if_missing() {
     let local_data_path = get_local_app_data_path();
@@ -58,6 +60,18 @@ pub struct ApplicationData {
     pub(crate) crate_engine_data: CrateEngineData
 }
 
+macro_rules! resolve_path {
+    ($path_string:expr) => {
+        {
+            let path = PathBuf::from($path_string);
+            match path.is_dir() {
+                true => Some(path),
+                false => None
+            }
+        }
+    }
+}
+
 impl ApplicationData {
     pub(crate) fn new() -> ApplicationData {
         create_local_data_dirs_if_missing();
@@ -65,15 +79,15 @@ impl ApplicationData {
             warn!("Failed to load settings. {}", e.to_string());
             GlobalSettings::default()
         });
-        match settings.ac_install_path() {
+        match resolve_path!(settings.get::<AcInstallPath>()) {
             None => { info!("Assetto Corsa path not set") }
             Some(path) => { info!("Assetto Corsa path set to {}", path.display()) }
         }
-        match settings.beamng_mod_path() {
+        match resolve_path!(settings.get::<BeamNGModPath>()) {
             None => { info!("BeamNG mod path not set") }
             Some(path) => { info!("BeamNG mod path set to {}", path.display()) }
         }
-        match settings.crate_engine_path() {
+        match resolve_path!(settings.get::<CrateEnginePath>()) {
             None => { info!("Crate engine path not set") }
             Some(path) => { info!("Crate engine path set to {}", path.display()) }
         }
@@ -89,55 +103,78 @@ impl ApplicationData {
         }
     }
 
+    pub(crate) fn revert_to_default(&mut self, setting: settings::Setting) {
+        match setting {
+            Setting::AcPath => {
+                self.settings.set_default::<AcInstallPath>();
+                self.assetto_corsa_data.property_update(&self.settings);
+            }
+            Setting::BeamNGModPath => {
+                self.settings.set_default::<BeamNGModPath>();
+                self.beam_ng_data.property_update(&self.settings);
+            }
+            Setting::CrateEnginePath => {
+                self.settings.set_default::<CrateEnginePath>();
+                self.crate_engine_data.property_update(&self.settings);
+            }
+            Setting::LegacyAutomationUserdataPath => {
+                self.settings.set_default::<LegacyAutomationUserdataPath>();
+            }
+            Setting::AutomationUserdataPath => {
+                self.settings.set_default::<AutomationUserdataPath>();
+            }
+        }
+    }
+
     pub(crate) fn get_ac_install_path(&self) -> Option<PathBuf> {
-        self.settings.ac_install_path()
+        resolve_path!(self.settings.get::<AcInstallPath>())
     }
 
     pub(crate) fn update_ac_install_path(&mut self, new_path: PathBuf) {
-        self.settings.set_ac_install_path(&new_path);
-        self.assetto_corsa_data.property_update(&self.settings);
+        self.settings.set::<AcInstallPath>(new_path.to_string_lossy().into_owned());
+        self.assetto_corsa_data.refresh_available_cars(resolve_path!(self.settings.get::<AcInstallPath>()));
     }
 
     pub(crate) fn get_beam_ng_mod_path(&self) -> Option<PathBuf> {
-        self.settings.beamng_mod_path()
+        resolve_path!(self.settings.get::<BeamNGModPath>())
     }
 
     pub(crate) fn update_beamng_mod_path(&mut self, new_path: PathBuf) {
-        self.settings.set_beamng_mod_path(&new_path);
+        self.settings.set::<BeamNGModPath>(new_path.to_string_lossy().into_owned());
         self.beam_ng_data.property_update(&self.settings);
     }
 
     pub(crate) fn get_crate_engine_path(&self) -> Option<PathBuf> {
-        self.settings.crate_engine_path()
+        resolve_path!(self.settings.get::<CrateEnginePath>())
     }
 
     pub(crate) fn update_crate_engine_path(&mut self, new_path: PathBuf) {
-        self.settings.set_crate_engine_pahth(&new_path);
+        self.settings.set::<CrateEnginePath>(new_path.to_string_lossy().into_owned());
         self.crate_engine_data.property_update(&self.settings)
     }
 
     pub(crate) fn get_legacy_automation_userdata_path(&self) -> Option<PathBuf> {
-        self.settings.legacy_automation_userdata_path()
+        resolve_path!(self.settings.get::<LegacyAutomationUserdataPath>())
     }
 
     pub(crate) fn update_legacy_automation_userdata_path(&mut self, new_path: PathBuf) {
-        self.settings.set_legacy_automation_userdata_path(&new_path);
+        self.settings.set::<LegacyAutomationUserdataPath>(new_path.to_string_lossy().into_owned());
     }
 
     pub(crate) fn get_automation_userdata_path(&self) -> Option<PathBuf> {
-        self.settings.automation_userdata_path()
+        resolve_path!(self.settings.get::<AutomationUserdataPath>())
     }
 
     pub(crate) fn update_automation_userdata_path(&mut self, new_path: PathBuf) {
-        self.settings.set_automation_userdata_path(&new_path);
+        self.settings.set::<AutomationUserdataPath>(new_path.to_string_lossy().into_owned());
     }
 
     pub(crate) fn refresh_available_cars(&mut self) {
-        self.assetto_corsa_data.refresh_available_cars(self.settings.ac_install_path())
+        self.assetto_corsa_data.refresh_available_cars(resolve_path!(self.settings.get::<AcInstallPath>()))
     }
 
     pub(crate) fn refresh_crate_engines(&mut self) {
-        self.crate_engine_data.refresh_available_engines(self.settings.crate_engine_path())
+        self.crate_engine_data.refresh_available_engines(resolve_path!(self.settings.get::<CrateEnginePath>()))
     }
 }
 
@@ -159,7 +196,7 @@ impl AssettoCorsaData {
     }
 
     pub fn property_update(&mut self, settings: &GlobalSettings) {
-        self.refresh_available_cars(settings.ac_install_path());
+        self.refresh_available_cars(resolve_path!(settings.get::<AcInstallPath>()))
     }
 
     pub fn refresh_available_cars(&mut self, ac_install_path: Option<PathBuf>) {
@@ -211,8 +248,8 @@ impl BeamNGData {
     }
 
     pub fn property_update(&mut self, settings: &GlobalSettings) {
-        if let Some(path) = &settings.beamng_mod_path() {
-            self.refresh_available_mods(path);
+        if let Some(path) = resolve_path!(settings.get::<BeamNGModPath>()) {
+            self.refresh_available_mods(&path);
         } else {
             info!("Update to GlobalSettings contains no BeamNG data path");
             self.available_mods.clear();
@@ -258,7 +295,7 @@ impl CrateEngineData {
     }
 
     pub fn property_update(&mut self, settings: &GlobalSettings) {
-        self.refresh_available_engines(settings.crate_engine_path());
+        self.refresh_available_engines(resolve_path!(settings.get::<CrateEnginePath>()));
     }
 
     pub fn get_path_for(&self, name: &str) -> Option<&PathBuf> {

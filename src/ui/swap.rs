@@ -30,6 +30,7 @@ use iced_native::widget::radio;
 
 use crate::fabricator::{AssettoCorsaPhysicsLevel};
 use crate::ui::{ApplicationData, ListPath};
+use crate::ui::settings::Setting;
 
 #[derive(Debug, Clone)]
 pub enum EngineSwapMessage {
@@ -106,7 +107,11 @@ impl EngineSwapTab {
 
     pub fn app_data_update(&mut self, _app_data: &ApplicationData, update_event: &Message) {
         match update_event {
-            Message::AcPathSelectPressed | Message::BeamNGModPathSelectPressed => self.refresh(),
+            Message::AcPathSelectPressed | Message::BeamNGModPathSelectPressed | Message::CrateEnginePathSelectPressed => self.refresh(),
+            Message::RevertSettingToDefault(setting) => match setting {
+                Setting::AcPath | Setting::BeamNGModPath | Setting::CrateEnginePath => self.refresh(),
+                _ => {}
+            }
             Message::EngineSwapRequested => {}
             _ => {}
         }
@@ -189,6 +194,7 @@ impl EngineSwapTab {
     pub fn refresh(&mut self) {
         self.current_car = None;
         self.current_mod = None;
+        self.current_crate_eng = None
     }
 }
 
