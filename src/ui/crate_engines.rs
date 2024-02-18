@@ -424,7 +424,7 @@ impl Tab for CrateEngineTab {
             self.selected_beam_ng_mod.clone(),
             move |new_val| Message::CrateTab(CrateTabMessage::BeamNGModSelected(new_val))
         );
-        let mut import_button = Button::new(Text::new("Import")).width(Length::Units(60));
+        let mut import_button = Button::new(Text::new("Import")).width(Length::Units(70));
         if self.selected_beam_ng_mod.is_some() {
             import_button = import_button.on_press(Message::CrateTab(CrateTabMessage::VerifyImport))
         }
