@@ -249,7 +249,10 @@ impl EditTab {
 
     pub fn app_data_update(&mut self, app_data: &ApplicationData, update_event: &Message) {
         match update_event {
-            Message::AcPathSelectPressed | Message::EngineSwapRequested => self.load_car_list(app_data),
+            Message::RequestPathSelect(setting) => match setting {
+                Setting::AcPath => self.load_car_list(app_data),
+                _ => {}
+            }
             Message::RevertSettingToDefault(setting) => match setting {
                 Setting::AcPath => self.load_car_list(app_data),
                 _ => {}

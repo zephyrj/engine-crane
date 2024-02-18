@@ -64,11 +64,7 @@ pub fn launch() -> Result<(), Error> {
 #[derive(Debug, Clone)]
 pub enum Message {
     TabSelected(usize),
-    AcPathSelectPressed,
-    BeamNGModPathSelectPressed,
-    CrateEnginePathSelectPressed,
-    LegacyAutomationPathSelectPressed,
-    AutomationPathSelectPressed,
+    RequestPathSelect(Setting),
     RevertSettingToDefault(Setting),
     EngineSwap(EngineSwapMessage),
     EngineSwapRequested,
@@ -238,44 +234,28 @@ impl Sandbox for UIMain {
             Message::CrateTab(message) => self.crate_engine_tab.update(message, &self.app_data),
             Message::Edit(message) => self.edit_tab.update(message, &self.app_data),
             Message::Settings(message) => self.settings_tab.update(message, &self.app_data),
+            Message::RequestPathSelect(setting) => {
+                let current_path = match setting {
+                    Setting::AcPath => self.app_data.get_ac_install_path(),
+                    Setting::BeamNGModPath => self.app_data.get_beam_ng_mod_path(),
+                    Setting::CrateEnginePath => self.app_data.get_crate_engine_path(),
+                    Setting::LegacyAutomationUserdataPath => self.app_data.get_legacy_automation_userdata_path(),
+                    Setting::AutomationUserdataPath => self.app_data.get_automation_userdata_path()
+                };
+                if let Some(path) = open_dir_select_dialog(current_path.as_ref()) {
+                    match setting {
+                        Setting::AcPath => self.app_data.update_ac_install_path(path),
+                        Setting::BeamNGModPath => self.app_data.update_beamng_mod_path(path),
+                        Setting::CrateEnginePath => self.app_data.update_crate_engine_path(path),
+                        Setting::LegacyAutomationUserdataPath => self.app_data.update_legacy_automation_userdata_path(path),
+                        Setting::AutomationUserdataPath => self.app_data.update_automation_userdata_path(path)
+                    }
+                    self.notify_app_data_update(&message);
+                }
+            }
             Message::RevertSettingToDefault(setting) => {
                 self.app_data.revert_to_default(setting);
                 self.notify_app_data_update(&message);
-            }
-            Message::AcPathSelectPressed => {
-                let install_path = open_dir_select_dialog(self.app_data.get_ac_install_path().as_ref());
-                if let Some(path) = install_path {
-                    self.app_data.update_ac_install_path(path);
-                    self.notify_app_data_update(&message);
-                }
-            }
-            Message::BeamNGModPathSelectPressed => {
-                let mod_path = open_dir_select_dialog(self.app_data.get_beam_ng_mod_path().as_ref());
-                if let Some(path) = mod_path {
-                    self.app_data.update_beamng_mod_path(path);
-                    self.notify_app_data_update(&message);
-                }
-            }
-            Message::LegacyAutomationPathSelectPressed => {
-                let userdata_path = open_dir_select_dialog(self.app_data.get_legacy_automation_userdata_path().as_ref());
-                if let Some(path) = userdata_path {
-                    self.app_data.update_legacy_automation_userdata_path(path);
-                    self.notify_app_data_update(&message);
-                }
-            }
-            Message::AutomationPathSelectPressed => {
-                let userdata_path = open_dir_select_dialog(self.app_data.get_automation_userdata_path().as_ref());
-                if let Some(path) = userdata_path {
-                    self.app_data.update_automation_userdata_path(path);
-                    self.notify_app_data_update(&message);
-                }
-            }
-            Message::CrateEnginePathSelectPressed => {
-                let eng_path = open_dir_select_dialog(self.app_data.get_crate_engine_path().as_ref());
-                if let Some(path) = eng_path {
-                    self.app_data.update_crate_engine_path(path);
-                    self.notify_app_data_update(&message);
-                }
             }
             Message::EngineSwapRequested => {
                 let ac_install = match &self.app_data.get_ac_install_path() {

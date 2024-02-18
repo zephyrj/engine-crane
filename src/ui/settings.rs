@@ -90,7 +90,7 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let ac_path_selector =
-            create_path_select(Message::AcPathSelectPressed,
+            create_path_select(Message::RequestPathSelect(Setting::AcPath),
                                Message::RevertSettingToDefault(Setting::AcPath),
                                "Assetto Corsa install path",
                                base_path_str)
@@ -102,7 +102,7 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let mod_path_selector =
-            create_path_select(Message::BeamNGModPathSelectPressed,
+            create_path_select(Message::RequestPathSelect(Setting::BeamNGModPath),
                                Message::RevertSettingToDefault(Setting::BeamNGModPath),
                                "BeamNG mod path",
                                mod_path_str)
@@ -113,7 +113,7 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let crate_path_selector =
-            create_path_select(Message::CrateEnginePathSelectPressed,
+            create_path_select(Message::RequestPathSelect(Setting::CrateEnginePath),
                                Message::RevertSettingToDefault(Setting::CrateEnginePath),
                                "Crate engine path",
                                crate_path_str)
@@ -124,7 +124,7 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let legacy_auto_path_selector =
-            create_path_select(Message::LegacyAutomationPathSelectPressed,
+            create_path_select(Message::RequestPathSelect(Setting::LegacyAutomationUserdataPath),
                                Message::RevertSettingToDefault(Setting::LegacyAutomationUserdataPath),
                                "Legacy automation data path",
                                legacy_auto_path_str)
@@ -135,7 +135,7 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let auto_path_selector =
-            create_path_select(Message::AutomationPathSelectPressed,
+            create_path_select(Message::RequestPathSelect(Setting::AutomationUserdataPath),
                                Message::RevertSettingToDefault(Setting::AutomationUserdataPath),
                                "Automation data path",
                                auto_path_str)

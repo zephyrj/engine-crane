@@ -107,7 +107,10 @@ impl EngineSwapTab {
 
     pub fn app_data_update(&mut self, _app_data: &ApplicationData, update_event: &Message) {
         match update_event {
-            Message::AcPathSelectPressed | Message::BeamNGModPathSelectPressed | Message::CrateEnginePathSelectPressed => self.refresh(),
+            Message::RequestPathSelect(setting) => match setting {
+                Setting::AcPath | Setting::BeamNGModPath | Setting::CrateEnginePath => self.refresh(),
+                _ => {}
+            }
             Message::RevertSettingToDefault(setting) => match setting {
                 Setting::AcPath | Setting::BeamNGModPath | Setting::CrateEnginePath => self.refresh(),
                 _ => {}
