@@ -817,7 +817,7 @@ pub fn get_default_db_path_ellisbury() -> Option<OsString> {
 
 #[cfg(target_os = "windows")]
 pub fn get_default_legacy_user_data_path() -> PathBuf {
-    let mut path : PathBuf = match UserDirs::new() {
+    let path : PathBuf = match UserDirs::new() {
         None => {
             let username = whoami::username();
             PathBuf::from_iter(["C:", "Users", &username, "Documents"])
@@ -842,7 +842,7 @@ pub fn get_default_legacy_user_data_path() -> PathBuf {
 
 #[cfg(target_os = "windows")]
 pub fn get_default_user_data_path() -> PathBuf {
-    let mut path: PathBuf = match BaseDirs::new() {
+    let path: PathBuf = match BaseDirs::new() {
         None => {
             let username = whoami::username();
             PathBuf::from_iter(["C:", "Users", &username, "AppData"])
