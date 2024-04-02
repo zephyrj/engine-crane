@@ -9,6 +9,10 @@ crate-type = ["cdylib"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 directories = { workspace = true }
+automation = { workspace = true }
+crate-engine = { workspace = true }
+unwrap-infallible = { workspace = true }
+toml = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.*"
