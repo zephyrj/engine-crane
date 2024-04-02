@@ -19,7 +19,6 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fs::File;
 use std::path::PathBuf;
 use iced::{Alignment, Background, Color, Element, Length, Renderer, Theme, theme};
 use iced::alignment::{Horizontal, Vertical};
@@ -342,27 +341,12 @@ impl CrateEngineTab {
             if let Some(crate_engine_path) = app_data.get_crate_engine_path() {
                 match CrateEngine::from_beamng_mod_zip(&mod_path.full_path, FromBeamNGModOptions::default()) {
                     Ok(crate_eng) => {
-                        let mut sanitized_name = sanitize_filename::sanitize(crate_eng.name());
-                        sanitized_name = sanitized_name.replace(" ", "_");
-                        let mut crate_path = crate_engine_path.join(format!("{}.eng", sanitized_name));
-                        let mut extra_num = 2;
-                        while crate_path.is_file() {
-                            crate_path = crate_engine_path.join(format!("{}{}.eng", sanitized_name, extra_num));
-                            extra_num += 1;
-                        }
-                        match File::create(&crate_path) {
-                            Ok(mut f) => {
-                                match crate_eng.serialize_to(&mut f) {
-                                    Ok(_) => {
-                                        self.set_success_status(format!("Successfully created crate engine {}", crate_path.display()));
-                                    }
-                                    Err(e) => {
-                                        self.set_error_status(format!("Failed to serialize to {}. {}",crate_path.display(), e));
-                                    }
-                                }
+                        match crate_eng.write_to_path(crate_engine_path) {
+                            Ok(written_path) => {
+                                self.set_success_status(format!("Successfully created crate engine {}", written_path.display()));
                             }
                             Err(e) => {
-                                self.set_error_status(format!("Failed to serialize to {}. {}",crate_path.display(), e));
+                                self.set_error_status(format!("Failed to write crate engine. {}", e));
                             }
                         }
                     }

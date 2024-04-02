@@ -12,3 +12,5 @@ tracing =  { workspace = true }
 sha2 = { workspace = true }
 bincode = { workspace = true }
 serde = { workspace = true }
+unwrap-infallible = { workspace = true }
+sanitize-filename = { workspace = true }

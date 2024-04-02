@@ -529,7 +529,11 @@ dependencies = [
 name = "ccrate_engine_builder"
 version = "0.0.1"
 dependencies = [
+ "automation",
+ "crate-engine",
  "directories",
+ "toml 0.8.2",
+ "unwrap-infallible",
  "windows",
 ]
 
@@ -920,9 +924,11 @@ dependencies = [
  "automation",
  "beam_ng",
  "bincode",
+ "sanitize-filename",
  "serde 1.0.152",
  "sha2",
  "tracing",
+ "unwrap-infallible",
  "utils",
 ]
 
@@ -5258,6 +5264,12 @@ name = "unicode-xid"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
+
+[[package]]
+name = "unwrap-infallible"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "151ac09978d3c2862c4e39b557f4eceee2cc72150bc4cb4f16abf061b6e381fb"
 
 [[package]]
 name = "usvg"
