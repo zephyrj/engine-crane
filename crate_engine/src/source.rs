@@ -30,8 +30,12 @@ pub struct DataSource {
 }
 
 impl DataSource {
-    pub fn create_as_beam_ng(hashes: Vec<Option<[u8; 32]>>) -> Self {
+    pub fn from_beam_ng_mod(hashes: Vec<Option<[u8; 32]>>) -> Self {
         DataSource { source_id: BEAM_NG_MOD_SOURCE_ID, hashes }
+    }
+
+    pub fn from_direct_export() -> Self {
+        DataSource { source_id: DIRECT_EXPORT_SOURCE_ID, hashes: Vec::new() }
     }
 
     pub fn source_name(&self) -> String {

@@ -24,14 +24,13 @@ pub mod direct_export;
 
 use std::io::{Read, Write};
 use std::path::Path;
-use bincode::{deserialize_from, serialize_into};
 use crate::source::{BEAM_NG_MOD_SOURCE_ID, DIRECT_EXPORT_SOURCE_ID};
 use crate::CrateEngineMetadata;
 
 #[derive(Debug)]
 pub enum CrateEngineData {
     BeamNGMod(beam_ng_mod::Data),
-    DirectExport(direct_export::DataV1)
+    DirectExport(direct_export::Data)
 }
 
 impl CrateEngineData {
@@ -46,11 +45,7 @@ impl CrateEngineData {
                 Ok(CrateEngineData::BeamNGMod(beam_ng_mod::Data::from_reader(metadata, reader)?))
             },
             DIRECT_EXPORT_SOURCE_ID=> {
-                let internal_data =
-                    deserialize_from(reader).map_err(|e| {
-                        format!("Failed to deserialise {} crate engine. {}", 1, e.to_string())
-                    })?;
-                Ok(CrateEngineData::DirectExport(internal_data))
+                Ok(CrateEngineData::DirectExport(direct_export::Data::from_reader(metadata, reader)?))
             },
             i => Err(format!("Unknown data source with id {}", i))
         }
@@ -66,7 +61,7 @@ impl CrateEngineData {
     pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
         match self {
             CrateEngineData::BeamNGMod(d) => d.serialize_into(writer),
-            CrateEngineData::DirectExport(d) => serialize_into(writer, d),
+            CrateEngineData::DirectExport(d) => d.serialise_into(writer),
         }
     }
 }

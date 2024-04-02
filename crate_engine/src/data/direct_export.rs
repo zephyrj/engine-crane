@@ -20,7 +20,10 @@
  */
 
 use std::collections::BTreeMap;
+use std::io::{Read, Write};
+use bincode::{deserialize_from, serialize_into};
 use serde::{Deserialize, Serialize};
+use crate::CrateEngineMetadata;
 
 #[derive(Debug)]
 pub struct CreationOptions {
@@ -37,11 +40,35 @@ pub enum Data {
     V1(DataV1)
 }
 
+impl Data {
+    pub fn version_int(&self) -> u16 {
+        match self {
+            Data::V1(d) => d.version_int()
+        }
+    }
+
+    pub fn from_reader(_metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<Data, String> {
+        let internal_data =
+            deserialize_from(reader).map_err(|e| {
+                format!("Failed to deserialise {} crate engine. {}", 1, e.to_string())
+            })?;
+        Ok(Data::V1(internal_data))
+    }
+
+    pub fn serialise_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
+        match self {
+            Data::V1(d) => {
+                serialize_into(writer, d)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct DataV1 {
     pub exporter_script_version: u32,
     pub string_data: BTreeMap<String, String>,
-    pub float_data: BTreeMap<String, f64>,
+    pub float_data: BTreeMap<String, f32>,
     pub curve_data: BTreeMap<String, Vec<f64>>,
     _car_file_data: Option<Vec<u8>>,
 }

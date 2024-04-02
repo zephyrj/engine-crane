@@ -23,8 +23,9 @@ use std::io::{Read, Write};
 use std::mem;
 use bincode::{deserialize_from, serialize_into};
 use serde::{Deserialize, Serialize};
-use automation::sandbox::{AspirationType, BlockConfig, HeadConfig, Valves};
+use automation::{AspirationType, BlockConfig, HeadConfig, Valves};
 use crate::source::DataSource;
+
 
 pub(crate) type CurrentMetadataType = MetadataV1;
 
@@ -57,7 +58,7 @@ impl CrateEngineMetadata {
     pub fn get_source(&self) -> DataSource {
         match self {
             CrateEngineMetadata::MetadataV1(m) => {
-                DataSource::create_as_beam_ng(vec![m.engine_jbeam_hash, m.automation_data_hash])
+                DataSource::from_beam_ng_mod(vec![m.engine_jbeam_hash, m.automation_data_hash])
             },
             CrateEngineMetadata::MetadataV2(m) => m.source.clone()
         }
@@ -214,22 +215,22 @@ impl MetadataV1 {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MetadataV2 {
-    source: DataSource,
+    pub source: DataSource,
     pub data_version: u16,
-    automation_version: u64,
-    name: String,
-    build_year: u16,
-    block_config: BlockConfig,
-    head_config: HeadConfig,
-    valves: Valves,
-    capacity: u32,
-    aspiration: AspirationType,
-    fuel: String,
-    peak_power: u32,
-    peak_power_rpm: u32,
-    peak_torque: u32,
-    peak_torque_rpm: u32,
-    max_rpm: u32
+    pub automation_version: u64,
+    pub name: String,
+    pub build_year: u16,
+    pub block_config: BlockConfig,
+    pub head_config: HeadConfig,
+    pub valves: Valves,
+    pub capacity: u32,
+    pub aspiration: AspirationType,
+    pub fuel: String,
+    pub peak_power: u32,
+    pub peak_power_rpm: u32,
+    pub peak_torque: u32,
+    pub peak_torque_rpm: u32,
+    pub max_rpm: u32
 }
 
 impl MetadataV2 {
