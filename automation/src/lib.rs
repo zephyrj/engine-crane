@@ -23,6 +23,10 @@ pub mod car;
 pub mod sandbox;
 pub mod validation;
 
+mod types;
+
+pub use types::*;
+
 use std::path::PathBuf;
 use steam;
 
@@ -36,3 +40,5 @@ pub fn is_installed() -> bool {
 pub fn get_install_path() -> PathBuf {
     steam::get_game_install_path(STEAM_GAME_NAME)
 }
+
+
