@@ -111,16 +111,16 @@ impl CrateEngine {
     pub fn from_exporter_data(data_type: direct_export::Data) -> Result<CrateEngine, String> {
         let metadata = match &data_type {
             direct_export::Data::V1(data) => {
-                let automation_version = data.float_data["GameVersion"].round() as u64;
-                let name = format!("{} {}", data.string_data["FamilyName"], data.string_data["VariantName"]);
-                let build_year = data.float_data["VariantYear"].round() as u16;
-                let block_config = automation::BlockConfig::from_str(&data.string_data["BlockType"]).unwrap_infallible();
-                let head_config = automation::HeadConfig::from_str(&data.string_data["HeadType"]).unwrap_infallible();
+                let automation_version = data.float_data["Info"]["GameVersion"].round() as u64;
+                let name = format!("{} {}", data.string_data["Info"]["FamilyName"], data.string_data["Info"]["VariantName"]);
+                let build_year = data.float_data["Info"]["VariantYear"].round() as u16;
+                let block_config = automation::BlockConfig::from_str(&data.string_data["Parts"]["BlockType"]).unwrap_infallible();
+                let head_config = automation::HeadConfig::from_str(&data.string_data["Parts"]["HeadType"]).unwrap_infallible();
                 let valves = automation::Valves::from_int(
-                    (data.float_data["IntakeValves"].round() + data.float_data["ExhaustValves"].round()) as u16
+                    (data.float_data["Parts"]["IntakeValves"].round() + data.float_data["Parts"]["ExhaustValves"].round()) as u16
                 ).unwrap_infallible();
-                let capacity = (data.float_data["Displacement"] * 1000.0).round() as u32;
-                let aspiration = automation::AspirationType::from_str(&data.string_data["Aspiration"]).unwrap_infallible();
+                let capacity = (data.float_data["Tune"]["Displacement"] * 1000.0).round() as u32;
+                let aspiration = automation::AspirationType::from_str(&data.string_data["Parts"]["Aspiration"]).unwrap_infallible();
 
                 metadata::MetadataV2 {
                     source: source::DataSource::from_direct_export(),
@@ -133,12 +133,12 @@ impl CrateEngine {
                     valves,
                     capacity,
                     aspiration,
-                    fuel: data.string_data["FuelType"].clone(),
-                    peak_power: data.float_data["PeakPower"].round() as u32,
-                    peak_power_rpm: data.float_data["PeakPowerRPM"].round() as u32,
-                    peak_torque: data.float_data["PeakTorque"].round() as u32,
-                    peak_torque_rpm: data.float_data["PeakTorqueRPM"].round() as u32,
-                    max_rpm: data.float_data["MaxRPM"].round() as u32
+                    fuel: data.string_data["Fuel"]["Type"].clone(),
+                    peak_power: data.float_data["Results"]["PeakPower"].round() as u32,
+                    peak_power_rpm: data.float_data["Results"]["PeakPowerRPM"].round() as u32,
+                    peak_torque: data.float_data["Results"]["PeakTorque"].round() as u32,
+                    peak_torque_rpm: data.float_data["Results"]["PeakTorqueRPM"].round() as u32,
+                    max_rpm: data.float_data["Results"]["MaxRPM"].round() as u32
                 }
             }
         };

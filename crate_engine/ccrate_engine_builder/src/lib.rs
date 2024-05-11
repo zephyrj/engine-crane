@@ -63,23 +63,29 @@ pub extern fn init(script_version: u32) -> *mut crate_engine::direct_export::Dat
 
 #[no_mangle]
 pub extern fn add_string(instance: *mut crate_engine::direct_export::DataV1,
+                         group: *const c_char,
                          key: *const c_char,
                          val: *const c_char) {
     let mut data = unsafe { &mut*(instance) };
+    let group_cstr = unsafe { CStr::from_ptr(group) };
     let key_cstr = unsafe { CStr::from_ptr(key) };
     let val_cstr = unsafe { CStr::from_ptr(val) };
-    data.string_data.insert(String::from_utf8_lossy(key_cstr.to_bytes()).to_string(),
-                            String::from_utf8_lossy(val_cstr.to_bytes()).to_string());
+    data.add_string(String::from_utf8_lossy(group_cstr.to_bytes()).to_string(),
+                    String::from_utf8_lossy(key_cstr.to_bytes()).to_string(),
+                    String::from_utf8_lossy(val_cstr.to_bytes()).to_string());
 }
 
 #[no_mangle]
 pub extern fn add_float(instance: *mut crate_engine::direct_export::DataV1,
+                        group: *const c_char,
                         key: *const c_char,
                         val: c_float) {
     let mut data = unsafe { &mut*(instance) };
+    let group_cstr = unsafe { CStr::from_ptr(group) };
     let key_cstr = unsafe { CStr::from_ptr(key) };
-    data.float_data.insert(String::from_utf8_lossy(key_cstr.to_bytes()).to_string(),
-                           val);
+    data.add_float(String::from_utf8_lossy(group_cstr.to_bytes()).to_string(),
+                   String::from_utf8_lossy(key_cstr.to_bytes()).to_string(),
+                   val);
 }
 
 #[no_mangle]

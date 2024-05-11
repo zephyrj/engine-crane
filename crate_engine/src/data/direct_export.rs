@@ -67,8 +67,8 @@ impl Data {
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct DataV1 {
     pub exporter_script_version: u32,
-    pub string_data: BTreeMap<String, String>,
-    pub float_data: BTreeMap<String, f32>,
+    pub string_data: BTreeMap<String, BTreeMap<String, String>>,
+    pub float_data: BTreeMap<String, BTreeMap<String, f32>>,
     pub curve_data: BTreeMap<String, Vec<f64>>,
     _car_file_data: Option<Vec<u8>>,
 }
@@ -81,5 +81,21 @@ impl DataV1 {
 
     pub fn new() -> DataV1 {
         DataV1::default()
+    }
+
+    pub fn add_string(&mut self, group_name: String, key: String, value: String) {
+        if !self.string_data.contains_key(&group_name) {
+            self.string_data.insert(group_name.clone(), BTreeMap::new());
+        };
+        let group_map = self.string_data.get_mut(&group_name).unwrap();
+        group_map.insert(key, value);
+    }
+
+    pub fn add_float(&mut self, group_name: String, key: String, value: f32) {
+        if !self.float_data.contains_key(&group_name) {
+            self.float_data.insert(group_name.clone(), BTreeMap::new());
+        };
+        let group_map = self.float_data.get_mut(&group_name).unwrap();
+        group_map.insert(key, value);
     }
 }
