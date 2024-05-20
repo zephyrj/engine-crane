@@ -8,3 +8,4 @@ authors = ["zephyrj <zephyrj@protonmail.com>"]
 
 [dependencies]
 sha2 = { workspace = true }
+sanitize-filename = { workspace = true }

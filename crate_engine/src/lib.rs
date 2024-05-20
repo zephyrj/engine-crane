@@ -177,14 +177,7 @@ impl CrateEngine {
                 bincode::ErrorKind::Custom(format!("Output path {} not found", path.display()))
             ))
         }
-        let mut sanitized_name = sanitize_filename::sanitize(self.name());
-        sanitized_name = sanitized_name.replace(" ", "_");
-        let mut crate_path = path.join(format!("{}.eng", sanitized_name));
-        let mut extra_num = 2;
-        while crate_path.is_file() {
-            crate_path = path.join(format!("{}{}.eng", sanitized_name, extra_num));
-            extra_num += 1;
-        }
+        let crate_path = utils::filesystem::create_safe_filename_in_path(&path, self.name(), CRATE_ENGINE_FILE_SUFFIX);
         let mut f = File::create(&crate_path)?;
         self.serialize_to(&mut f)?;
         Ok(crate_path)
