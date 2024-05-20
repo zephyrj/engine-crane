@@ -18,18 +18,18 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
-use std::ffi::{c_float, c_int, CStr};
+extern crate core;
+
+use std::ffi::{c_float, c_ulong, CStr};
 use std::fs;
 use std::os::raw::c_char;
 use std::path::{PathBuf};
-use toml;
-use toml::ser::Error;
-
 
 use windows::{Win32::Foundation::*, Win32::System::SystemServices::*, };
 
 use crate_engine;
-use crate_engine::{CrateEngine, CrateEngineMetadata};
+use crate_engine::{CrateEngine};
+use crate_engine::direct_export::DataV1;
 
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
@@ -44,7 +44,6 @@ extern "system" fn DllMain(
         DLL_PROCESS_DETACH => detach(),
         _ => ()
     }
-
     true
 }
 
@@ -55,14 +54,14 @@ fn detach() {
 }
 
 #[no_mangle]
-pub extern fn init(script_version: u32) -> *mut crate_engine::direct_export::DataV1 {
-    let mut data: Box<crate_engine::direct_export::DataV1> = Box::new(crate_engine::direct_export::DataV1::new());
+pub extern fn init(script_version: u32) -> *mut DataV1 {
+    let mut data: Box<DataV1> = Box::new(DataV1::new());
     data.exporter_script_version = script_version;
     Box::into_raw(data)
 }
 
 #[no_mangle]
-pub extern fn add_string(instance: *mut crate_engine::direct_export::DataV1,
+pub extern fn add_string(instance: *mut DataV1,
                          group: *const c_char,
                          key: *const c_char,
                          val: *const c_char) {
@@ -76,7 +75,7 @@ pub extern fn add_string(instance: *mut crate_engine::direct_export::DataV1,
 }
 
 #[no_mangle]
-pub extern fn add_float(instance: *mut crate_engine::direct_export::DataV1,
+pub extern fn add_float(instance: *mut DataV1,
                         group: *const c_char,
                         key: *const c_char,
                         val: c_float) {
@@ -89,7 +88,19 @@ pub extern fn add_float(instance: *mut crate_engine::direct_export::DataV1,
 }
 
 #[no_mangle]
-pub extern fn dump_toml(instance: *mut crate_engine::direct_export::DataV1,
+pub extern fn add_curve_data(instance: *mut DataV1,
+                             curve_name: *const c_char,
+                             index: c_ulong,
+                             val: c_float) {
+    let mut data = unsafe { &mut*(instance) };
+    let curve_name_cstr = unsafe { CStr::from_ptr(curve_name) };
+    data.add_curve_data(String::from_utf8_lossy(curve_name_cstr.to_bytes()).to_string(),
+                        index as usize,
+                        val);
+}
+
+#[no_mangle]
+pub extern fn dump_json(instance: *mut DataV1,
                         path_char: *const c_char) -> bool
 {
     let data = unsafe { &mut*(instance) };
@@ -108,21 +119,25 @@ pub extern fn dump_toml(instance: *mut crate_engine::direct_export::DataV1,
             return false;
         }
     }
-    match toml::to_string(data) {
-        Ok(toml_string) => {
-            match fs::write(parent_path.join("test_data.toml"), toml_string) {
-                Ok(_) => true,
-                Err(_) => false
-            }
+    let json_string = match serde_json::to_string_pretty(&data) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("{}", e);
+            return false;
         }
-        Err(_) => {
-            false
-        }
+    };
+    let file_path =
+        utils::filesystem::create_safe_filename_in_path(&parent_path,
+                                                        &data.deduce_engine_name(),
+                                                        "json");
+    match fs::write(file_path, json_string) {
+        Ok(_) => true,
+        Err(_) => false
     }
 }
 
 #[no_mangle]
-pub extern fn finalise(instance: *mut crate_engine::direct_export::DataV1,
+pub extern fn finalise(instance: *mut DataV1,
                        path_char: *const c_char) -> bool
 {
     let data = unsafe {Box::from_raw(instance)};
@@ -153,7 +168,6 @@ pub extern fn finalise(instance: *mut crate_engine::direct_export::DataV1,
 }
 
 #[no_mangle]
-pub extern fn destroy(struct_instance: *mut crate_engine::direct_export::DataV1) {
+pub extern fn destroy(struct_instance: *mut DataV1) {
     unsafe { drop(Box::from_raw(struct_instance)); }
 }
-

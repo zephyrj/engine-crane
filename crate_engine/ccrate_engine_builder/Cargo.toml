@@ -11,8 +11,9 @@ crate-type = ["cdylib"]
 directories = { workspace = true }
 automation = { workspace = true }
 crate-engine = { workspace = true }
+utils = { workspace = true }
 unwrap-infallible = { workspace = true }
-toml = { workspace = true }
+serde_json = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.*"

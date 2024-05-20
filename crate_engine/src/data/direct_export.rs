@@ -69,7 +69,7 @@ pub struct DataV1 {
     pub exporter_script_version: u32,
     pub string_data: BTreeMap<String, BTreeMap<String, String>>,
     pub float_data: BTreeMap<String, BTreeMap<String, f32>>,
-    pub curve_data: BTreeMap<String, Vec<f64>>,
+    pub curve_data: BTreeMap<String, BTreeMap<usize, f32>>,
     _car_file_data: Option<Vec<u8>>,
 }
 
@@ -97,5 +97,23 @@ impl DataV1 {
         };
         let group_map = self.float_data.get_mut(&group_name).unwrap();
         group_map.insert(key, value);
+    }
+
+    pub fn add_curve_data(&mut self, curve_name: String, index: usize, value: f32) {
+        let curve_map = self.curve_data.entry(curve_name).or_insert(BTreeMap::new());
+        curve_map.insert(index, value);
+    }
+
+    pub fn deduce_engine_name(&self) -> String {
+        let backup_fam_name = String::from("UnknownFamily");
+        let backup_var_name = String::from("UnknownVariant");
+        match self.string_data.get("Info") {
+            Some(info_data) => {
+                let fam = info_data.get("FamilyName").unwrap_or(&backup_fam_name);
+                let var = info_data.get("VariantName").unwrap_or(&backup_var_name);
+                format!("{}-{}", fam, var)
+            },
+            None => format!("{}-{}", backup_fam_name, backup_var_name)
+        }
     }
 }
