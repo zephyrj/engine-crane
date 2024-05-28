@@ -141,27 +141,33 @@ pub extern fn finalise(instance: *mut DataV1,
                        path_char: *const c_char) -> bool
 {
     let data = unsafe {Box::from_raw(instance)};
+    let path_cstr = unsafe { CStr::from_ptr(path_char) };
+    let path_str = String::from_utf8_lossy(path_cstr.to_bytes()).to_string();
+    let mut path = PathBuf::from(path_str);
+    if path.is_file() {
+        path = match path.parent() {
+            None => PathBuf::new(),
+            Some(p) => PathBuf::from(p)
+        }
+    }
+
     let result = CrateEngine::from_exporter_data(crate_engine::direct_export::Data::V1(*data));
     match result {
         Ok(eng) => {
-            let path_cstr = unsafe { CStr::from_ptr(path_char) };
-            let path_str = String::from_utf8_lossy(path_cstr.to_bytes()).to_string();
-            let mut path = PathBuf::from(path_str);
-            if path.is_file() {
-                path = match path.parent() {
-                    None => PathBuf::new(),
-                    Some(p) => PathBuf::from(p)
-                }
-            }
-            match fs::create_dir_all(path) {
+            match fs::create_dir_all(&path) {
                 Ok(_) => {}
                 Err(e) => {
                     return false;
                 }
             }
-            // Write file
-            //eng.serialize_to()
-            true
+            return match eng.write_to_path(path) {
+                Ok(_) => {
+                    true
+                }
+                Err(e) => {
+                    false
+                }
+            }
         }
         Err(_) => false
     }
