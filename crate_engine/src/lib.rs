@@ -107,7 +107,6 @@ impl CrateEngine {
         })
     }
 
-    // TODO!
     pub fn from_exporter_data(data_type: direct_export::Data) -> Result<CrateEngine, String> {
         let metadata = match &data_type {
             direct_export::Data::V1(data) => {

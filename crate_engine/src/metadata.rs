@@ -49,7 +49,8 @@ impl CrateEngineMetadata {
                 Ok(CrateEngineMetadata::MetadataV1(metadata))
             },
             MetadataV2::VERSION_U16 => {
-                Ok(CrateEngineMetadata::MetadataV2(_deserialize_metadata(reader)?))
+                let metadata = deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
+                Ok(CrateEngineMetadata::MetadataV2(metadata))
             },
             _ => Err(format!("Unknown metadata version {}", metadata_version))
         }
