@@ -27,7 +27,7 @@ use std::path::Path;
 use crate::source::{BEAM_NG_MOD_SOURCE_ID, DIRECT_EXPORT_SOURCE_ID};
 use crate::CrateEngineMetadata;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CrateEngineData {
     BeamNGMod(beam_ng_mod::Data),
     DirectExport(direct_export::Data)

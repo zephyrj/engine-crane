@@ -35,7 +35,7 @@ impl CreationOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Data {
     V1(DataV1)
 }
@@ -64,7 +64,7 @@ impl Data {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct DataV1 {
     pub exporter_script_version: u32,
     pub string_data: BTreeMap<String, BTreeMap<String, String>>,

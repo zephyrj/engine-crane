@@ -44,7 +44,7 @@ impl CreationOptions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Data {
     V1(DataV1)
 }
@@ -111,7 +111,7 @@ impl Data {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DataV1 {
     mod_info_json_data: Option<Vec<u8>>,
     main_engine_jbeam_filename: String,
