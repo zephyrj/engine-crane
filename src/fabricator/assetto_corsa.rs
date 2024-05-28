@@ -20,6 +20,7 @@
  */
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::path::Path;
@@ -27,18 +28,21 @@ use itertools::Itertools;
 use tracing::{debug, info};
 use assetto_corsa::car::data;
 use assetto_corsa::car::data::engine;
+use assetto_corsa::car::data::engine::FuelConsumptionFlowRate;
 use automation::car::CarFile;
 use automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxFinder};
-use utils::units::kw_to_bhp;
+use utils::units::{calculate_power_kw, kw_to_bhp};
 use automation::validation::AutomationSandboxCrossChecker;
 use crate_engine::{CrateEngine, CrateEngineData};
 use crate_engine::beam_ng_mod;
+use crate_engine::direct_export::Data;
 use crate::fabricator::{FabricationError};
 use crate::fabricator::FabricationError::{InvalidData, MissingDataSection};
 use crate::utils::numeric::{round_float_to};
 
 pub enum EngineParameterCalculator {
-    V1(EngineParameterCalculatorV1)
+    V1(EngineParameterCalculatorV1),
+    V2(EngineParameterCalculatorV2)
 }
 
 impl EngineParameterCalculator {
@@ -46,7 +50,7 @@ impl EngineParameterCalculator {
         use crate::fabricator::FabricationError::*;
         info!("Creating AC parameter calculator for crate engine {}", crate_eng_path.display());
         let mut file = File::open(crate_eng_path)?;
-        let crate_eng = CrateEngine::deserialize_from(&mut file).map_err(|reason|{
+        let mut crate_eng = CrateEngine::deserialize_from(&mut file).map_err(|reason|{
             FailedToLoad(crate_eng_path.display().to_string(), reason)
         })?;
         info!("Loaded {} from eng file", crate_eng.name());
@@ -74,8 +78,10 @@ impl EngineParameterCalculator {
                     }))
                 }
             }
-            _ => {
-                Err(Other("Can only currently create EngineParameterCalculator from BeamNG mods".to_string()))
+            CrateEngineData::DirectExport(eng_data) => {
+                Ok(EngineParameterCalculator::V2(
+                    EngineParameterCalculatorV2 { eng_data: eng_data.clone() }
+                ))
             }
         }
     }
@@ -146,31 +152,36 @@ impl EngineParameterCalculator {
 
     pub fn engine_weight(&self) -> u32 {
         match self {
-            EngineParameterCalculator::V1(c) => c.engine_weight()
+            EngineParameterCalculator::V1(c) => c.engine_weight(),
+            EngineParameterCalculator::V2(c) => c.engine_weight(),
         }
     }
 
     pub fn inertia(&self) -> Result<f64, FabricationError> {
         match self {
-            EngineParameterCalculator::V1(c) => c.inertia()
+            EngineParameterCalculator::V1(c) => c.inertia(),
+            EngineParameterCalculator::V2(c) => c.inertia()
         }
     }
 
     pub fn idle_speed(&self) -> Option<f64> {
         match self {
-            EngineParameterCalculator::V1(c) => c.idle_speed()
+            EngineParameterCalculator::V1(c) => c.idle_speed(),
+            EngineParameterCalculator::V2(c) => c.idle_speed()
         }
     }
 
     pub fn limiter(&self) -> f64 {
         match self {
-            EngineParameterCalculator::V1(c) => c.limiter()
+            EngineParameterCalculator::V1(c) => c.limiter(),
+            EngineParameterCalculator::V2(c) => c.limiter()
         }
     }
 
     pub fn basic_fuel_consumption(&self) -> f64 {
         match self {
-            EngineParameterCalculator::V1(c) => c.basic_fuel_consumption()
+            EngineParameterCalculator::V1(c) => c.basic_fuel_consumption(),
+            EngineParameterCalculator::V2(c) => c.basic_fuel_consumption()
         }
     }
 
@@ -178,37 +189,47 @@ impl EngineParameterCalculator {
         match self {
             EngineParameterCalculator::V1(c) => {
                 c.fuel_flow_consumption(mechanical_efficiency)
+            },
+            EngineParameterCalculator::V2(c) => {
+                c.fuel_flow_consumption(mechanical_efficiency)
             }
         }
     }
 
     pub fn engine_torque_curve(&self) -> Vec<(i32, i32)> {
         match self {
-            EngineParameterCalculator::V1(c) => c.engine_torque_curve()
+            EngineParameterCalculator::V1(c) => c.engine_torque_curve(),
+            EngineParameterCalculator::V2(c) => c.engine_torque_curve()
         }
     }
 
     pub fn peak_torque(&self) -> i32 {
         match self {
-            EngineParameterCalculator::V1(c) => c.peak_torque()
+            EngineParameterCalculator::V1(c) => c.peak_torque(),
+            EngineParameterCalculator::V2(c) => c.peak_torque()
         }
     }
 
     pub fn engine_bhp_power_curve(&self) -> Vec<(i32, i32)> {
         match self {
-            EngineParameterCalculator::V1(c) => c.engine_bhp_power_curve()
+            EngineParameterCalculator::V1(c) => c.engine_bhp_power_curve(),
+            EngineParameterCalculator::V2(c) => c.engine_bhp_power_curve()
         }
     }
 
     pub fn peak_bhp(&self) -> i32 {
         match self {
-            EngineParameterCalculator::V1(c) => c.peak_bhp()
+            EngineParameterCalculator::V1(c) => c.peak_bhp(),
+            EngineParameterCalculator::V2(c) => c.peak_bhp()
         }
     }
 
     pub fn naturally_aspirated_wheel_torque_curve(&self, drivetrain_efficiency: f64) -> Vec<(i32, f64)> {
         match self {
             EngineParameterCalculator::V1(c) => {
+                c.naturally_aspirated_wheel_torque_curve(drivetrain_efficiency)
+            }
+            EngineParameterCalculator::V2(c) => {
                 c.naturally_aspirated_wheel_torque_curve(drivetrain_efficiency)
             }
         }
@@ -220,36 +241,44 @@ impl EngineParameterCalculator {
             EngineParameterCalculator::V1(c) => {
                 c.get_max_boost_params(decimal_place_precision)
             }
+            EngineParameterCalculator::V2(c) => {
+                c.get_max_boost_params(decimal_place_precision)
+            }
         }
     }
 
     pub fn create_turbo(&self) -> Option<engine::Turbo> {
         match self {
-            EngineParameterCalculator::V1(c) => c.create_turbo()
+            EngineParameterCalculator::V1(c) => c.create_turbo(),
+            EngineParameterCalculator::V2(c) => c.create_turbo()
         }
     }
 
     pub fn create_turbo_controller(&self) -> Option<engine::turbo_ctrl::TurboController> {
         match self {
-            EngineParameterCalculator::V1(c) => c.create_turbo_controller()
+            EngineParameterCalculator::V1(c) => c.create_turbo_controller(),
+            EngineParameterCalculator::V2(c) => c.create_turbo_controller()
         }
     }
 
     pub fn coast_data(&self) -> Result<engine::CoastCurve, FabricationError> {
         match self {
-            EngineParameterCalculator::V1(c) => c.coast_data()
+            EngineParameterCalculator::V1(c) => c.coast_data(),
+            EngineParameterCalculator::V2(c) => c.coast_data()
         }
     }
 
     pub fn damage(&self) -> engine::Damage {
         match self {
-            EngineParameterCalculator::V1(c) => c.damage()
+            EngineParameterCalculator::V1(c) => c.damage(),
+            EngineParameterCalculator::V2(c) => c.damage()
         }
     }
 
     pub fn create_metadata(&self) -> engine::Metadata {
         match self {
-            EngineParameterCalculator::V1(c) => c.create_metadata()
+            EngineParameterCalculator::V1(c) => c.create_metadata(),
+            EngineParameterCalculator::V2(c) => c.create_metadata()
         }
     }
 }
@@ -266,7 +295,7 @@ impl EngineParameterCalculatorV1 {
         self.engine_sqlite_data.weight.round() as u32
     }
 
-    pub fn get_engine_jbeam_key(&self) -> String {
+    fn get_engine_jbeam_key(&self) -> String {
         let mut engine_key = String::from("Camso_Engine");
         let test_key = String::from(engine_key.clone() + "_");
         for key in self.engine_jbeam_data.keys() {
@@ -278,7 +307,7 @@ impl EngineParameterCalculatorV1 {
         engine_key
     }
 
-    pub fn get_main_engine_jbeam_map(&self) -> Result<&serde_hjson::Map<String, serde_hjson::Value>, FabricationError> {
+    fn get_main_engine_jbeam_map(&self) -> Result<&serde_hjson::Map<String, serde_hjson::Value>, FabricationError> {
         let section_name = self.get_engine_jbeam_key();
         let eng_section_object = get_object_from_jbeam_map(
             &self.engine_jbeam_data,
@@ -590,6 +619,318 @@ impl EngineParameterCalculatorV1 {
         m.set_source(engine::metadata::Source::Automation);
         m.set_mass_kg(self.engine_sqlite_data.weight.round() as i64);
         m
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct EngineParameterCalculatorV2 {
+    eng_data: crate_engine::direct_export::Data
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + t * (b - a)
+}
+
+impl EngineParameterCalculatorV2 {
+    pub fn engine_weight(&self) -> u32 {
+        self.lookup_float_data("Results", "Weight").unwrap().round() as u32
+    }
+
+    pub fn inertia(&self) -> Result<f64, FabricationError> {
+        // TODO perhaps use the flywheel weight and dimensions to calculate this somehow?
+        // I(kg⋅m2) = 1/2 * Mass * (radius * radius)
+        let responsiveness = self.lookup_float_data("Results", "Responsiveness")?;
+        // TODO this uses the max and min inertia for AC road cars I could find and then
+        //      does a maps the responsiveness metric over that range
+        //      The low and high ends are quite extreme so try lower values or
+        //      use a normal distribution?
+        Ok(lerp(0.32, 0.07, responsiveness / 100.0) as f64)
+    }
+
+    pub fn idle_speed(&self) -> Option<f64> {
+        let result_idle = self.lookup_float_data("Results", "IdleRPM").ok()?;
+        let curve_min = self.lookup_curve_data("RPM").ok()?.get(&1).unwrap_or(&result_idle);
+        let values = vec![result_idle as f64, *curve_min as f64];
+        values.into_iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+    }
+
+    pub fn limiter(&self) -> f64 {
+        self.lookup_float_data("Results", "MaxRPM").unwrap() as f64
+    }
+
+    fn average_econ_efficiency(&self) -> f32 {
+        self.lookup_float_data("Results", "EconEff").unwrap()
+    }
+
+    pub fn basic_fuel_consumption(&self) -> f64 {
+        // Get a BSFC value from efficiency
+        // LHV of gasoline = 43400 kJ/Kg
+        // LHV of Ethanol  = 26700 kJ/Kg
+        // BSFC g/kWh = (3600 / (eff-decimal * LHV)) * 1000
+        // TODO take into account various ethanol mixes
+        let econ_eff = self.average_econ_efficiency() / 100.0;
+        let bsfc = (3600.0 / (econ_eff * 43400.0)) * 1000.0;
+
+        // From https://buildingclub.info/calculator/g-kwh-to-l-h-online-from-gram-kwh-to-liters-per-hour/
+        // Fuel Use (l/h) = (Engine Power (kW) * BSFC@Power) / Fuel density kg/m3
+        let fuel_use_per_hour = (self.peak_kw() as f64 * bsfc as f64) / 750f64;
+        let fuel_use_per_sec = fuel_use_per_hour / 3600f64;
+
+        // Assetto Corsa calculation:
+        // In one second the consumption is (rpm*gas*CONSUMPTION)/1000
+        // fuel_use_per_sec = (engine_data["PeakPowerRPM"] * 1 * C) / 1000
+        // fuel_use_per_sec * 1000 =  engine_data["PeakPowerRPM"]*C
+        // C = (fuel_use_per_sec * 1000) / engine_data["PeakPowerRPM"]
+        // This is all fundamentally flawed as the Econ value is an average over all engine RPMs
+        // rather than the consumption at max power. It often results in the values being higher
+        // than the values of other AC engines
+        // # TODO refine this
+        return (fuel_use_per_sec * 1000f64) / self.peak_power_rpm() as f64
+    }
+
+    pub fn fuel_flow_consumption(&self, mechanical_efficiency: f64) -> FuelConsumptionFlowRate {
+        data::engine::FuelConsumptionFlowRate::new(
+            0.03,
+            (self.idle_speed().unwrap() + 100_f64).round() as i32,
+            mechanical_efficiency,
+            None,
+            50
+        )
+    }
+
+    /// Return a vector containing pairs of RPM, Torque (NM)
+    pub fn engine_torque_curve(&self) -> Vec<(i32, i32)> {
+        let rpm_map = self.lookup_curve_data("RPM").unwrap();
+        let torque_map = self.lookup_curve_data("Torque").unwrap();
+        let mut torque_vec = Vec::new();
+        for (idx, rpm) in rpm_map {
+            torque_vec.push((rpm.round() as i32, torque_map.get(idx).unwrap().round() as i32))
+        }
+        torque_vec
+    }
+
+    pub fn peak_torque(&self) -> i32 {
+        self.lookup_float_data("Results", "PeakTorque").unwrap().round() as i32
+    }
+
+    /// Return a vector containing pairs of RPM, Power (BHP)
+    pub fn engine_bhp_power_curve(&self) -> Vec<(i32, i32)> {
+        let rpm_map = self.lookup_curve_data("RPM").unwrap();
+        let torque_map = self.lookup_curve_data("Torque").unwrap();
+        let mut power_vec = Vec::new();
+        for (idx, rpm) in rpm_map {
+            let power_kw = calculate_power_kw(*rpm, torque_map[idx]);
+            power_vec.push((*rpm as i32, kw_to_bhp(power_kw as f64).round() as i32));
+        }
+        power_vec
+    }
+
+    fn peak_kw(&self) -> f32 {
+        self.lookup_float_data("Results", "PeakPower").unwrap()
+    }
+
+    fn peak_power_rpm(&self) -> f32 {
+        self.lookup_float_data("Results", "PeakPowerRPM").unwrap()
+    }
+
+    pub fn peak_bhp(&self) -> i32 {
+        kw_to_bhp(self.peak_kw() as f64).round() as i32
+    }
+
+    pub fn naturally_aspirated_wheel_torque_curve(&self, drivetrain_efficiency: f64) -> Vec<(i32, f64)> {
+        let mut out_vec: Vec<(i32, f64)> = Vec::new();
+        let rpm_map = self.lookup_curve_data("RPM").unwrap();
+        let torque_map = self.lookup_curve_data("Torque").unwrap();
+
+        if self.is_naturally_aspirated() {
+            info!("Writing torque curve for NA engine");
+            for (idx, rpm) in rpm_map {
+                let wheel_torque = torque_map[idx] * drivetrain_efficiency as f32;
+                out_vec.push(((*rpm as i32), wheel_torque.round() as f64));
+            }
+        }
+        else {
+            info!("Writing torque curve for Turbo engine");
+            let boost_map = self.lookup_curve_data("Boost").unwrap();
+            for (idx, rpm) in rpm_map {
+                let boost_pressure = vec![0.0, boost_map[idx]].into_iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+                info!("Adjusting {}@{} for boost pressure {}", torque_map[idx], *rpm as i32, 1f32+boost_pressure);
+                let adjusted_value = ((torque_map[idx] / (1f32+boost_pressure)) * drivetrain_efficiency as f32).round();
+                info!("Adjusted value = {}", adjusted_value);
+                out_vec.push(((*rpm as i32), adjusted_value as f64));
+            }
+        }
+        // Taper curve down to 0
+        let rpm_increment;
+        {
+            let last_item = out_vec.last().unwrap();
+            let penultimate_item = out_vec.get(out_vec.len()-2).unwrap();
+            rpm_increment = last_item.0 - penultimate_item.0;
+        }
+        out_vec.push((out_vec.last().unwrap().0 + rpm_increment, out_vec.last().unwrap().1/2f64));
+        out_vec.push((out_vec.last().unwrap().0 + rpm_increment, 0f64));
+        out_vec
+    }
+
+    fn is_naturally_aspirated(&self) -> bool {
+        let aspiration = self.lookup_string_data("Parts", "Aspiration").unwrap();
+        if aspiration.starts_with("Aspiration_Natural") {
+            return true;
+        }
+        false
+    }
+
+    pub fn get_max_boost_params(&self, decimal_place_precision: u32) -> (i32, f64) {
+        if self.is_naturally_aspirated() {
+            return (0, 0.0);
+        }
+        let rpm_map = self.lookup_curve_data("RPM").unwrap();
+        let boost_map = self.lookup_curve_data("Boost").unwrap();
+        let (ref_rpm_idx, max_boost) = boost_map.iter().fold(
+            (1usize, normalise_boost_value(boost_map[&1] as f64, decimal_place_precision)),
+            |(idx_max, max_val), (idx, val)| {
+                if normalise_boost_value(*val as f64, 2) > max_val {
+                    if normalise_boost_value(*val as f64, 1) > normalise_boost_value(max_val, 1) {
+                        return (*idx, *val as f64);
+                    }
+                    return (idx_max, *val as f64);
+                }
+                (idx_max, max_val)
+            }
+        );
+        (rpm_map[&ref_rpm_idx].round() as i32,
+         round_float_to(max_boost, decimal_place_precision))
+    }
+
+    pub fn create_turbo(&self) -> Option<engine::Turbo> {
+        if self.is_naturally_aspirated() {
+            return None;
+        }
+        // todo update this to take into account the boost amount set and ignore any overboost that may skew the turbo section calculation
+        let (ref_rpm, max_boost) = self.get_max_boost_params(3);
+        let mut t = engine::Turbo::new();
+        t.add_section(engine::turbo::TurboSection::new(
+            0,
+            // TODO work out how to better approximate these
+            0.99,
+            0.965,
+            max_boost,
+            max_boost,
+            (max_boost * 10_f64).ceil() / 10_f64,
+            ref_rpm,
+            2.5,
+            0)
+        );
+        Some(t)
+    }
+
+    pub fn create_turbo_controller(&self) -> Option<engine::turbo_ctrl::TurboController> {
+        if self.is_naturally_aspirated() {
+            return None;
+        }
+
+        let rpm_map = self.lookup_curve_data("RPM").unwrap();
+        let boost_map = self.lookup_curve_data("Boost").unwrap();
+        let mut lut: Vec<(f64, f64)> = Vec::new();
+        for (idx, rpm) in rpm_map {
+            let mut boost_val = 0.0;
+            if boost_map[idx] > boost_val {
+                boost_val = round_float_to(boost_map[idx] as f64, 3) as f32;
+            }
+            lut.push((*rpm as f64, boost_val as f64));
+        }
+        let controller = engine::turbo_ctrl::TurboController::new(
+            0,
+            engine::turbo_ctrl::ControllerInput::Rpms,
+            engine::turbo_ctrl::ControllerCombinator::Add,
+            lut,
+            0.95,
+            10000_f64,
+            0_f64
+        );
+        Some(controller)
+    }
+
+    // From https://www.eng-tips.com/viewthread.cfm?qid=338422
+    // T=MEP*V_displacement/(2*PI*N_c)
+    // where N_c is the number of strokes per power cycle (2 for 4-stroke, 1 for 2-stroke).
+    // So, on a 5.0 liter NA gasoline engine,
+    // you would expect about
+    // (100,000 Pa)*(0.005 m^3) / (2*3.1415*2) = 39.8 N-m
+    fn calculate_approx_engine_brake_force(&self) -> f64 {
+        let displacement_litres = self.displacement() as f64;
+        (100_000f64*(displacement_litres / 1000.0)) / (2.0*std::f64::consts::PI*2.0)
+    }
+
+    pub fn displacement(&self) -> f32 {
+        self.lookup_float_data("Tune", "Displacement").unwrap()
+    }
+
+    pub fn coast_data(&self) -> Result<engine::CoastCurve, FabricationError> {
+        let friction_map = self.lookup_curve_data("Friction").unwrap();
+        let (_, max_friction) = friction_map.last_key_value().ok_or_else(||MissingDataSection("Friction".to_string(), "curve_data".to_string() ))?;
+        let engine_brake_torque = *max_friction as f64 + self.calculate_approx_engine_brake_force();
+        Ok(engine::CoastCurve::new_from_coast_ref(self.limiter() as i32,
+                                                  engine_brake_torque.round() as i32,
+                                                  0.0))
+    }
+
+    pub fn damage(&self) -> engine::Damage {
+        let (_, max_boost) = self.get_max_boost_params(2);
+        engine::Damage::new(
+            (self.limiter()+200_f64).round() as i32,
+            1,
+            Some(max_boost.ceil()),
+            match self.is_naturally_aspirated() {
+                true => { Some(0) },
+                _ => { Some(4) }
+            }
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn create_metadata(&self) -> engine::Metadata {
+        let mut m = engine::Metadata::new();
+        m.set_version(2);
+        m.set_source(engine::metadata::Source::Automation);
+        m.set_mass_kg(self.engine_weight() as i64);
+        m
+    }
+
+    fn lookup_float_data(&self, group: &str, key: &str) -> Result<f32, FabricationError> {
+        match &self.eng_data {
+            Data::V1(data) => {
+                let group_map = data.float_data.get(group).ok_or_else(||{
+                    MissingDataSection(format!("Group {}", group), "float_data".to_string())
+                })?;
+                Ok(*group_map.get(key).ok_or_else(|| {
+                    MissingDataSection(key.to_string(), "float_data".to_string())
+                })?)
+            }
+        }
+    }
+
+    fn lookup_string_data(&self, group: &str, key: &str) -> Result<&str, FabricationError> {
+        match &self.eng_data {
+            Data::V1(data) => {
+                let group_map = data.string_data.get(group).ok_or_else(||{
+                    MissingDataSection(format!("Group {}", group), "string_data".to_string())
+                })?;
+                Ok(group_map.get(key).ok_or_else(|| {
+                    MissingDataSection(key.to_string(), "string_data".to_string())
+                })?)
+            }
+        }
+    }
+
+    fn lookup_curve_data(&self, name: &str) -> Result<&BTreeMap<usize, f32>, FabricationError> {
+        match &self.eng_data {
+            Data::V1(data) => {
+                Ok(data.curve_data.get(name).ok_or_else(||{
+                    MissingDataSection(name.to_string(), "curve_data".to_string())
+                })?)
+            }
+        }
     }
 }
 

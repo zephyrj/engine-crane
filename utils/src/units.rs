@@ -23,3 +23,7 @@ pub fn kw_to_bhp(power_kw: f64) -> f64 {
     power_kw * 1.341
 }
 
+pub fn calculate_power_kw(rpm: f32, torque: f32) -> f32 {
+    (torque * rpm * 2.0 * std::f32::consts::PI) / (60.0 * 1000.0)
+}
+
