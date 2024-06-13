@@ -659,7 +659,7 @@ impl EngineParameterCalculatorV2 {
         // TODO perhaps use the flywheel weight and dimensions to calculate this somehow?
         // I(kg⋅m2) = 1/2 * Mass * (radius * radius)
         let responsiveness = self.lookup_float_data("Results", "Responsiveness")?;
-        Ok(normal_lerp(0.32, 0.07, responsiveness / 100.0, 0.15) as f64)
+        Ok(normal_lerp(0.32, 0.07, responsiveness / 100.0, 0.2) as f64)
     }
 
     pub fn idle_speed(&self) -> Option<f64> {
