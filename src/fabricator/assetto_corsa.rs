@@ -26,6 +26,8 @@ use std::fs::File;
 use std::path::Path;
 use itertools::Itertools;
 use tracing::{debug, info};
+use statrs::distribution::{ContinuousCDF, Normal};
+
 use assetto_corsa::car::data;
 use assetto_corsa::car::data::engine;
 use assetto_corsa::car::data::engine::FuelConsumptionFlowRate;
@@ -631,6 +633,23 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + t * (b - a)
 }
 
+fn normal_lerp(min: f32, max: f32, input: f32, standard_deviation: f64) -> f32 {
+    // Ensure t is between 0 and 1
+    let t = input.clamp(0.0, 1.0);
+
+    // Define the normal distribution with mean = 0.5 and standard deviation = 0.15
+    // These values can be adjusted based on how spread out you want the distribution
+    let normal = Normal::new(0.5, standard_deviation).unwrap();
+
+    // Compute the CDF to map t to a normal distribution
+    let mapped_t = normal.cdf(t as f64) as f32;
+
+    // Perform the interpolation
+    min + mapped_t * (max - min)
+}
+
+
+
 impl EngineParameterCalculatorV2 {
     pub fn engine_weight(&self) -> u32 {
         self.lookup_float_data("Results", "Weight").unwrap().round() as u32
@@ -640,11 +659,7 @@ impl EngineParameterCalculatorV2 {
         // TODO perhaps use the flywheel weight and dimensions to calculate this somehow?
         // I(kg⋅m2) = 1/2 * Mass * (radius * radius)
         let responsiveness = self.lookup_float_data("Results", "Responsiveness")?;
-        // TODO this uses the max and min inertia for AC road cars I could find and then
-        //      does a maps the responsiveness metric over that range
-        //      The low and high ends are quite extreme so try lower values or
-        //      use a normal distribution?
-        Ok(lerp(0.32, 0.07, responsiveness / 100.0) as f64)
+        Ok(normal_lerp(0.32, 0.07, responsiveness / 100.0, 0.15) as f64)
     }
 
     pub fn idle_speed(&self) -> Option<f64> {
