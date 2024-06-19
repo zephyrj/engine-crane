@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2023 zephyrj
+ * 2024 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -54,7 +54,7 @@ pub fn get_filetypes_in_path(path: &Path, file_type: &str) -> io::Result<Vec<Pat
 ///
 /// To provide uniqueness a number will be appended to the returned filename if the name would
 /// clash with anything else in the provided path. i.e. if you have a file called test.txt present
-/// in the path then the next filename returned would be test2.txt
+/// in the path then the next filename returned would be test_2.txt
 ///
 pub fn create_safe_filename_in_path(path: &Path, name: &str, extension: &str) -> PathBuf {
     let mut sanitized_name = sanitize_filename::sanitize(name);
@@ -62,7 +62,7 @@ pub fn create_safe_filename_in_path(path: &Path, name: &str, extension: &str) ->
     let mut file_path = path.join(format!("{}.{}", sanitized_name, extension));
     let mut extra_num = 2;
     while file_path.exists() {
-        file_path = path.join(format!("{}{}.{}", sanitized_name, extra_num, extension));
+        file_path = path.join(format!("{}_{}.{}", sanitized_name, extra_num, extension));
         extra_num += 1;
     }
     file_path
