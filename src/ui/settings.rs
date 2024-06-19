@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2023 zephyrj
+ * 2024 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -90,10 +90,9 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let ac_path_selector =
-            create_path_select(Message::RequestPathSelect(Setting::AcPath),
-                               Message::RevertSettingToDefault(Setting::AcPath),
-                               "Assetto Corsa install path",
-                               base_path_str)
+            create_path_select(Setting::AcPath,
+                                   "Assetto Corsa install path",
+                                   base_path_str)
                 .spacing(5)
                 .padding(Padding::from([15, 3, 0, 3]));
 
@@ -102,10 +101,9 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let mod_path_selector =
-            create_path_select(Message::RequestPathSelect(Setting::BeamNGModPath),
-                               Message::RevertSettingToDefault(Setting::BeamNGModPath),
-                               "BeamNG mod path",
-                               mod_path_str)
+            create_path_select(Setting::BeamNGModPath,
+                                   "BeamNG mod path",
+                                   mod_path_str)
                 .padding(Padding::from([0, 3, 0, 3]));
 
         let crate_path_str = match &app_data.get_crate_engine_path() {
@@ -113,10 +111,9 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let crate_path_selector =
-            create_path_select(Message::RequestPathSelect(Setting::CrateEnginePath),
-                               Message::RevertSettingToDefault(Setting::CrateEnginePath),
-                               "Crate engine path",
-                               crate_path_str)
+            create_path_select(Setting::CrateEnginePath,
+                                   "Crate engine path",
+                                   crate_path_str)
                 .padding(Padding::from([0, 3, 0, 3]));
 
         let legacy_auto_path_str = match &app_data.get_legacy_automation_userdata_path() {
@@ -124,10 +121,9 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let legacy_auto_path_selector =
-            create_path_select(Message::RequestPathSelect(Setting::LegacyAutomationUserdataPath),
-                               Message::RevertSettingToDefault(Setting::LegacyAutomationUserdataPath),
-                               "Legacy automation data path",
-                               legacy_auto_path_str)
+            create_path_select(Setting::LegacyAutomationUserdataPath,
+                                   "Legacy automation data path",
+                                   legacy_auto_path_str)
                 .padding(Padding::from([0, 3, 0, 3]));
 
         let auto_path_str = match &app_data.get_automation_userdata_path() {
@@ -135,12 +131,10 @@ impl Tab for SettingsTab {
             Some(path) => format!("{}", path.display())
         };
         let auto_path_selector =
-            create_path_select(Message::RequestPathSelect(Setting::AutomationUserdataPath),
-                               Message::RevertSettingToDefault(Setting::AutomationUserdataPath),
-                               "Automation data path",
-                               auto_path_str)
+            create_path_select(Setting::AutomationUserdataPath,
+                                   "Automation data path",
+                                   auto_path_str)
                 .padding(Padding::from([0, 3, 0, 3]));
-
 
         let container : Container<'_, Message> = Container::new(
             Column::new()
@@ -156,21 +150,20 @@ impl Tab for SettingsTab {
     }
 }
 
-fn create_path_select(on_select: Message, on_default: Message, title: &str, current_val: String) -> Column<Message> {
+fn create_path_select(setting: Setting, title: &str, current_val: String) -> Column<Message> {
     let select =
         Button::new( Text::new("Browse"))
-            .on_press(on_select);
+            .on_press(Message::RequestPathSelect(setting));
+    let copy =
+        Button::new(Text::new("Copy"))
+            .on_press(Message::CopySettingToClipboard(setting));
     let default=
         Button::new( Text::new("Revert to default")).style(theme::Button::Destructive)
-            .on_press(on_default);
+            .on_press(Message::RevertSettingToDefault(setting));
     Column::new()
         .align_items(Alignment::Start)
+        .spacing(5)
         .push(Text::new(title).size(24))
         .push(Text::new(current_val))
-        .push(Row::new().spacing(5).push(select).push(default))
-        .spacing(5)
+        .push(Row::new().spacing(5).push(select).push(copy).push(default))
 }
-
-
-
-

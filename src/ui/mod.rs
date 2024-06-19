@@ -44,6 +44,9 @@ use iced_aw::tab_bar::StyleSheet;
 use crate::{assetto_corsa, fabricator};
 use tracing::{span, Level, info, error};
 use rfd::FileDialog;
+use arboard::Clipboard;
+use iced::futures::future::err;
+
 use assetto_corsa::car::delete_car;
 use automation::sandbox::SandboxFinder;
 
@@ -66,6 +69,7 @@ pub enum Message {
     TabSelected(usize),
     RequestPathSelect(Setting),
     RevertSettingToDefault(Setting),
+    CopySettingToClipboard(Setting),
     EngineSwap(EngineSwapMessage),
     EngineSwapRequested,
     CrateTab(CrateTabMessage),
@@ -256,6 +260,27 @@ impl Sandbox for UIMain {
             Message::RevertSettingToDefault(setting) => {
                 self.app_data.revert_to_default(setting);
                 self.notify_app_data_update(&message);
+            }
+            Message::CopySettingToClipboard(setting) => {
+                let setting_to_copy = match setting {
+                    Setting::AcPath => self.app_data.get_ac_install_path(),
+                    Setting::BeamNGModPath => self.app_data.get_beam_ng_mod_path(),
+                    Setting::CrateEnginePath => self.app_data.get_crate_engine_path(),
+                    Setting::LegacyAutomationUserdataPath => self.app_data.get_legacy_automation_userdata_path(),
+                    Setting::AutomationUserdataPath => self.app_data.get_automation_userdata_path()
+                };
+                if let Some(setting_value) = setting_to_copy {
+                    match Clipboard::new() {
+                        Ok(mut clipboard) => {
+                            let val = setting_value.to_string_lossy().into_owned();
+                            match clipboard.set_text(val) {
+                                Err(e) => error!("Failed to copy setting to clipboard. {}", e.to_string()),
+                                _ => {}
+                            }
+                        }
+                        Err(e) => error!("Failed to open clipboard. {}", e.to_string())
+                    }
+                }
             }
             Message::EngineSwapRequested => {
                 let ac_install = match &self.app_data.get_ac_install_path() {

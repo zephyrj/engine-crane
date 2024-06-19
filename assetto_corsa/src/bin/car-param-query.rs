@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match CarUiData::from_car(&mut car) {
             Ok(ui_data) => {
-                if ui_data.ui_info.has_tag(ENGINE_CRANE_CAR_TAG) {
+                if !ui_data.ui_info.has_tag(ENGINE_CRANE_CAR_TAG) {
                     println!("Skipping generated engine {}", path.display());
                     continue;
                 }

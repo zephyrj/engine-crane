@@ -173,6 +173,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "arboard"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fb4009533e8ff8f1450a5bcbc30f4242a1d34442221f72314bea1f5dc9c7f89"
+dependencies = [
+ "clipboard-win 5.3.1",
+ "core-graphics 0.23.1",
+ "image 0.25.1",
+ "log",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "parking_lot 0.12.1",
+ "windows-sys 0.48.0",
+ "x11rb 0.13.0",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -753,9 +771,18 @@ version = "4.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7191c27c2357d9b7ef96baac1773290d4ca63b24205b82a3fd8a0637afcf0362"
 dependencies = [
- "error-code",
+ "error-code 2.3.1",
  "str-buf",
  "winapi",
+]
+
+[[package]]
+name = "clipboard-win"
+version = "5.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79f4473f5144e20d9aceaf2972478f06ddf687831eafeeb434fbaf0acc4144ad"
+dependencies = [
+ "error-code 3.2.0",
 ]
 
 [[package]]
@@ -1517,6 +1544,7 @@ checksum = "a3d8a32ae18130a3c84dd492d4215c3d913c3b07c6b63c2eb3eb7ff1101ab7bf"
 name = "engine-crane"
 version = "0.3.2-alpha"
 dependencies = [
+ "arboard",
  "assetto_corsa",
  "automation",
  "beam_ng",
@@ -1595,6 +1623,12 @@ dependencies = [
  "libc",
  "str-buf",
 ]
+
+[[package]]
+name = "error-code"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0474425d51df81997e2f90a21591180b38eccf27292d755f3e30750225c175b"
 
 [[package]]
 name = "euclid"
@@ -2670,6 +2704,19 @@ dependencies = [
  "png 0.17.7",
  "qoi",
  "tiff 0.8.1",
+]
+
+[[package]]
+name = "image"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd54d660e773627692c524beaad361aca785a4f9f5730ce91f42aabe5bce3d11"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "num-traits 0.2.15",
+ "png 0.17.7",
+ "tiff 0.9.1",
 ]
 
 [[package]]
@@ -5356,6 +5403,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tiff"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba1310fcea54c6a9a4fd1aad794ecc02c31682f6bfbecdf460bf19533eed1e3e"
+dependencies = [
+ "flate2",
+ "jpeg-decoder 0.3.0",
+ "weezl",
+]
+
+[[package]]
 name = "time"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6393,7 +6451,7 @@ version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "015dd4474dc6aa96fe19aae3a24587a088bd90331dba5a5cc60fb3a180234c4d"
 dependencies = [
- "clipboard-win",
+ "clipboard-win 4.5.0",
  "clipboard_macos",
  "clipboard_wayland",
  "clipboard_x11",

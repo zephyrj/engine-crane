@@ -70,6 +70,7 @@ itertools = { workspace = true }
 sanitize-filename = { workspace = true }
 statrs = { workspace = true }
 rfd = "0.14"
+arboard = "3.4.0"
 winit = "0.30"
 config = { version= "0.14", features = ["toml"] }
 uuid = { version = "1.8", features = ["v4"] }
