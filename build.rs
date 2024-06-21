@@ -26,7 +26,14 @@ extern crate winres;
 fn main() {
     if Ok("release".to_owned()) == std::env::var("PROFILE") {
         let mut res = winres::WindowsResource::new();
-        res.set_manifest(r#"
+        res.set_manifest(manifest_data());
+        res.compile().unwrap();
+    }
+}
+
+#[cfg(feature = "always_admin")]
+fn manifest_data() -> &'static str{
+    return r#"
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
 <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
@@ -36,9 +43,22 @@ fn main() {
     </security>
 </trustInfo>
 </assembly>
-"#);
-        res.compile().unwrap();
-    }
+"#;
+}
+
+#[cfg(not(feature = "always_admin"))]
+fn manifest_data() -> &'static str {
+    return r#"
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+<trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+        <requestedPrivileges>
+            <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+        </requestedPrivileges>
+    </security>
+</trustInfo>
+</assembly>
+"#;
 }
 
 #[cfg(unix)]
