@@ -46,6 +46,10 @@ use tracing::{span, Level, info, error};
 use rfd::FileDialog;
 use arboard::Clipboard;
 use iced::futures::future::err;
+use iced::window::Icon;
+use image::{GenericImageView};
+use image::io::Reader as ImageReader;
+use image::ImageFormat;
 
 use assetto_corsa::car::delete_car;
 use automation::sandbox::SandboxFinder;
@@ -60,8 +64,32 @@ use crate::ui::swap::EngineSource;
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
 
+fn load_icon(path: &str) -> Result<Icon, Box<dyn std::error::Error>> {
+    let path = PathBuf::from(path);
+    let image = ImageReader::open(path)?.decode()?;
+    let (width, height) = image.dimensions();
+    let rgba = image.to_rgba8().into_raw();
+
+    Ok(Icon::from_rgba(rgba, width, height)?)
+}
+
 pub fn launch() -> Result<(), Error> {
-    UIMain::run(Settings::default())
+    let mut settings = Settings::default();
+
+    settings.window = iced::window::Settings {
+        size: (800, 600),
+        position: Default::default(),
+        min_size: None,
+        max_size: None,
+        visible: true,
+        resizable: true,
+        decorations: true,
+        transparent: false,
+        icon: Some(Icon::from_file_data(image_data::WINDOW_LOGO, None).unwrap()), // This is not used in our example
+        always_on_top: false,
+    };
+
+    UIMain::run(settings)
 }
 
 #[derive(Debug, Clone)]

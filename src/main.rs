@@ -18,7 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
-
+#![windows_subsystem = "windows"]
 mod ui;
 mod data;
 mod fabricator;

@@ -22,3 +22,4 @@
 pub(crate) const ADD_SVG: &[u8] = include_bytes!("resources/plus-lg.svg");
 pub(crate) const DELETE_SVG: &[u8] = include_bytes!("resources/x-lg.svg");
 pub(crate) const ICE_CREAM_SVG: &[u8] = include_bytes!("resources/ice-cream-colour.svg");
+pub(crate) const WINDOW_LOGO: &[u8] = include_bytes!("resources/eng-logo.ico");

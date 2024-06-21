@@ -27,6 +27,8 @@ fn main() {
     if Ok("release".to_owned()) == std::env::var("PROFILE") {
         let mut res = winres::WindowsResource::new();
         res.set_manifest(manifest_data());
+        res.set("RC_FILE", "res/app.rc");
+        res.set_icon("src/ui/resources/eng-logo.ico");
         res.compile().unwrap();
     }
 }

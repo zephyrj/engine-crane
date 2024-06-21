@@ -1,0 +1,2 @@
+// app.rc
+id ICON "src/ui/resources/eng-logo.ico"
