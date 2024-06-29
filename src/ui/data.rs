@@ -19,14 +19,19 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
 use std::fs::create_dir;
+use std::io;
 use std::path::PathBuf;
+use thiserror::Error;
 use tracing::{error, info, Level, span, warn};
 use crate::data::{CrateEngineMetadata, find_crate_engines_in_path, get_default_crate_engine_path, get_local_app_data_path};
 use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, CrateEnginePath, LegacyAutomationUserdataPath};
 use crate::ui::{GlobalSettings, ListPath, settings};
 use crate::ui::settings::Setting;
+use crate::utils::filesystem;
 
 fn create_local_data_dirs_if_missing() {
     let local_data_path = get_local_app_data_path();
@@ -57,7 +62,33 @@ pub struct ApplicationData {
     pub(crate) settings: GlobalSettings,
     pub(crate) assetto_corsa_data: AssettoCorsaData,
     pub(crate) beam_ng_data: BeamNGData,
-    pub(crate) crate_engine_data: CrateEngineData
+    pub(crate) crate_engine_data: CrateEngineData,
+    pub(crate) permissions: HashMap<&'static str, (PathState, PathState)>
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum PathState {
+    Ok,
+    NotOk,
+    DoesntExist,
+    Invalid
+}
+
+impl PathState {
+    fn as_str(&self) -> &'static str {
+        match self {
+            PathState::Ok => "Ok",
+            PathState::NotOk => "Not Ok",
+            PathState::DoesntExist => "Doesn't exist",
+            PathState::Invalid => "Invalid"
+        }
+    }
+}
+
+impl Display for PathState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 macro_rules! resolve_path {
@@ -79,28 +110,22 @@ impl ApplicationData {
             warn!("Failed to load settings. {}", e.to_string());
             GlobalSettings::default()
         });
-        match resolve_path!(settings.get::<AcInstallPath>()) {
-            None => { info!("Assetto Corsa path not set") }
-            Some(path) => { info!("Assetto Corsa path set to {}", path.display()) }
-        }
-        match resolve_path!(settings.get::<BeamNGModPath>()) {
-            None => { info!("BeamNG mod path not set") }
-            Some(path) => { info!("BeamNG mod path set to {}", path.display()) }
-        }
-        match resolve_path!(settings.get::<CrateEnginePath>()) {
-            None => { info!("Crate engine path not set") }
-            Some(path) => { info!("Crate engine path set to {}", path.display()) }
-        }
-
-        let assetto_corsa_data = AssettoCorsaData::from_settings(&settings);
-        let beam_ng_data = BeamNGData::from_settings(&settings);
-        let crate_engine_data = CrateEngineData::from_settings(&settings);
-        ApplicationData {
+        let mut data = ApplicationData {
             settings,
-            assetto_corsa_data,
-            beam_ng_data,
-            crate_engine_data
-        }
+            assetto_corsa_data: AssettoCorsaData::new(),
+            beam_ng_data: BeamNGData::new(),
+            crate_engine_data: CrateEngineData::new(),
+            permissions: HashMap::new()
+        };
+        data.set_path_permission_data::<AcInstallPath>();
+        data.assetto_corsa_data.property_update(&data.settings);
+        data.set_path_permission_data::<BeamNGModPath>();
+        data.beam_ng_data.property_update(&data.settings);
+        data.set_path_permission_data::<CrateEnginePath>();
+        data.crate_engine_data.property_update(&data.settings);
+        data.set_path_permission_data::<LegacyAutomationUserdataPath>();
+        data.set_path_permission_data::<AutomationUserdataPath>();
+        data
     }
 
     pub(crate) fn revert_to_default(&mut self, setting: settings::Setting) {
@@ -126,12 +151,17 @@ impl ApplicationData {
         }
     }
 
+    pub(crate) fn get_path<T: crate::settings::PathSetting>(&self) -> Option<PathBuf> {
+        T::resolve_path(&self.settings)
+    }
+
     pub(crate) fn get_ac_install_path(&self) -> Option<PathBuf> {
         resolve_path!(self.settings.get::<AcInstallPath>())
     }
 
     pub(crate) fn update_ac_install_path(&mut self, new_path: PathBuf) {
         self.settings.set::<AcInstallPath>(new_path.to_string_lossy().into_owned());
+        self.set_path_permission_data::<AcInstallPath>();
         self.assetto_corsa_data.refresh_available_cars(resolve_path!(self.settings.get::<AcInstallPath>()));
     }
 
@@ -141,6 +171,7 @@ impl ApplicationData {
 
     pub(crate) fn update_beamng_mod_path(&mut self, new_path: PathBuf) {
         self.settings.set::<BeamNGModPath>(new_path.to_string_lossy().into_owned());
+        self.set_path_permission_data::<BeamNGModPath>();
         self.beam_ng_data.property_update(&self.settings);
     }
 
@@ -150,6 +181,7 @@ impl ApplicationData {
 
     pub(crate) fn update_crate_engine_path(&mut self, new_path: PathBuf) {
         self.settings.set::<CrateEnginePath>(new_path.to_string_lossy().into_owned());
+        self.set_path_permission_data::<CrateEnginePath>();
         self.crate_engine_data.property_update(&self.settings)
     }
 
@@ -159,6 +191,7 @@ impl ApplicationData {
 
     pub(crate) fn update_legacy_automation_userdata_path(&mut self, new_path: PathBuf) {
         self.settings.set::<LegacyAutomationUserdataPath>(new_path.to_string_lossy().into_owned());
+        self.set_path_permission_data::<LegacyAutomationUserdataPath>();
     }
 
     pub(crate) fn get_automation_userdata_path(&self) -> Option<PathBuf> {
@@ -167,6 +200,7 @@ impl ApplicationData {
 
     pub(crate) fn update_automation_userdata_path(&mut self, new_path: PathBuf) {
         self.settings.set::<AutomationUserdataPath>(new_path.to_string_lossy().into_owned());
+        self.set_path_permission_data::<AutomationUserdataPath>();
     }
 
     pub(crate) fn refresh_available_cars(&mut self) {
@@ -175,6 +209,65 @@ impl ApplicationData {
 
     pub(crate) fn refresh_crate_engines(&mut self) {
         self.crate_engine_data.refresh_available_engines(resolve_path!(self.settings.get::<CrateEnginePath>()))
+    }
+
+    pub fn get_permission_data<T: crate::settings::Setting>(&self) -> (PathState, PathState) {
+        match self.permissions.get(T::param_name()) {
+            None => (PathState::Invalid, PathState::Invalid),
+            Some((readable, writable)) => (*readable, *writable)
+        }
+    }
+
+    fn update_permission_data<T: crate::settings::Setting>(&mut self,
+                                                           read_state: PathState,
+                                                           write_state: PathState)
+    {
+        self.permissions.entry(T::param_name())
+            .and_modify(|(readable, writable)|{
+                (*readable, *writable) = (read_state, write_state);
+            })
+            .or_insert_with(||{
+                (read_state, write_state)
+            });
+    }
+
+    fn set_path_permission_data<T: crate::settings::Setting>(&mut self)
+    where <T as crate::settings::Setting>::ValueType: AsRef<OsStr>
+    {
+        match resolve_path!(self.settings.get::<T>()) {
+            None => { info!("{} not set", T::friendly_name()) }
+            Some(path) => {
+                info!("{} set to {}", T::friendly_name(), path.display());
+                match filesystem::is_directory_read_writable(&path) {
+                    Ok((readable, writable)) => {
+                        let read_state = match readable {
+                            true => PathState::Ok,
+                            false => PathState::NotOk
+                        };
+                        let write_state = match writable {
+                            true => PathState::Ok,
+                            false => PathState::NotOk
+                        };
+                        info!("{} readable state {}", path.display(), read_state);
+                        info!("{} writable state {}", path.display(), write_state);
+                        self.update_permission_data::<T>(read_state, write_state);
+                    }
+                    Err(e) => {
+                        let new_state = match e.kind() {
+                            io::ErrorKind::NotFound => {
+                                warn!("{} cannot be found", path.display());
+                                PathState::DoesntExist
+                            },
+                            _ => {
+                                warn!("{} is an invalid path. {}", path.display(), e.to_string());
+                                PathState::Invalid
+                            }
+                        };
+                        self.update_permission_data::<T>(new_state, new_state);
+                    }
+                }
+            }
+        }
     }
 }
 

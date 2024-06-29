@@ -85,7 +85,7 @@ pub fn launch() -> Result<(), Error> {
         resizable: true,
         decorations: true,
         transparent: false,
-        icon: Some(Icon::from_file_data(image_data::WINDOW_LOGO, None).unwrap()), // This is not used in our example
+        icon: Some(Icon::from_file_data(image_data::WINDOW_LOGO, None).unwrap()),
         always_on_top: false,
     };
 

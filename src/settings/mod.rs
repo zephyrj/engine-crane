@@ -1,4 +1,6 @@
+use std::ffi::OsStr;
 use std::fs;
+use std::path::PathBuf;
 use config::{Config, ConfigError};
 use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
@@ -29,6 +31,7 @@ pub trait Setting {
     type ValueType;
 
     fn param_name() -> &'static str;
+    fn friendly_name() -> &'static str;
     fn default() -> Self::ValueType;
     fn get(global_settings: &GlobalSettings) -> &Self::ValueType;
     fn set(global_settings: &mut GlobalSettings, new_val: Self::ValueType);
@@ -36,6 +39,18 @@ pub trait Setting {
         Self::set(global_settings, Self::default())
     }
 }
+
+pub trait PathSetting : Setting<ValueType=String>
+{
+    fn resolve_path(global_settings: &GlobalSettings) -> Option<PathBuf> {
+        let path = PathBuf::from(Self::get(global_settings));
+        match path.is_dir() {
+            true => Some(path),
+            false => None
+        }
+    }
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GlobalSettings {
@@ -97,10 +112,12 @@ impl GlobalSettings {
 }
 
 pub struct AcInstallPath {}
-
+impl PathSetting for AcInstallPath {}
 impl Setting for AcInstallPath {
     type ValueType = String;
     fn param_name() -> &'static str { "ac_install_path" }
+
+    fn friendly_name() -> &'static str { "Assetto Corsa install path" }
 
     fn default() -> Self::ValueType {
         assetto_corsa::get_default_install_path().to_string_lossy().into_owned()
@@ -116,10 +133,12 @@ impl Setting for AcInstallPath {
 }
 
 pub struct BeamNGModPath {}
-
+impl PathSetting for BeamNGModPath {}
 impl Setting for BeamNGModPath {
     type ValueType = String;
     fn param_name() -> &'static str { "beamng_mod_path" }
+
+    fn friendly_name() -> &'static str { "BeamNG mod path" }
 
     fn default() -> Self::ValueType {
         beam_ng::get_default_mod_path().to_string_lossy().into_owned()
@@ -135,10 +154,12 @@ impl Setting for BeamNGModPath {
 }
 
 pub struct CrateEnginePath {}
+impl PathSetting for CrateEnginePath {}
 
 impl Setting for CrateEnginePath {
     type ValueType = String;
     fn param_name() -> &'static str { "crate_engine_path" }
+    fn friendly_name() -> &'static str { "Crate engine path" }
     fn default() -> Self::ValueType {
         crate::data::get_default_crate_engine_path().to_string_lossy().into_owned()
     }
@@ -153,10 +174,11 @@ impl Setting for CrateEnginePath {
 }
 
 pub struct LegacyAutomationUserdataPath {}
-
+impl PathSetting for LegacyAutomationUserdataPath {}
 impl Setting for LegacyAutomationUserdataPath {
     type ValueType = String;
     fn param_name() -> &'static str { "legacy_automation_userdata_path" }
+    fn friendly_name() -> &'static str { "Legacy Automation userdata path" }
 
     fn default() -> Self::ValueType {
         automation::sandbox::get_default_legacy_user_data_path().to_string_lossy().into_owned()
@@ -172,10 +194,12 @@ impl Setting for LegacyAutomationUserdataPath {
 }
 
 pub struct AutomationUserdataPath {}
+impl PathSetting for AutomationUserdataPath {}
 
 impl Setting for AutomationUserdataPath {
     type ValueType = String;
     fn param_name() -> &'static str { "automation_userdata_path" }
+    fn friendly_name() -> &'static str { "Automation userdata path" }
     fn default() -> Self::ValueType {
         automation::sandbox::get_default_user_data_path().to_string_lossy().into_owned()
     }
