@@ -70,20 +70,19 @@ pub fn create_safe_filename_in_path(path: &Path, name: &str, extension: &str) ->
     file_path
 }
 
-fn is_directory_read_writable(path: &Path) -> io::Result<(bool, bool)> {
+pub fn is_directory_read_writable(path: &Path) -> io::Result<(bool, bool)> {
     if !path.exists() || !path.is_dir() {
         return Err(io::Error::from(io::ErrorKind::NotFound));
     }
 
-    // Check read permission by attempting to read the directory
     let read_permission = fs::read_dir(path).is_ok();
 
     let temp_file_path = path.join("permission_check.txt");
     let write_permission = match File::create(&temp_file_path) {
         Ok(mut file) => {
             let write_result = file.write_all(b"engine-crane can write here");
-            file.sync_all().ok(); // Ensure data is written
-            fs::remove_file(&temp_file_path).ok(); // Clean up
+            file.sync_all().ok();
+            fs::remove_file(&temp_file_path).ok();
             write_result.is_ok()
         }
         Err(_) => false,
