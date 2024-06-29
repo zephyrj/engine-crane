@@ -52,7 +52,7 @@ impl EngineParameterCalculator {
         use crate::fabricator::FabricationError::*;
         info!("Creating AC parameter calculator for crate engine {}", crate_eng_path.display());
         let mut file = File::open(crate_eng_path)?;
-        let mut crate_eng = CrateEngine::deserialize_from(&mut file).map_err(|reason|{
+        let crate_eng = CrateEngine::deserialize_from(&mut file).map_err(|reason|{
             FailedToLoad(crate_eng_path.display().to_string(), reason)
         })?;
         info!("Loaded {} from eng file", crate_eng.name());

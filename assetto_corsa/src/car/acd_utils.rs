@@ -140,7 +140,7 @@ impl AcdArchive {
     }
 
     pub fn delete_file(&mut self, filename: &str) -> Option<Vec<u8>> {
-        self.contents.files.remove(filename)
+        self.contents.files.shift_remove(filename)
     }
 
     pub fn unpack(&self) -> Result<()> {

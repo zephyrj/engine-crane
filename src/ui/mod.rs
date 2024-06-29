@@ -45,11 +45,7 @@ use crate::{assetto_corsa, fabricator};
 use tracing::{span, Level, info, error};
 use rfd::FileDialog;
 use arboard::Clipboard;
-use iced::futures::future::err;
 use iced::window::Icon;
-use image::{GenericImageView};
-use image::io::Reader as ImageReader;
-use image::ImageFormat;
 
 use assetto_corsa::car::delete_car;
 use automation::sandbox::SandboxFinder;
@@ -63,15 +59,6 @@ use crate::ui::swap::EngineSource;
 
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
-
-fn load_icon(path: &str) -> Result<Icon, Box<dyn std::error::Error>> {
-    let path = PathBuf::from(path);
-    let image = ImageReader::open(path)?.decode()?;
-    let (width, height) = image.dimensions();
-    let rgba = image.to_rgba8().into_raw();
-
-    Ok(Icon::from_rgba(rgba, width, height)?)
-}
 
 pub fn launch() -> Result<(), Error> {
     let mut settings = Settings::default();

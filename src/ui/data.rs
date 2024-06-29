@@ -25,7 +25,6 @@ use std::fmt::{Display, Formatter};
 use std::fs::create_dir;
 use std::io;
 use std::path::PathBuf;
-use thiserror::Error;
 use tracing::{error, info, Level, span, warn};
 use crate::data::{CrateEngineMetadata, find_crate_engines_in_path, get_default_crate_engine_path, get_local_app_data_path};
 use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, CrateEnginePath, LegacyAutomationUserdataPath};

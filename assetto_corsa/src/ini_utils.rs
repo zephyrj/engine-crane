@@ -493,7 +493,7 @@ impl Ini {
 
     pub fn remove_section(&mut self, section_name: &str) {
         if self.sections.contains_key(section_name) {
-            self.sections.remove(section_name);
+            self.sections.shift_remove(section_name);
         }
     }
 
