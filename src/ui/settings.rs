@@ -20,6 +20,7 @@
  */
 use super::{Message, Tab};
 use iced::{Alignment, Color, Element, Length, Padding, theme};
+use iced::alignment::Vertical;
 use iced::widget::{Button, Column, Container, svg, Text};
 use iced_aw::{TabLabel};
 use iced_native::widget::{Row, Svg};
@@ -53,31 +54,32 @@ pub enum Setting {
 impl Setting {
     fn create_path_select(&self, app_data: &ApplicationData) -> Column<Message> {
         let value: String;
+        let aux_text ;
         let is_valid: bool;
         let title: &'static str;
         match &self {
             Setting::AcPath => {
-                (value, is_valid) = get_path_data::<AcInstallPath>(app_data, true);
+                (is_valid, value, aux_text) = get_path_data::<AcInstallPath>(app_data, true);
                 title = AcInstallPath::friendly_name();
             }
             Setting::BeamNGModPath => {
-                (value, is_valid) = get_path_data::<BeamNGModPath>(app_data, false);
+                (is_valid, value, aux_text) = get_path_data::<BeamNGModPath>(app_data, false);
                 title = BeamNGModPath::friendly_name();
             }
             Setting::CrateEnginePath => {
-                (value, is_valid) = get_path_data::<CrateEnginePath>(app_data, true);
+                (is_valid, value, aux_text) = get_path_data::<CrateEnginePath>(app_data, true);
                 title = CrateEnginePath::friendly_name();
             }
             Setting::LegacyAutomationUserdataPath => {
-                (value, is_valid) = get_path_data::<LegacyAutomationUserdataPath>(app_data, false);
+                (is_valid, value, aux_text) = get_path_data::<LegacyAutomationUserdataPath>(app_data, false);
                 title = LegacyAutomationUserdataPath::friendly_name();
             }
             Setting::AutomationUserdataPath => {
-                (value, is_valid) = get_path_data::<AutomationUserdataPath>(app_data, false);
+                (is_valid, value, aux_text) = get_path_data::<AutomationUserdataPath>(app_data, false);
                 title = AutomationUserdataPath::friendly_name();
             }
         };
-        create_path_select(*self, title, value, is_valid, None)
+        create_path_select(*self, title, value, is_valid, aux_text)
     }
 }
 
@@ -159,24 +161,30 @@ fn fail_red_colour() -> Color {
 }
 
 fn get_path_data<T: crate::settings::PathSetting>(app_data: &ApplicationData,
-                                                  need_write_permission: bool) -> (String, bool)
+                                                  need_write_permission: bool) -> (bool, String, Option<String>)
 {
-    let mut path_valid: bool = false;
+    let mut valid = true;
+    let mut invalid_text = None;
     let base_path_str = match &app_data.get_path::<T>() {
-        None => "Not Set".to_string(),
-        Some(path) => format!("{}", path.display())
-    };
-    let (read_state, write_state) = app_data.get_permission_data::<T>();
-    if read_state == PathState::Ok {
-        if need_write_permission {
-            if write_state == PathState::Ok {
-                path_valid = true
-            }
-        } else {
-            path_valid = true
+        None => {
+            valid = false;
+            "Not Set".to_string()
         }
-    }
-    (base_path_str, path_valid)
+        Some(path) => {
+            let (read_state, write_state) = app_data.get_permission_data::<T>();
+            if read_state == PathState::Ok {
+                if need_write_permission && write_state != PathState::Ok {
+                    valid = false;
+                    invalid_text = Some("Don't have permission to write directory".to_owned())
+                }
+            } else {
+                valid = false;
+                invalid_text = Some("Don't have permission to read directory".to_owned())
+            }
+            format!("{}", path.display())
+        }
+    };
+    (valid, base_path_str.clone(), invalid_text)
 }
 
 fn create_path_select(setting: Setting,
@@ -217,10 +225,20 @@ fn create_path_select(setting: Setting,
         .push(Text::new(current_val))
         .push(svg);
 
+    let mut button_row = Row::new()
+        .align_items(Alignment::Center)
+        .spacing(5)
+        .push(select)
+        .push(copy)
+        .push(default);
+    if let Some(t) = aux_text {
+        button_row = button_row.push(Text::new(t).size(14).vertical_alignment(Vertical::Center));
+    }
+
     Column::new()
         .align_items(Alignment::Start)
         .spacing(5)
         .push(Text::new(title).size(24))
         .push(val_row)
-        .push(Row::new().spacing(5).push(select).push(copy).push(default))
+        .push(button_row)
 }
