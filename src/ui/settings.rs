@@ -23,8 +23,9 @@ use iced::{Alignment, Color, Element, Length, Padding, theme};
 use iced::alignment::Vertical;
 use iced::widget::{Button, Column, Container, svg, Text};
 use iced_aw::{TabLabel};
-use iced_native::widget::{Row, Svg};
+use iced_native::widget::{Row, scrollable, Svg};
 use iced_native::svg::Handle;
+use iced_native::widget::scrollable::Properties;
 use crate::settings::Setting as AppSettings;
 use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, CrateEnginePath, LegacyAutomationUserdataPath};
 use crate::ui::{ApplicationData};
@@ -138,7 +139,7 @@ impl Tab for SettingsTab {
         let auto_path_selector = Setting::AutomationUserdataPath.create_path_select(app_data)
             .padding(Padding::from([0, 3, 0, 3]));
 
-        let container : Container<'_, Message> = Container::new(
+        let container : Element<'_, Message> = scrollable(Container::new(
             Column::new()
                 .push(ac_path_selector)
                 .push(mod_path_selector)
@@ -146,8 +147,8 @@ impl Tab for SettingsTab {
                 .push(legacy_auto_path_selector)
                 .push(auto_path_selector)
                 .spacing(25)
-        );
-        container.into()
+        ).width(Length::Fill)).vertical_scroll(Properties::default()).into();
+        container
         //content.map(Message::Edit)
     }
 }
