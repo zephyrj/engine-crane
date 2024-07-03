@@ -20,7 +20,7 @@
  */
 
 use std::path::PathBuf;
-use iced::{Alignment, Background, Color, Element, Length, Renderer, Theme, theme};
+use iced::{Alignment, Background, Color, Element, Length, Padding, Renderer, Theme, theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::Length::Fill;
 use iced::widget::{Button, Column, Container, Row, Text};
@@ -155,7 +155,7 @@ impl CrateEngineTab {
     }
 
     fn create_metadata_container(data: Option<&CrateEngineMetadata>) -> Column<'_, Message> {
-        let mut metadata_container = Column::new();
+        let mut metadata_container = Column::new().padding(Padding::from([20,0,0,0]));
         match data {
             None => {
                 metadata_container = metadata_container.push(Text::new("No metadata found"));
@@ -388,8 +388,7 @@ impl Tab for CrateEngineTab {
         where 'b: 'a
     {
         let mut crate_layout = Column::new()
-            .width(Length::FillPortion(2))
-            .spacing(20);
+            .width(Length::FillPortion(2));
         let list = create_drop_down_list(
             "Crate Engines",
             &app_data.crate_engine_data.available_engines,
@@ -397,6 +396,7 @@ impl Tab for CrateEngineTab {
             move |new_val| Message::CrateTab(CrateTabMessage::EngineSelected(new_val))
         );
         crate_layout = crate_layout.push(list);
+        crate_layout = crate_layout.push(Button::new("Refresh").on_press(Message::RefreshCrateEngines));
         if let Some(name) = &self.selected_engine {
             crate_layout = crate_layout.push(Self::create_metadata_container(app_data.crate_engine_data.get_metadata_for(name)))
         }
