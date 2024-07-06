@@ -236,7 +236,10 @@ impl ApplicationData {
 
     fn set_path_permission_data<T: crate::settings::PathSetting>(&mut self) {
         match self.get_path::<T>() {
-            None => { info!("{} not set", T::friendly_name()) }
+            None => {
+                info!("{} not set", T::friendly_name());
+                self.update_permission_data::<T>(PathState::DoesntExist, PathState::DoesntExist);
+            }
             Some(path) => {
                 info!("{} set to {}", T::friendly_name(), path.display());
                 match filesystem::is_directory_read_writable(&path) {
