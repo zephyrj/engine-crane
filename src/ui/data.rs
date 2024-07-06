@@ -130,96 +130,100 @@ impl ApplicationData {
     pub(crate) fn revert_to_default(&mut self, setting: settings::Setting) {
         match setting {
             Setting::AcPath => {
-                self.settings.set_default::<AcInstallPath>();
+                self.revert_to_default_path::<AcInstallPath>();
                 self.assetto_corsa_data.property_update(&self.settings);
             }
             Setting::BeamNGModPath => {
-                self.settings.set_default::<BeamNGModPath>();
+                self.revert_to_default_path::<BeamNGModPath>();
                 self.beam_ng_data.property_update(&self.settings);
             }
             Setting::CrateEnginePath => {
-                self.settings.set_default::<CrateEnginePath>();
+                self.revert_to_default_path::<CrateEnginePath>();
                 self.crate_engine_data.property_update(&self.settings);
             }
             Setting::LegacyAutomationUserdataPath => {
-                self.settings.set_default::<LegacyAutomationUserdataPath>();
+                self.revert_to_default_path::<LegacyAutomationUserdataPath>();
             }
             Setting::AutomationUserdataPath => {
-                self.settings.set_default::<AutomationUserdataPath>();
+                self.revert_to_default_path::<AutomationUserdataPath>();
             }
         }
+    }
+
+    fn revert_to_default_path<T: crate::settings::PathSetting>(&mut self) {
+        self.set_path::<T>(T::default());
     }
 
     pub(crate) fn get_path<T: crate::settings::PathSetting>(&self) -> Option<PathBuf> {
         T::resolve_path(&self.settings)
     }
 
+    pub(crate) fn set_path<T: crate::settings::PathSetting>(&mut self, val: T::ValueType) {
+        T::set(&mut self.settings, val);
+        self.set_path_permission_data::<T>();
+    }
+
     pub(crate) fn get_ac_install_path(&self) -> Option<PathBuf> {
-        resolve_path!(self.settings.get::<AcInstallPath>())
+        self.get_path::<AcInstallPath>()
     }
 
     pub(crate) fn update_ac_install_path(&mut self, new_path: PathBuf) {
-        self.settings.set::<AcInstallPath>(new_path.to_string_lossy().into_owned());
-        self.set_path_permission_data::<AcInstallPath>();
+        self.set_path::<AcInstallPath>(new_path.to_string_lossy().into_owned());
         self.assetto_corsa_data.refresh_available_cars(resolve_path!(self.settings.get::<AcInstallPath>()));
     }
 
     pub(crate) fn get_beam_ng_mod_path(&self) -> Option<PathBuf> {
-        resolve_path!(self.settings.get::<BeamNGModPath>())
+        self.get_path::<BeamNGModPath>()
     }
 
     pub(crate) fn update_beamng_mod_path(&mut self, new_path: PathBuf) {
-        self.settings.set::<BeamNGModPath>(new_path.to_string_lossy().into_owned());
-        self.set_path_permission_data::<BeamNGModPath>();
+        self.set_path::<BeamNGModPath>(new_path.to_string_lossy().into_owned());
         self.beam_ng_data.property_update(&self.settings);
     }
 
     pub(crate) fn get_crate_engine_path(&self) -> Option<PathBuf> {
-        resolve_path!(self.settings.get::<CrateEnginePath>())
+        self.get_path::<CrateEnginePath>()
     }
 
     pub(crate) fn update_crate_engine_path(&mut self, new_path: PathBuf) {
-        self.settings.set::<CrateEnginePath>(new_path.to_string_lossy().into_owned());
-        self.set_path_permission_data::<CrateEnginePath>();
+        self.set_path::<CrateEnginePath>(new_path.to_string_lossy().into_owned());
         self.crate_engine_data.property_update(&self.settings)
     }
 
     pub(crate) fn get_legacy_automation_userdata_path(&self) -> Option<PathBuf> {
-        resolve_path!(self.settings.get::<LegacyAutomationUserdataPath>())
+        self.get_path::<LegacyAutomationUserdataPath>()
     }
 
     pub(crate) fn update_legacy_automation_userdata_path(&mut self, new_path: PathBuf) {
-        self.settings.set::<LegacyAutomationUserdataPath>(new_path.to_string_lossy().into_owned());
-        self.set_path_permission_data::<LegacyAutomationUserdataPath>();
+        self.set_path::<LegacyAutomationUserdataPath>(new_path.to_string_lossy().into_owned());
     }
 
     pub(crate) fn get_automation_userdata_path(&self) -> Option<PathBuf> {
-        resolve_path!(self.settings.get::<AutomationUserdataPath>())
+        self.get_path::<AutomationUserdataPath>()
     }
 
     pub(crate) fn update_automation_userdata_path(&mut self, new_path: PathBuf) {
-        self.settings.set::<AutomationUserdataPath>(new_path.to_string_lossy().into_owned());
-        self.set_path_permission_data::<AutomationUserdataPath>();
+        self.set_path::<AutomationUserdataPath>(new_path.to_string_lossy().into_owned());
     }
 
     pub(crate) fn refresh_available_cars(&mut self) {
-        self.assetto_corsa_data.refresh_available_cars(resolve_path!(self.settings.get::<AcInstallPath>()))
+        self.assetto_corsa_data.refresh_available_cars(self.get_path::<AcInstallPath>())
     }
 
     pub(crate) fn refresh_crate_engines(&mut self) {
-        self.crate_engine_data.refresh_available_engines(resolve_path!(self.settings.get::<CrateEnginePath>()))
+        self.crate_engine_data.refresh_available_engines(self.get_path::<CrateEnginePath>())
     }
 
-    pub fn get_permission_data<T: crate::settings::Setting>(&self) -> (PathState, PathState) {
+    pub fn get_permission_data<T: crate::settings::PathSetting>(&self) -> (PathState, PathState) {
         match self.permissions.get(T::param_name()) {
             None => (PathState::Invalid, PathState::Invalid),
             Some((readable, writable)) => (*readable, *writable)
         }
     }
 
-    fn update_permission_data<T: crate::settings::Setting>(&mut self,
-                                                           read_state: PathState,
-                                                           write_state: PathState)
+    fn update_permission_data<T: crate::settings::PathSetting>(&mut self,
+                                                               read_state: PathState,
+                                                               write_state: PathState)
     {
         self.permissions.entry(T::param_name())
             .and_modify(|(readable, writable)|{
@@ -230,10 +234,8 @@ impl ApplicationData {
             });
     }
 
-    fn set_path_permission_data<T: crate::settings::Setting>(&mut self)
-    where <T as crate::settings::Setting>::ValueType: AsRef<OsStr>
-    {
-        match resolve_path!(self.settings.get::<T>()) {
+    fn set_path_permission_data<T: crate::settings::PathSetting>(&mut self) {
+        match self.get_path::<T>() {
             None => { info!("{} not set", T::friendly_name()) }
             Some(path) => {
                 info!("{} set to {}", T::friendly_name(), path.display());
