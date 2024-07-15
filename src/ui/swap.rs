@@ -42,6 +42,7 @@ pub enum EngineSwapMessage {
     PhysicsLevelSelected(AssettoCorsaPhysicsLevel),
     OldEngineWeightEntered(String),
     UnpackToggled(bool),
+    ACCarTunerCompatToggled(bool)
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -86,6 +87,7 @@ pub struct EngineSwapTab {
     pub(crate) current_engine_weight: Option<String>,
     pub(crate) current_minimum_physics: AssettoCorsaPhysicsLevel,
     pub(crate) unpack_physics_data: bool,
+    pub(crate) ac_car_tuner_compat: bool,
     status_message: String
 }
 
@@ -101,6 +103,7 @@ impl EngineSwapTab {
             current_engine_weight: None,
             current_minimum_physics: Default::default(),
             unpack_physics_data: false,
+            ac_car_tuner_compat: false,
             status_message: "".to_string()
         }
     }
@@ -170,7 +173,17 @@ impl EngineSwapTab {
                 }
             }
             EngineSwapMessage::UnpackToggled(bool_val) => {
-                self.unpack_physics_data = bool_val;
+                if self.ac_car_tuner_compat == true {
+                    self.unpack_physics_data = true;
+                } else {
+                    self.unpack_physics_data = bool_val;
+                }
+            }
+            EngineSwapMessage::ACCarTunerCompatToggled(bool_val) => {
+                if bool_val == true {
+                    self.unpack_physics_data = true;
+                }
+                self.ac_car_tuner_compat = bool_val;
             }
         }
     }
@@ -325,26 +338,43 @@ impl Tab for EngineSwapTab {
             Some(self.current_minimum_physics),
             move |val| { Message::EngineSwap(EngineSwapMessage::PhysicsLevelSelected(val)) }
         );
+        let ac_car_tuner_checkbox = checkbox(
+            "AC Car Tuner compatability".to_string(),
+            self.ac_car_tuner_compat,
+            move |val| { Message::EngineSwap(EngineSwapMessage::ACCarTunerCompatToggled(val)) }
+        ).spacing(3);
         let unpack_checkbox = checkbox(
             "Unpack physics data".to_string(),
             self.unpack_physics_data,
             move |val| { Message::EngineSwap(EngineSwapMessage::UnpackToggled(val)) }
         ).spacing(3);
+        
+        let options_row = Row::new()
+            .align_items(Alignment::Center)
+            .spacing(10)
+            .push(ac_car_tuner_checkbox)
+            .push(unpack_checkbox);
 
         let control_row = Row::new()
             .align_items(Alignment::Center)
-            .padding(Padding::from([10, 0]))
+            .padding(Padding::from([5, 0, 0, 0]))
             .spacing(10)
             .push(swap_button)
-            .push(physics_pick_list)
-            .push(unpack_checkbox);
+            .push(physics_pick_list);
+        
+        let swap_col = Column::new().width(Length::Fill)
+            .align_items(Alignment::Start)
+            .spacing(5)
+            .push(control_row)
+            .push(options_row);
 
         let mut layout = Column::new().width(Length::Fill)
             .align_items(Alignment::Start)
             .padding(Padding::from([0, 10]))
             .spacing(30)
             .push(select_container)
-            .push(control_row);
+            .push(swap_col);
+            
 
         if !self.status_message.is_empty() {
             layout = layout.push(

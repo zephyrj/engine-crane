@@ -64,7 +64,7 @@ pub fn launch() -> Result<(), Error> {
     let mut settings = Settings::default();
 
     settings.window = iced::window::Settings {
-        size: (800, 600),
+        size: (800, 620),
         position: Default::default(),
         min_size: None,
         max_size: None,
@@ -346,11 +346,17 @@ impl Sandbox for UIMain {
                             path_ref
                         }
                     };
-
+                    let mut opts = 0;
+                    if self.engine_swap_tab.unpack_physics_data {
+                        opts |= assetto_corsa::car::UNPACK_DATA_BIT;
+                    }
+                    if self.engine_swap_tab.ac_car_tuner_compat {
+                        opts |= assetto_corsa::car::AC_CAR_TUNER_COMPAT_BIT;
+                    }
                     match assetto_corsa::car::create_new_car_spec(&ac_install,
                                                                   current_car_path,
                                                                   new_spec_name,
-                                                                  self.engine_swap_tab.unpack_physics_data)
+                                                                  opts)
                     {
                         Ok(path) => { path }
                         Err(e) => {
@@ -378,7 +384,7 @@ impl Sandbox for UIMain {
                     };
                 let additional_car_settings = AdditionalAcCarData::new(current_engine_weight);
 
-                                let res = match self.engine_swap_tab.current_source {
+                let res = match self.engine_swap_tab.current_source {
                     EngineSource::BeamNGMod => {
                         let mod_path = match self.engine_swap_tab.current_mod.as_ref() {
                             Some(p) => p,

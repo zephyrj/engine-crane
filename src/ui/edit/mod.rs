@@ -102,13 +102,17 @@ impl EditTab {
             for car_path in &app_data.assetto_corsa_data.available_cars {
                 match Car::load_from_path(&car_path.full_path) {
                     Ok(mut car) => {
-                        match CarUiData::from_car(&mut car) {
-                            Ok(ui_data) => {
-                                if ui_data.ui_info.has_tag(ENGINE_CRANE_CAR_TAG) {
-                                    self.editable_car_paths.push(car_path.clone())
+                        if car.is_ac_car_tuner_tune() {
+                            self.editable_car_paths.push(car_path.clone());
+                        } else {
+                            match CarUiData::from_car(&mut car) {
+                                Ok(ui_data) => {
+                                    if ui_data.ui_info.has_tag(ENGINE_CRANE_CAR_TAG) {
+                                        self.editable_car_paths.push(car_path.clone())
+                                    }
                                 }
-                            }
-                            Err(_) => skip_count += 1
+                                Err(_) => skip_count += 1
+                            } 
                         }
                     }
                     Err(_) => skip_count += 1

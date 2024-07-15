@@ -122,30 +122,45 @@ pub fn clone_existing_car(ac_installation: &Installation,
     }
 }
 
+pub const UNPACK_DATA_BIT: u64 = 1 << 0;
+pub const AC_CAR_TUNER_COMPAT_BIT: u64 = 1 << 1;
+
 pub fn create_new_car_spec(ac_installation: &Installation,
                            existing_car_path: &PathBuf,
                            spec_name: &str,
-                           unpack_data: bool) -> Result<PathBuf>{
+                           opt_flags: u64) -> Result<PathBuf>{
+    
+    let opt_is_set = |opt_bit| {(opt_flags & opt_bit) > 0};
     let existing_car_name = get_final_path_part(existing_car_path)?;
     if !existing_car_path.exists() {
         return Err(Error::new(ErrorKind::NoSuchCar, existing_car_name));
     }
-    let new_car_name = format!(
-        "{}_{}",
-        existing_car_name,
-        spec_name.to_lowercase().split_whitespace().collect::<Vec<&str>>().join("_")
-    );
+    let path_suffix = spec_name.to_lowercase().split_whitespace().collect::<Vec<&str>>().join("_");
+    let new_car_name = format!("{}_{}", existing_car_name, path_suffix);
     let new_car_path = get_parent_path_part(existing_car_path)?.join(&new_car_name);
     if new_car_path.exists() {
         return Err(Error::new(ErrorKind::CarAlreadyExists, new_car_name));
     }
     info!("Cloning {} to {}", existing_car_path.display(), new_car_path.display());
+    let unpack_data_dif = opt_is_set(UNPACK_DATA_BIT) || opt_is_set(AC_CAR_TUNER_COMPAT_BIT);
     clone_existing_car(ac_installation,
                        existing_car_path.as_path(),
                        new_car_path.as_path(),
-                       unpack_data)?;
+                       unpack_data_dif)?;
     update_car_ui_data(new_car_path.as_path(), spec_name, &existing_car_name)?;
+    if opt_is_set(AC_CAR_TUNER_COMPAT_BIT) {
+        match create_x_tuned_file(&new_car_path, &path_suffix) {
+            Err(e) => error!("Failed to create x.tuned file. {}", e),
+            _ => info!("Added x.tuned for AC Car Tuner compatability")
+        }
+    }
     Ok(new_car_path)
+}
+
+fn create_x_tuned_file(car_path: &PathBuf, tune_name: &str) -> io::Result<()> {
+    let mut f = File::create(car_path.join("x.tuned"))?;
+    f.write_all(tune_name.as_bytes())?;
+    Ok(())
 }
 
 pub fn delete_data_acd_file(car_path: &Path) -> Result<()> {
@@ -331,6 +346,10 @@ impl Car {
 
     pub fn mut_data_interface(&mut self) -> & mut dyn DataInterface {
         self.data_interface.as_mut()
+    }
+    
+    pub fn is_ac_car_tuner_tune(&self) -> bool {
+        self.root_path.join("x.tuned").is_file()
     }
 }
 
