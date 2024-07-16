@@ -42,6 +42,8 @@ use crate::fabricator::{FabricationError};
 use crate::fabricator::FabricationError::{InvalidData, MissingDataSection};
 use crate::utils::numeric::{round_float_to};
 
+pub(crate) const UPGRADE_ICON: &[u8] = include_bytes!("resources/upgrade.png");
+
 pub enum EngineParameterCalculator {
     V1(EngineParameterCalculatorV1),
     V2(EngineParameterCalculatorV2)
