@@ -147,7 +147,7 @@ pub fn create_new_car_spec(ac_installation: &Installation,
                        existing_car_path.as_path(),
                        new_car_path.as_path(),
                        unpack_data_dif)?;
-    update_car_ui_data(new_car_path.as_path(), spec_name, &existing_car_name)?;
+    update_car_ui_data(new_car_path.as_path(), &existing_car_path, spec_name)?;
     if opt_is_set(AC_CAR_TUNER_COMPAT_BIT) {
         match create_x_tuned_file(&new_car_path, &path_suffix) {
             Err(e) => error!("Failed to create x.tuned file. {}", e),
@@ -232,29 +232,39 @@ fn fix_car_specific_filenames(car_path: &Path, name_to_change: &str) -> Result<(
     Ok(())
 }
 
-pub fn update_car_ui_data(car_path: &Path, new_suffix: &str, parent_car_folder_name: &str) -> Result<()> {
-    let mut car = Car::load_from_path(car_path)?;
+pub fn update_car_ui_data(new_car_path: &Path, old_car_path: &Path, new_suffix: &str) -> Result<()> {
+    let mut car = Car::load_from_path(new_car_path)?;
     let existing_name;
     let new_name ;
     {
         let mut ini_data = CarIniData::from_car(&mut car)?;
         existing_name = match ini_data.screen_name() {
-            None => { get_final_path_part(car_path)? }
+            None => { get_final_path_part(new_car_path)? }
             Some(name) => { name }
         };
         new_name = existing_name.clone().add(format!(" {}", new_suffix).as_str());
-        info!("Updating screen name and ui data from {} to {}", existing_name, new_name);
+        info!("Updating screen name from {} to {}", existing_name, new_name);
         ini_data.set_screen_name(new_name.as_str());
         ini_data.write()?;
     }
 
     {
         let mut ui_data = CarUiData::from_car(&mut car)?;
-        ui_data.ui_info.set_name(new_name);
+        let ui_name = match ui_data.ui_info.name() {
+            None => new_name,
+            Some(old_name) => format!("{} {}", old_name, new_suffix)
+        };
+        info!("Updating ui name to {}", ui_name);
+        ui_data.ui_info.set_name(ui_name);
         match ui_data.ui_info.parent() {
             None => {
                 info!("Updating parent name");
-                ui_data.ui_info.set_parent(String::from(parent_car_folder_name));
+                match get_final_path_part(old_car_path) {
+                    Ok(parent_car_folder_name) => {
+                        ui_data.ui_info.set_parent(String::from(parent_car_folder_name));
+                    }
+                    Err(e) => warn!("Error occurred whilst trying to update parent name. {}",e.to_string())
+                }
             }
             Some(existing_parent) => {
                 info!("Parent name already set to {}", existing_parent);
