@@ -20,5 +20,7 @@
  */
 
 pub mod car_ui_data;
+mod upgrade_icon;
 
 pub use car_ui_data::CarUiData;
+pub use upgrade_icon::CarUpgradeIcon;

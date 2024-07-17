@@ -128,7 +128,7 @@ pub const AC_CAR_TUNER_COMPAT_BIT: u64 = 1 << 1;
 pub fn create_new_car_spec(ac_installation: &Installation,
                            existing_car_path: &PathBuf,
                            spec_name: &str,
-                           opt_flags: u64) -> Result<PathBuf>{
+                           opt_flags: u64) -> Result<PathBuf> {
     
     let opt_is_set = |opt_bit| {(opt_flags & opt_bit) > 0};
     let existing_car_name = get_final_path_part(existing_car_path)?;
@@ -151,7 +151,7 @@ pub fn create_new_car_spec(ac_installation: &Installation,
     if opt_is_set(AC_CAR_TUNER_COMPAT_BIT) {
         match create_x_tuned_file(&new_car_path, &path_suffix) {
             Err(e) => error!("Failed to create x.tuned file. {}", e),
-            _ => info!("Added x.tuned for AC Car Tuner compatability")
+            _ => info!("Added x.tuned for AC Car Tuner compatibility")
         }
     }
     Ok(new_car_path)

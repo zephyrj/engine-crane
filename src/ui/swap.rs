@@ -339,7 +339,7 @@ impl Tab for EngineSwapTab {
             move |val| { Message::EngineSwap(EngineSwapMessage::PhysicsLevelSelected(val)) }
         );
         let ac_car_tuner_checkbox = checkbox(
-            "AC Car Tuner compatability".to_string(),
+            "AC Car Tuner compatibility".to_string(),
             self.ac_car_tuner_compat,
             move |val| { Message::EngineSwap(EngineSwapMessage::ACCarTunerCompatToggled(val)) }
         ).spacing(3);

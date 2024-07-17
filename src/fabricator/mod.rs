@@ -38,14 +38,14 @@ use crate::assetto_corsa::car::data::CarIniData;
 use crate::assetto_corsa::car::data::car_ini_data::CarVersion;
 use crate::assetto_corsa::car::data::digital_instruments::DigitalInstruments;
 use crate::assetto_corsa::car::data::digital_instruments::shift_lights::ShiftLights;
-use crate::assetto_corsa::car::ui::CarUiData;
+use crate::assetto_corsa::car::ui::{CarUiData, CarUpgradeIcon};
 use crate::assetto_corsa::car::data::Drivetrain;
 use crate::assetto_corsa::car::data::Engine;
 use crate::assetto_corsa::car::data::engine;
 use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
 
 use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
-
+use crate::fabricator::assetto_corsa::UPGRADE_ICON_BYTES;
 
 #[derive(thiserror::Error, Debug)]
 pub enum FabricationError {
@@ -479,6 +479,15 @@ pub fn update_ac_engine_parameters(ac_car_path: &Path,
             Err(e) => {
                 error!("Failed to load ui files. {}", e.to_string());
             }
+        }
+    }
+
+    {
+        info!("Updating upgrade.png");
+        let mut icon = CarUpgradeIcon::from_car(&car);
+        match icon.update(UPGRADE_ICON_BYTES) {
+            Err(e) => warn!("Failed to update upgrade icon. {}", e.to_string()),
+            _ => {}
         }
     }
     Ok(())
