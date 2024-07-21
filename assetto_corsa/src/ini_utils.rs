@@ -178,7 +178,7 @@ pub fn validate_section_exists(ini: &Ini, section_name: &str) -> Result<(), Miss
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
-struct Section {
+pub struct Section {
     name: String,
     indentation: Option<String>,
     property_map: IndexMap<String, Property>,
@@ -295,7 +295,7 @@ impl ToString for Section {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
-struct Property {
+pub struct Property {
     key: String,
     value: String,
     indentation: Option<String>,
@@ -344,6 +344,14 @@ impl Property {
     pub fn set_value(&mut self, val: String) -> String {
         std::mem::replace(&mut self.value, val)
     }
+
+    pub fn has_comment(&self) -> bool {
+        self.comment.is_some()
+    }
+
+    pub fn add_comment(&mut self, comment: Comment) -> Option<Comment> {
+        self.comment.replace(comment)
+    }
 }
 
 impl ToString for Property {
@@ -363,13 +371,19 @@ impl ToString for Property {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
-struct Comment {
+pub struct Comment {
     symbol: String,
     value: String,
     indentation: Option<String>
 }
 
 impl Comment {
+    pub fn new(value: String, indentation: Option<String>) -> Comment{
+        return Comment {
+            symbol: "#".to_string(), value, indentation
+        }
+    }
+
     pub fn from_line(line: &str, comment_symbols: &HashSet<char>) -> Option<Comment> {
         return match line.match_indices(|c: char| comment_symbols.contains(&c)).next() {
             None => None,
@@ -475,6 +489,13 @@ impl Ini {
 
     pub fn get_value(&self, section_name: &str, property_name: &str) -> Option<String> {
         Some(self.sections.get(section_name)?.get_property(property_name)?.get_value())
+    }
+
+    pub fn get_mut_section(&mut self, name: &str) -> Option<&mut Section> {
+        if !self.sections.contains_key(name) {
+            return None;
+        }
+        Some(self.sections.get_mut(name).unwrap())
     }
 
     /// Remove a property from a given section.

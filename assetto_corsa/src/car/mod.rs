@@ -28,6 +28,7 @@ pub(crate) mod structs;
 mod max_speed_est;
 pub mod model;
 
+use crate::ini_utils::Comment;
 pub use data_interface::DataFolderInterface;
 
 use std::fmt::Debug;
@@ -152,6 +153,35 @@ pub fn create_new_car_spec(ac_installation: &Installation,
         match create_x_tuned_file(&new_car_path, &path_suffix) {
             Err(e) => error!("Failed to create x.tuned file. {}", e),
             _ => info!("Added x.tuned for AC Car Tuner compatibility")
+        }
+        let drivetrain_ini_path = new_car_path.join("data").join("drivetrain.ini");
+        // Workaround a bug in CarTuner when drive type doesn't have any indentation after it
+        match Ini::load_from_file(&drivetrain_ini_path) {
+            Ok(mut ini_file) => {
+                match ini_file.get_mut_section("TRACTION") {
+                    None => warn!("TRACTION section missing from drivetrain.ini file."),
+                    Some(section) => {
+                        match section.get_property_mut("TYPE") {
+                            None => warn!("TRACTION section missing a type property."),
+                            Some(property) => {
+                                if !property.has_comment() {
+                                    let _ = property.add_comment(
+                                        Comment::new(
+                                            String::from("Possible options: FWD, RWD, AWD or AWD2"),
+                                            Some(String::from("  "))
+                                        )
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                match ini_file.write_to_file(&drivetrain_ini_path) {
+                    Ok(_) => info!("Applied Car Tuner drivetrain.ini workaround"),
+                    Err(e) => warn!("Failed to write drivetrain.ini Car Tuner workaround. {}", e.to_string())
+                }
+            }
+            Err(e) => warn!("Car appears to be missing a drivetrain.ini file. {}", e.to_string())
         }
     }
     Ok(new_car_path)
@@ -419,10 +449,12 @@ mod tests {
     #[test]
     fn clone_car() {
         let ac_install = Installation::new();
+        let mut opts = 0;
+        opts |= crate::car::AC_CAR_TUNER_COMPAT_BIT;
         let new_car_path = create_new_car_spec(&ac_install,
-                                               &ac_install.get_installed_car_path().join("zephyr_za401"),
+                                               &ac_install.get_installed_car_path().join("urd_radical_sr3xxr_2023"),
                                                "test",
-                                               true).unwrap();
+                                               opts).unwrap();
         println!("{}", new_car_path.display());
     }
 
