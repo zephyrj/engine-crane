@@ -20,6 +20,7 @@
  */
 
 use std::{fmt, io};
+use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::Cursor;
@@ -205,6 +206,70 @@ impl<K, V> LutType<K, V>
     }
 }
 
+#[derive(Debug)]
+pub struct LutInterpolator<K, V> {
+    data: Vec<(K, V)>,
+}
+
+impl<K, V> LutInterpolator<K, V>
+where
+    K: Into<f64> + PartialOrd + Copy + FromStr + Display + std::ops::Sub<Output=K> + std::ops::Div<Output=K>, <K as FromStr>::Err: fmt::Debug,
+    V: Into<f64> + Copy + FromStr + Display, <V as FromStr>::Err: fmt::Debug,
+{
+    pub fn from_lut(lut: &LutType<K, V>) -> LutInterpolator<K,V> {
+        let data = match lut {
+            LutType::File(l) => { l.to_vec() }
+            LutType::Inline(l) => { l.to_vec() }
+            LutType::PathOnly(_) => { Vec::new() }
+        };
+        LutInterpolator { data }
+    }
+
+    pub fn from_vec(data: Vec<(K, V)>) -> LutInterpolator<K,V> {
+        LutInterpolator { data }
+    }
+
+    pub fn get_value(&self, key: K) -> Option<f64> {
+        if self.data.is_empty() {
+            return None;
+        }
+
+        if key < self.data[0].0 || key > self.data[self.data.len() - 1].0 {
+            return None;
+        }
+
+        // Binary search for the correct position
+        let mut low = 0;
+        let mut high = self.data.len() - 1;
+
+        while low <= high {
+            let mid = low + (high - low) / 2;
+
+            match self.data[mid].0.partial_cmp(&key) {
+                Some(Ordering::Less) => low = mid + 1,
+                Some(Ordering::Greater) => {
+                    if mid == 0 {
+                        break;
+                    }
+                    high = mid - 1;
+                }
+                Some(Ordering::Equal) => return Some(self.data[mid].1.into()),
+                None => return None, // Handle NaN or other invalid comparisons
+            }
+        }
+
+        // At this point, low is the index where the key would be inserted
+        let (k1, v1) = self.data[low - 1];
+        let (k2, v2) = self.data[low];
+
+        // Linear interpolation formula
+        let fraction :f64 = (key - k1).into() / (k2 - k1).into();
+        let interpolated_value = v1.into() + fraction * (v2.into() - v1.into());
+
+        Some(interpolated_value)
+    }
+}
+
 pub fn load_lut_from_path<K, V>(lut_path: &Path) -> Result<Vec<(K, V)>, String>
     where
         K: std::str::FromStr + Display + Clone, <K as FromStr>::Err: fmt::Debug,
@@ -357,7 +422,27 @@ pub fn write_lut_to_property_value<K, V>(data: &Vec<(K,V)>, delimiter: u8, termi
     };
 }
 
-// #[test]
+#[test]
+fn interpolator_test() {
+    let data = vec![
+        (1.0, 2.0),
+        (2.0, 4.0),
+        (3.0, 6.0),
+        (4.0, 8.0),
+        (5.0, 10.0),
+    ];
+
+    let interpolator = LutInterpolator {data};
+
+    // Test interpolation
+    let test_keys =
+        vec![0.5,  1.0,       1.5,       2.5,       3.5,       4.5,       5.0,        5.5];
+    let expected_vals =
+        vec![None, Some(2.0), Some(3.0), Some(5.0), Some(7.0), Some(9.0), Some(10.0), None];
+    for (idx, key) in test_keys.iter().enumerate() {
+        assert_eq!(interpolator.get_value(*key), expected_vals[idx]);
+    }
+}
 // fn load_lut_string() {
 //     let data = String::from("(0=0.12|0.97=13|1=0.40)");
 //     let vec: Vec<(f64, f64)> = load_lut_from_property_value(data, Path::new("")).unwrap();
