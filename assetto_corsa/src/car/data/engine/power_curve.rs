@@ -20,6 +20,7 @@
  */
 
 use std::collections::BTreeMap;
+use crate::car::lut_utils::LutType;
 use crate::car::structs::LutProperty;
 use crate::traits::{CarDataFile, CarDataUpdater, MandatoryDataSection};
 use crate::error::{Result, Error, ErrorKind};
@@ -39,6 +40,10 @@ impl PowerCurve {
     pub fn get_curve_data(&self) -> BTreeMap<i32, f64> {
         let lut_data = self.power_lut.to_vec();
         lut_data.into_iter().collect()
+    }
+
+    pub fn get_lut(&self) -> &LutType<i32, f64> {
+        self.power_lut.get_type()
     }
 }
 
