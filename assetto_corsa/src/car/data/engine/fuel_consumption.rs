@@ -19,7 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use crate::ini_utils::Ini;
 use crate::error::{Result, Error, ErrorKind};
 use crate::ini_utils;
@@ -111,13 +111,18 @@ impl FuelConsumptionFlowRate {
             max_fuel_flow_lut: match max_fuel_flow_lut {
                 None => { None }
                 Some(lut_vec) => {
-                    Some(LutProperty::new(
-                        LutType::Inline(InlineLut::from_vec(lut_vec)),
-                        String::from(Self::SECTION_NAME),
-                        String::from("MAX_FUEL_FLOW_LUT")))
+                    Some(FuelConsumptionFlowRate::create_flow_limit_lut(lut_vec))
                 }},
             max_fuel_flow
         }
+    }
+
+    fn create_flow_limit_lut(data: Vec<(i32, i32)>) -> LutProperty<i32, i32> {
+        LutProperty::new(
+            LutType::Inline(InlineLut::from_vec(data)),
+            String::from(Self::SECTION_NAME),
+            String::from("MAX_FUEL_FLOW_LUT")
+        )
     }
 
     pub fn load_from_data(ini_data: &Ini,
@@ -144,6 +149,28 @@ impl FuelConsumptionFlowRate {
             max_fuel_flow_lut,
             max_fuel_flow
         }))
+    }
+
+    pub fn get_max_fuel_flow_lut_data(&self) -> BTreeMap<i32, i32> {
+        let lut_data = match &self.max_fuel_flow_lut {
+            None => return BTreeMap::new(),
+            Some(lut) => {
+                lut.to_vec()
+            }
+        };
+        lut_data.into_iter().collect()
+    }
+
+    pub fn update_max_fuel_flow_lut(&mut self, fuel_flow_vec: Vec<(i32, i32)>) -> Option<Vec<(i32, i32)>> {
+        match &mut self.max_fuel_flow_lut {
+            None => {
+                self.max_fuel_flow_lut = Some(FuelConsumptionFlowRate::create_flow_limit_lut(fuel_flow_vec));
+                None
+            }
+            Some(lut) => {
+                Some(lut.update(fuel_flow_vec))
+            }
+        }
     }
 }
 

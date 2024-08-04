@@ -20,7 +20,9 @@
  */
 
 mod gears;
+mod fuel_econ;
 
+use std::fmt::{Display, Formatter};
 use super::{Message, Tab};
 use std::path::{PathBuf};
 
@@ -34,22 +36,51 @@ use iced_native::widget::scrollable::Properties;
 use iced_native::widget::{button, checkbox, container, Svg, text};
 use iced_native::svg::Handle;
 use tracing::{error, info};
+use assetto_corsa::car::data::car_ini_data::CarVersion;
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;
 
 use crate::ui::{ApplicationData, ListPath};
+use crate::ui::edit::fuel_econ::{consumption_configuration_builder, FuelConsumptionConfig};
 use crate::ui::edit::gears::{gear_configuration_builder, convert_gear_configuration, FinalDriveUpdate, GearConfig, GearConfigType, GearUpdateType, GearConfiguration};
 use crate::ui::elements::modal::Modal;
 use crate::ui::image_data::ICE_CREAM_SVG;
 use crate::ui::settings::Setting;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum EditOption {
+    Gears,
+    FuelEcon
+}
+
+impl EditOption {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EditOption::Gears => "Gears",
+            EditOption::FuelEcon => "Fuel Consumption",
+        }
+    }
+
+    pub fn all() -> Vec<EditOption> {
+        vec![EditOption::Gears, EditOption::FuelEcon,]
+    }
+}
+
+impl Display for EditOption {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
 
 pub struct EditTab {
     status_message: String,
+    edit_types: Vec<EditOption>,
+    current_edit_type: EditOption,
     editable_car_paths: Vec<ListPath>,
     current_car_path: Option<PathBuf>,
     gear_configuration: Option<GearConfig>,
+    fuel_econ_data: Option<FuelConsumptionConfig>,
     update_successful: bool,
     modal_state: ModalState,
     show_all_cars: bool
@@ -64,10 +95,12 @@ enum ModalState {
 
 #[derive(Debug, Clone)]
 pub enum EditMessage {
+    EditTypeSelected(EditOption),
     CarSelected(ListPath),
     GearConfigSelected(GearConfigType),
     GearUpdate(GearUpdateType),
     FinalDriveUpdate(FinalDriveUpdate),
+    FuelConsumptionUpdate(i32, String),
     ApplyChanges(),
     ResetChanges(),
     ChangeConfirmation(),
@@ -80,9 +113,12 @@ impl EditTab {
     pub(crate) fn new(app_data: &ApplicationData) -> Self {
         let mut e = EditTab {
             status_message: String::new(),
+            edit_types: EditOption::all(),
+            current_edit_type: EditOption::Gears,
             editable_car_paths: Vec::new(),
             current_car_path: None,
             gear_configuration: None,
+            fuel_econ_data: None,
             update_successful: true,
             modal_state: ModalState::Hidden,
             show_all_cars: false
@@ -142,17 +178,60 @@ impl EditTab {
         layout.push(horizontal_rule(5)).push(gear_config_row)
     }
 
+    fn setup_gear_data(&mut self) {
+        if let Some(path_ref) = &self.current_car_path {
+            match gear_configuration_builder(path_ref) {
+                Ok(config) => { self.gear_configuration = Some(config) }
+                Err(e) => {
+                    error!(e)
+                }
+            }
+        }
+    }
+
+    fn setup_fuel_econ_data(&mut self) {
+        if let Some(path_ref) = &self.current_car_path {
+            match consumption_configuration_builder(path_ref) {
+                Ok(config) => { self.fuel_econ_data = Some(config) }
+                Err(e) => {
+                    error!(e)
+                }
+            }
+        }
+    }
+
     pub fn update(&mut self, message: EditMessage, app_data: &ApplicationData) {
         match message {
             EditMessage::CarSelected(path_ref) => {
                 self.current_car_path = Some(path_ref.full_path.clone());
-                match gear_configuration_builder(&path_ref.full_path) {
-                    Ok(config) => { self.gear_configuration = Some(config) }
-                    Err(e) => {
-                        error!(e)
-                    }
+                match self.current_edit_type {
+                    EditOption::Gears => self.setup_gear_data(),
+                    EditOption::FuelEcon => self.setup_fuel_econ_data(),
                 }
             }
+            EditMessage::EditTypeSelected(ty) => {
+                if self.current_edit_type != ty {
+                    self.current_edit_type = ty;
+                }
+                if self.current_car_path.is_some() {
+                    self.reload_selected_car();
+                }
+
+                match ty {
+                    EditOption::Gears => {
+                        if self.fuel_econ_data.is_some() {
+                            self.fuel_econ_data = None;
+                        }
+                        self.setup_gear_data()
+                    },
+                    EditOption::FuelEcon => {
+                        if self.gear_configuration.is_some() {
+                            self.gear_configuration = None;
+                        }
+                        self.setup_fuel_econ_data()
+                    }
+                }
+            },
             EditMessage::GearConfigSelected(choice) => {
                 let current_config_type =
                     if let Some(config) = &self.gear_configuration {
@@ -187,20 +266,46 @@ impl EditTab {
                     config.handle_final_drive_update(update_type);
                 }
             }
+            EditMessage::FuelConsumptionUpdate(rpm, new_value) => {
+                if let Some(config) = &mut self.fuel_econ_data {
+                    config.update_efficiency_string(rpm, new_value);
+                }
+            }
             EditMessage::ApplyChanges() => {
                 self.status_message = "Updating...".to_string();
                 self.modal_state = ModalState::AfterUpdate;
-                if let Some(config) = &mut self.gear_configuration {
-                    if let Some(car_path) = &self.current_car_path {
-                        match config.write_to_car(car_path) {
-                            Ok(_) => {
-                                self.update_successful = true;
-                                info!("Successfully updated gear data for {}", car_path.display())
-                            },
-                            Err(e) => {
-                                self.update_successful = false;
-                                self.status_message = format!("Failed to update gear data: {}", e);
-                                error!("Failed to update gear data for {}. {}", car_path.display(), e);
+                match self.current_edit_type {
+                    EditOption::Gears => {
+                        if let Some(config) = &mut self.gear_configuration {
+                            if let Some(car_path) = &self.current_car_path {
+                                match config.write_to_car(car_path) {
+                                    Ok(_) => {
+                                        self.update_successful = true;
+                                        info!("Successfully updated gear data for {}", car_path.display())
+                                    },
+                                    Err(e) => {
+                                        self.update_successful = false;
+                                        self.status_message = format!("Failed to update gear data: {}", e);
+                                        error!("Failed to update gear data for {}. {}", car_path.display(), e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    EditOption::FuelEcon => {
+                        if let Some(config) = &mut self.fuel_econ_data {
+                            if let Some(car_path) = &self.current_car_path {
+                                match config.update_car(car_path) {
+                                    Ok(_) => {
+                                        self.update_successful = true;
+                                        info!("Successfully updated fuel consumption data for {}", car_path.display())
+                                    },
+                                    Err(e) => {
+                                        self.update_successful = false;
+                                        self.status_message = format!("Failed to update fuel consumption data: {}", e);
+                                        error!("Failed to update fuel consumption data for {}. {}", car_path.display(), e);
+                                    }
+                                }
                             }
                         }
                     }
@@ -241,10 +346,17 @@ impl EditTab {
         match &self.current_car_path {
             None => error!("Reload requested when no car selected"),
             Some(current_car_path) => {
-                match gear_configuration_builder(&current_car_path) {
-                    Ok(config) => { self.gear_configuration = Some(config) }
-                    Err(e) => {
-                        error!(e)
+                match self.current_edit_type {
+                    EditOption::Gears => match gear_configuration_builder(&current_car_path) {
+                        Ok(config) => { self.gear_configuration = Some(config) }
+                        Err(e) => {
+                            error!(e)
+                        }
+                    }
+                    EditOption::FuelEcon => {
+                        if self.gear_configuration.is_some() {
+                            self.gear_configuration = None;
+                        }
                     }
                 }
             }
@@ -358,24 +470,36 @@ impl Tab for EditTab {
     fn content<'a, 'b>(&'a self, _app_data: &'b ApplicationData) -> Element<'_, Self::Message>
         where 'b: 'a
     {
+        let edit_type_selector = Row::new().padding(0).spacing(8).align_items(Alignment::Center)
+            .push(pick_list(
+                &self.edit_types,
+                Some(self.current_edit_type),
+                EditMessage::EditTypeSelected,
+            ));
+        let edit_select_container = Column::new()
+            .align_items(Alignment::Start)
+            .padding(Padding::from([0,0,5,0]))
+            .push(Text::new("Type"))
+            .push(edit_type_selector);
+
         let current_car = match &self.current_car_path {
             None => { None }
             Some(path) => {
                 Some(ListPath {full_path: path.clone()})
             }
         };
+
         let mut command_row = Row::new().spacing(5);
         let mut apply_but = Button::new("Apply")
             .style(theme::Button::Positive);
         let mut reset_but =
             Button::new("Undo")
-            .style(theme::Button::Destructive);
+                .style(theme::Button::Destructive);
         if let Some(_) = current_car {
             apply_but = apply_but.on_press(EditMessage::ApplyChanges());
             reset_but = reset_but.on_press(EditMessage::ResetChanges());
         }
         command_row = command_row.push(apply_but).push(reset_but);
-
         let car_select_row = Row::new().padding(0).spacing(8).align_items(Alignment::Center)
             .push(pick_list(
                 &self.editable_car_paths,
@@ -387,7 +511,6 @@ impl Tab for EditTab {
                 self.show_all_cars,
                 |new_val| EditMessage::ShowAllCarsSelected(new_val)
             ).spacing(3));
-
         let car_select_container = Column::new()
             .align_items(Alignment::Start)
             .push(Text::new("Assetto Corsa car"))
@@ -396,6 +519,7 @@ impl Tab for EditTab {
         let select_container = Column::new()
             .padding(Padding::from([0, 10]))
             .spacing(5)
+            .push(edit_select_container)
             .push(car_select_container)
             .push(command_row);
 
@@ -406,10 +530,20 @@ impl Tab for EditTab {
             .push(select_container);
             //.push(horizontal_rule(3));
 
-        if let Some(gear_config) = &self.gear_configuration {
-            layout = self.add_gearbox_config_selector_row(layout, gear_config.get_config_type());
-            layout = gear_config.add_editable_gear_list(layout);
+        match self.current_edit_type {
+            EditOption::Gears => {
+                if let Some(gear_config) = &self.gear_configuration {
+                    layout = self.add_gearbox_config_selector_row(layout, gear_config.get_config_type());
+                    layout = gear_config.add_editable_gear_list(layout);
+                }
+            }
+            EditOption::FuelEcon => {
+                if let Some(fuel_econ_data) = &self.fuel_econ_data {
+                    layout = fuel_econ_data.add_editable_list(layout);
+                }
+            }
         }
+
         let content : Element<'_, EditMessage> =
             scrollable(
                 Container::new(layout)
