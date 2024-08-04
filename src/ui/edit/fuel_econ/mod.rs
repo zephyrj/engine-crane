@@ -41,7 +41,6 @@ use crate::ui::edit::gears::GearConfig;
 pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelConsumptionConfig, String> {
     let mut config = FuelConsumptionConfig {
         original_data: BTreeMap::new(),
-        power_curve_data: BTreeMap::new(),
         updated_data: BTreeMap::new(),
     };
 
@@ -68,22 +67,21 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelCo
             Err(_) => {}
         }
 
-        let power_curve = match PowerCurve::load_from_parent(&engine) {
-            Ok(curve) => curve,
-            Err(e) => {
-                return Err(String::from("Failed to load engine curve data"));
-            }
-        };
-
         if config.original_data.is_empty() {
-            let power_map = power_curve.get_curve_data();
-            let start_rpm =
-                *power_map.first_key_value()
-                    .ok_or(String::from("Couldn't get start RPM from power curve"))?.0;
-            let end_rpm =
-                *power_map.last_key_value()
-                    .ok_or(String::from("Couldn't get end RPM from power curve"))?.0;
-            for rpm in (start_rpm..=end_rpm).rev().step_by(250) {
+            let idle;
+            let limiter;
+            match EngineData::load_from_parent(&engine) {
+                Ok(ed) => {
+                    idle = ed.minimum;
+                    limiter = ed.limiter;
+                }
+                Err(e) => {
+                    return Err(format!("Failed to load engine data. {}", e.to_string()));
+                }
+            };
+            let start_rpm = idle;
+            let end_rpm = limiter;
+            for rpm in (start_rpm..=end_rpm).rev().step_by(500) {
                 if rpm < 0 {
                     continue;
                 }
@@ -108,7 +106,6 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelCo
 
 pub struct FuelConsumptionConfig {
     original_data: BTreeMap<i32, i32>,
-    power_curve_data: BTreeMap<i32, f64>,
     updated_data: BTreeMap<i32, Option<String>>,
 }
 
