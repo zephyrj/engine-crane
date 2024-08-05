@@ -27,11 +27,11 @@ use tracing::{error, info, warn};
 use assetto_corsa::Car;
 use assetto_corsa::car::data;
 use assetto_corsa::car::data::car_ini_data::CarVersion;
-use assetto_corsa::car::data::{CarIniData, Engine};
+use assetto_corsa::car::data::{CarIniData, Drivetrain, Engine};
 use assetto_corsa::car::data::engine::{EngineData, FuelConsumptionFlowRate, PowerCurve};
 use assetto_corsa::car::lut_utils::LutInterpolator;
 use assetto_corsa::car::model::GearingCalculator;
-use assetto_corsa::traits::{CarDataFile, MandatoryDataSection, update_car_data};
+use assetto_corsa::traits::{CarDataFile, extract_mandatory_section, MandatoryDataSection, update_car_data};
 use crate::fabricator::FabricationError::FailedToLoad;
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::FuelConsumptionUpdate;
@@ -42,6 +42,8 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelCo
     let mut config = FuelConsumptionConfig {
         original_data: BTreeMap::new(),
         updated_data: BTreeMap::new(),
+        power_curve_data: BTreeMap::new(),
+        projected_fuel_flow: BTreeMap::new(),
     };
 
     let mut car = match Car::load_from_path(ac_car_path) {
@@ -96,10 +98,6 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelCo
                 let _ = config.updated_data.insert(*rpm, None);
             }
         }
-
-        for rpm in config.updated_data.keys() {
-            // get interpolated torque
-        }
     }
     Ok(config)
 }
@@ -107,6 +105,8 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelCo
 pub struct FuelConsumptionConfig {
     original_data: BTreeMap<i32, i32>,
     updated_data: BTreeMap<i32, Option<String>>,
+    power_curve_data: BTreeMap<i32, f64>,
+    projected_fuel_flow: BTreeMap<i32, i32>
 }
 
 impl FuelConsumptionConfig {
@@ -164,6 +164,17 @@ impl FuelConsumptionConfig {
             }
         };
 
+        let drive_type;
+        {
+            let drivetrain = Drivetrain::from_car(&mut car).map_err(|e|{
+                format!("Failed to load {}. {}", Drivetrain::INI_FILENAME.to_string(), e.to_string())
+            })?;
+            drive_type = extract_mandatory_section::<data::drivetrain::Traction>(&drivetrain).map_err(|_|{
+                format!("{} is missing data section 'Traction'", Drivetrain::INI_FILENAME.to_string())
+            })?.drive_type
+        }
+        info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, drive_type.mechanical_efficiency());
+
         {
             let mut engine = Engine::from_car(&mut car).map_err(|err| { err.to_string() })?;
             let idle;
@@ -196,7 +207,6 @@ impl FuelConsumptionConfig {
             // kW⋅h/g
             const GASOLINE_LHV: f64 = 0.01204;
 
-            let mechanical_efficiency = 0.8;
             // The lut values should be: rpm, kg/hr
             // The max-flow should be weighted to the upper end of the rev-range as racing is usually done in that range.
             // This is probably enough of a fallback as this will only be used if a lut isn't found and that will be
@@ -246,7 +256,7 @@ impl FuelConsumptionConfig {
             let fuel_flow = FuelConsumptionFlowRate::new(
                 0.03,
                 idle + 100,
-                mechanical_efficiency,
+                drive_type.mechanical_efficiency(),
                 Some(max_flow_lut),
                 max_fuel_flow
             );
