@@ -204,6 +204,14 @@ impl<K, V> LutType<K, V>
             }
         }
     }
+
+    pub fn to_vec(&self) -> Vec<(K, V)> {
+        match &self {
+            LutType::File(l) => { l.to_vec() }
+            LutType::Inline(l) => { l.to_vec() }
+            LutType::PathOnly(_) => { Vec::new() }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -217,12 +225,7 @@ where
     V: Into<f64> + Copy + FromStr + Display, <V as FromStr>::Err: fmt::Debug,
 {
     pub fn from_lut(lut: &LutType<K, V>) -> LutInterpolator<K,V> {
-        let data = match lut {
-            LutType::File(l) => { l.to_vec() }
-            LutType::Inline(l) => { l.to_vec() }
-            LutType::PathOnly(_) => { Vec::new() }
-        };
-        LutInterpolator { data }
+        LutInterpolator { data: lut.to_vec() }
     }
 
     pub fn from_vec(data: Vec<(K, V)>) -> LutInterpolator<K,V> {
