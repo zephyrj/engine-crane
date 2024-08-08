@@ -63,7 +63,6 @@ impl Display for Source {
 pub struct Metadata {
     toml_config: toml::Value,
     boost_curve_data: Option<Vec<(i32, f64)>>,
-
     fuel_flow_data: Option<Vec<(i32, f64)>>
 }
 
@@ -202,7 +201,7 @@ impl Metadata {
     }
 
     pub fn set_string_value(&mut self, key: String, val: String) -> Option<toml::Value> {
-        return if let Some(table) = self.toml_config.as_table_mut() {
+        if let Some(table) = self.toml_config.as_table_mut() {
             table.insert(key, toml::Value::String(val))
         } else {
             error!("Failed to get metadata toml config as a table");
@@ -211,7 +210,7 @@ impl Metadata {
     }
 
     pub fn set_int_value(&mut self, key: String, val: i64) -> Option<toml::Value> {
-        return if let Some(table) = self.toml_config.as_table_mut() {
+        if let Some(table) = self.toml_config.as_table_mut() {
             table.insert(key, toml::Value::Integer(val))
         } else {
             error!("Failed to get metadata toml config as a table");
