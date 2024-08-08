@@ -130,6 +130,7 @@ impl EditTab {
     fn load_car_list(&mut self, app_data: &ApplicationData) {
         self.editable_car_paths.clear();
         self.gear_configuration = None;
+        self.fuel_econ_data = None;
         self.current_car_path = None;
         if self.show_all_cars {
             self.editable_car_paths = app_data.assetto_corsa_data.available_cars.clone();
@@ -373,6 +374,7 @@ impl EditTab {
                 Setting::AcPath => self.load_car_list(app_data),
                 _ => {}
             }
+            Message::EngineSwapRequested => self.load_car_list(app_data),
             _ => {}
         }
     }
