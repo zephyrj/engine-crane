@@ -215,6 +215,10 @@ impl TurboController {
         TurboController::get_controller_section_name(self.index)
     }
 
+    pub fn get_lut(&self) -> &LutProperty<f64, f64> {
+        &self.lut
+    }
+
     fn get_controller_section_name(index: usize) -> String {
         format!("CONTROLLER_{}", index)
     }

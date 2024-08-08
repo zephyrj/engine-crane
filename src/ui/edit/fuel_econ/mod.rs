@@ -31,10 +31,11 @@ use assetto_corsa::car::data;
 use assetto_corsa::car::data::car_ini_data::CarVersion;
 use assetto_corsa::car::data::{CarIniData, Drivetrain, Engine};
 use assetto_corsa::car::data::drivetrain::traction::DriveType;
-use assetto_corsa::car::data::engine::{EngineData, FuelConsumptionFlowRate, PowerCurve};
+use assetto_corsa::car::data::engine::{EngineData, FuelConsumptionFlowRate, PowerCurve, Turbo, TurboControllerFile};
+use assetto_corsa::car::data::engine::turbo_ctrl::TurboController;
 use assetto_corsa::car::lut_utils::LutInterpolator;
 use assetto_corsa::car::model::GearingCalculator;
-use assetto_corsa::traits::{CarDataFile, extract_mandatory_section, MandatoryDataSection, update_car_data};
+use assetto_corsa::traits::{CarDataFile, extract_mandatory_section, MandatoryDataSection, update_car_data, OptionalDataSection};
 use utils::units::calculate_power_kw;
 use crate::fabricator::FabricationError::FailedToLoad;
 use crate::ui::edit::EditMessage;
@@ -55,6 +56,42 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelCo
     let drive_type= load_drive_type(&mut car)?;
     let mechanical_efficiency = drive_type.mechanical_efficiency();
     info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, mechanical_efficiency);
+
+    let is_turbo;
+    {
+        let engine = Engine::from_car(&mut car).map_err(|err| {
+            err.to_string()
+        })?;
+
+        {
+            is_turbo = match Turbo::load_from_parent(&engine) {
+                Ok(opt) => opt.is_some(),
+                Err(e) => {
+                    warn!("Couldn't determine if turbo engine. {}", e.to_string());
+                    info!("Assuming NA");
+                    false
+                }
+            };
+        }
+    }
+
+    let mut boost_interpolator_opt: Option<LutInterpolator<f64, f64>> = None;
+    if is_turbo {
+        match TurboControllerFile::from_car(&mut car, 0) {
+            Ok(ctrl_opt) => {
+                match ctrl_opt {
+                    None => {
+                        warn!("No turbo controller file. No boost corrections applied.")
+                    }
+                    Some(ctrl_file) => match TurboController::load_from_parent(0, &ctrl_file) {
+                        Ok(tc) => boost_interpolator_opt = Some(LutInterpolator::from_vec(tc.get_lut().to_vec())),
+                        Err(e) => warn!("Failed to load turbo controller. No boost corrections applied. {}", e.to_string())
+                    }
+                }
+            }
+            Err(e) => warn!("Error loading turbo controller file. No boost corrections applied. {}", e.to_string())
+        }
+    }
 
     let original_data;
     let mut updated_data = BTreeMap::new();
@@ -81,7 +118,7 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelCo
             };
 
         power_curve_interpolator =
-            create_engine_power_interpolator(&engine, mechanical_efficiency)?;
+            create_engine_power_interpolator(&engine, mechanical_efficiency, boost_interpolator_opt)?;
 
         if original_data.is_empty() {
             let (start_rpm, end_rpm) = get_min_max_rpms(&engine)?;
@@ -130,7 +167,9 @@ impl FuelConsumptionConfig {
     {
         let mut rpm_column = Column::new().width(Length::Shrink).spacing(7).align_items(Alignment::Center).push(Text::new("RPM").size(16));
         let mut eff_input_col = Column::new().width(Length::Shrink).spacing(7).align_items(Alignment::Center).push(Text::new("Efficiency %").size(16));
+        let mut power_col = Column::new().width(Length::Shrink).spacing(7).align_items(Alignment::Center).push(Text::new("Power").size(16));
         let mut projected_flow_col = Column::new().width(Length::Shrink).spacing(7).align_items(Alignment::Center).push(Text::new("Proj. Flow kg/hr").size(16));
+
         let row_height = Length::Units(28);
         for (rpm, val_opt) in self.updated_data.iter() {
             let val = match &val_opt {
@@ -151,13 +190,22 @@ impl FuelConsumptionConfig {
                     .push(Text::new(format!("{}:", rpm)))
             );
 
-            projected_flow_col = projected_flow_col.push(
-                Row::new().height(row_height).align_items(Alignment::Center).push(
-                    match self.projected_fuel_flow.get(rpm) {
-                        None => Text::new(""),
-                        Some(val) => Text::new(val.to_string())
+            power_col = power_col.push(
+                Row::new().height(row_height).align_items(Alignment::Center).push(Text::new(
+                    match self.power_curve_interpolator.get_value(*rpm) {
+                        None => "-- kW".to_string(),
+                        Some(power) => format!("{} kW", power.round() as i32)
                     }
-                )
+                ).size(18))
+            );
+
+            projected_flow_col = projected_flow_col.push(
+                Row::new().height(row_height).align_items(Alignment::Center).push(Text::new(
+                    match self.projected_fuel_flow.get(rpm) {
+                        None => "".to_string(),
+                        Some(val) => format!("{} kg/h", val.to_string())
+                    }
+                ).size(18))
             );
         }
         let mut holder = Column::new().width(Length::Shrink).align_items(Alignment::Fill).spacing(10);
@@ -166,6 +214,7 @@ impl FuelConsumptionConfig {
                 .push(rpm_column)
                 .push(eff_input_col)
                 .push(vertical_rule(5))
+                .push(power_col)
                 .push(projected_flow_col)
         );
         layout.push(holder)
@@ -365,26 +414,32 @@ fn load_drive_type(car: &mut Car) -> Result<DriveType, String> {
 }
 
 fn create_engine_power_interpolator(engine: &Engine,
-                                    mechanical_efficiency: f64) -> Result<LutInterpolator<i32, f64>, String>
+                                    mechanical_efficiency: f64,
+                                    boost_interpolator_opt: Option<LutInterpolator<f64, f64>>)
+    -> Result<LutInterpolator<i32, f64>, String>
 {
     match PowerCurve::load_from_parent(engine) {
         Ok(curve) => {
-            let v: Vec<(i32, f64)> = curve.get_lut().to_vec().into_iter().map(
+            let power_curve_vec: Vec<(i32, f64)> = curve.get_lut().to_vec().into_iter().map(
                 |(rpm, torque)|{
-                    let scaled_torque = (torque / (mechanical_efficiency * 100.0)) * 100.0;
+                    let mut scaled_torque = (torque / (mechanical_efficiency * 100.0)) * 100.0;
+                    if let Some(boost_interpolator) = &boost_interpolator_opt {
+                        scaled_torque = match boost_interpolator.get_value(rpm as f64) {
+                            None => scaled_torque,
+                            Some(boost) => scaled_torque * (1.0 + boost)
+                        }
+                    }
                     let power = (scaled_torque * (rpm as f64) * 2.0 * std::f64::consts::PI) / (60.0 * 1000.0);
                     (rpm, power)
                 }
             ).collect();
-            Ok(LutInterpolator::from_vec(v))
+            Ok(LutInterpolator::from_vec(power_curve_vec))
         },
         Err(e) => {
-            return Err(format!("Failed to load engine curve data. {}", e.to_string()));
+            Err(format!("Failed to load engine curve data. {}", e.to_string()))
         }
     }
 }
-
-
 
 // pub fn fuel_flow_consumption(mechanical_efficiency: f64) -> data::engine::FuelConsumptionFlowRate {
 //     // The lut values should be: rpm, kg/hr

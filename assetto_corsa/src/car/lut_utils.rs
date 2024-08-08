@@ -224,7 +224,7 @@ where
     K: Into<f64> + PartialOrd + Copy + FromStr + Display + std::ops::Sub<Output=K> + std::ops::Div<Output=K>, <K as FromStr>::Err: fmt::Debug,
     V: Into<f64> + Copy + FromStr + Display, <V as FromStr>::Err: fmt::Debug,
 {
-    pub fn from_lut(lut: &LutType<K, V>) -> LutInterpolator<K,V> {
+    pub fn from_lut_type(lut: &LutType<K, V>) -> LutInterpolator<K,V> {
         LutInterpolator { data: lut.to_vec() }
     }
 
