@@ -36,7 +36,6 @@ use iced_native::widget::scrollable::Properties;
 use iced_native::widget::{button, checkbox, container, Svg, text};
 use iced_native::svg::Handle;
 use tracing::{error, info};
-use assetto_corsa::car::data::car_ini_data::CarVersion;
 use crate::assetto_corsa::Car;
 use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;

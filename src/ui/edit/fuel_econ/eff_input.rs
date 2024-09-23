@@ -73,7 +73,7 @@ impl FuelConsumptionConfig {
         let mut updated_data = BTreeMap::new();
         let power_curve_interpolator;
         {
-            let mut engine = Engine::from_car(car).map_err(|err| {
+            let engine = Engine::from_car(car).map_err(|err| {
                 err.to_string()
             })?;
 

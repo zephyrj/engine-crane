@@ -18,28 +18,9 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
-use std::collections::BTreeMap;
-use std::num::ParseIntError;
 use std::path::PathBuf;
-use iced::{Alignment, Length};
-use iced::widget::{Column, container, Row, Text, TextInput};
-use iced_native::Widget;
-use iced_native::widget::vertical_rule;
-use tracing::{error, info, warn};
+use tracing::error;
 use assetto_corsa::Car;
-use assetto_corsa::car::data;
-use assetto_corsa::car::data::car_ini_data::CarVersion;
-use assetto_corsa::car::data::{CarIniData, Drivetrain, Engine};
-use assetto_corsa::car::data::drivetrain::traction::DriveType;
-use assetto_corsa::car::data::engine::{EngineData, FuelConsumptionFlowRate, PowerCurve, Turbo, TurboControllerFile};
-use assetto_corsa::car::data::engine::turbo_ctrl::TurboController;
-use assetto_corsa::car::lut_utils::LutInterpolator;
-use assetto_corsa::car::model::GearingCalculator;
-use assetto_corsa::traits::{CarDataFile, extract_mandatory_section, MandatoryDataSection, update_car_data, OptionalDataSection};
-use crate::fabricator::FabricationError::FailedToLoad;
-use crate::ui::edit::EditMessage;
-use crate::ui::edit::EditMessage::FuelConsumptionUpdate;
-use crate::ui::edit::gears::GearConfig;
 
 pub use crate::ui::edit::fuel_econ::eff_input::FuelConsumptionConfig;
 
