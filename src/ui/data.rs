@@ -20,7 +20,6 @@
  */
 
 use std::collections::{BTreeMap, HashMap};
-use std::ffi::OsStr;
 use std::fmt::{Display, Formatter};
 use std::fs::create_dir;
 use std::io;
