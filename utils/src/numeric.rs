@@ -32,9 +32,26 @@ pub fn round_up_to_nearest_multiple(val: i32, multiple: i32) -> i32 {
     ((val + (multiple-1)) / multiple) * multiple
 }
 
+pub fn is_valid_percentage_str(val: &str) -> bool {
+    if val.is_empty() {
+        return true;
+    }
+    match val.parse::<i32>() {
+        Ok(v) => is_valid_percentage(v),
+        Err(_) => false
+    }
+}
+
+pub fn is_valid_percentage(val: i32) -> bool {
+    if val >= 0 && val <= 100 {
+        return true;
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::numeric::round_up_to_nearest_multiple;
+    use crate::numeric::{is_valid_percentage, round_up_to_nearest_multiple};
 
     #[test]
     fn round_multiple_tests()  {
@@ -50,5 +67,18 @@ mod tests {
         assert_eq!(round_up_to_nearest_multiple(99, 50), 100);
         assert_eq!(round_up_to_nearest_multiple(100, 50), 100);
         assert_eq!(round_up_to_nearest_multiple(101, 50), 150);
+    }
+
+    #[test]
+    fn valid_percentage_tests()  {
+        assert_eq!(is_valid_percentage(-1), false);
+        assert_eq!(is_valid_percentage(0), true);
+        assert_eq!(is_valid_percentage(1), true);
+        assert_eq!(is_valid_percentage(50), true);
+        assert_eq!(is_valid_percentage(99), true);
+        assert_eq!(is_valid_percentage(100), true);
+        assert_eq!(is_valid_percentage(101), false);
+        assert_eq!(is_valid_percentage(i32::MAX), false);
+        assert_eq!(is_valid_percentage(i32::MIN), false);
     }
 }
