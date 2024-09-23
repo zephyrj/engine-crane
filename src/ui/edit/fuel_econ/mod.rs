@@ -19,15 +19,51 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 use std::path::PathBuf;
+use iced::widget::Column;
 use tracing::error;
 use assetto_corsa::Car;
-
+use crate::ui::edit::EditMessage;
 pub use crate::ui::edit::fuel_econ::eff_input::FuelConsumptionConfig;
 
 mod eff_input;
 mod helpers;
 
-pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelConsumptionConfig, String> {
+pub enum FuelEfficiencyConfig {
+    ThermalEff(FuelConsumptionConfig)
+}
+
+impl FuelEfficiencyConfig {
+    pub(crate) fn add_editable_list<'a, 'b>(
+        &'a self,
+        layout: Column<'b, EditMessage>
+    ) -> Column<'b, EditMessage>
+    where 'b: 'a
+    {
+        match &self {
+            FuelEfficiencyConfig::ThermalEff(e) => {
+                e.add_editable_list(layout)
+            }
+        }
+    }
+
+    pub fn update_efficiency_string(&mut self, rpm: i32, new_value: String) {
+        match self {
+            FuelEfficiencyConfig::ThermalEff(e) => {
+                e.update_efficiency_string(rpm, new_value)
+            }
+        }
+    }
+    
+    pub fn update_car(&self, ac_car_path: &PathBuf) -> Result<(), String> {
+        match &self {
+            FuelEfficiencyConfig::ThermalEff(e) => {
+                e.update_car(ac_car_path)
+            }
+        }
+    }
+}
+
+pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelEfficiencyConfig, String> {
     let mut car = match Car::load_from_path(ac_car_path) {
         Ok(c) => { c }
         Err(err) => {
@@ -36,5 +72,5 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelCo
             return Err(err_str);
         }
     };
-    Ok(FuelConsumptionConfig::from_car(&mut car)?)
+    Ok(FuelEfficiencyConfig::ThermalEff(FuelConsumptionConfig::from_car(&mut car)?))
 }
