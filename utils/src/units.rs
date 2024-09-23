@@ -27,3 +27,4 @@ pub fn calculate_power_kw(rpm: f32, torque: f32) -> f32 {
     (torque * rpm * 2.0 * std::f32::consts::PI) / (60.0 * 1000.0)
 }
 
+
