@@ -41,7 +41,7 @@ use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;
 
 use crate::ui::{ApplicationData, ListPath};
-use crate::ui::edit::fuel_econ::{consumption_configuration_builder, FuelConsumptionConfig};
+use crate::ui::edit::fuel_econ::{consumption_configuration_builder, FuelEfficiencyConfig};
 use crate::ui::edit::gears::{gear_configuration_builder, convert_gear_configuration, FinalDriveUpdate, GearConfig, GearConfigType, GearUpdateType, GearConfiguration};
 use crate::ui::elements::modal::Modal;
 use crate::ui::image_data::ICE_CREAM_SVG;
@@ -79,7 +79,7 @@ pub struct EditTab {
     editable_car_paths: Vec<ListPath>,
     current_car_path: Option<PathBuf>,
     gear_configuration: Option<GearConfig>,
-    fuel_econ_data: Option<FuelConsumptionConfig>,
+    fuel_eff_data: Option<FuelEfficiencyConfig>,
     update_successful: bool,
     modal_state: ModalState,
     show_all_cars: bool
@@ -117,7 +117,7 @@ impl EditTab {
             editable_car_paths: Vec::new(),
             current_car_path: None,
             gear_configuration: None,
-            fuel_econ_data: None,
+            fuel_eff_data: None,
             update_successful: true,
             modal_state: ModalState::Hidden,
             show_all_cars: false
@@ -129,7 +129,7 @@ impl EditTab {
     fn load_car_list(&mut self, app_data: &ApplicationData) {
         self.editable_car_paths.clear();
         self.gear_configuration = None;
-        self.fuel_econ_data = None;
+        self.fuel_eff_data = None;
         self.current_car_path = None;
         if self.show_all_cars {
             self.editable_car_paths = app_data.assetto_corsa_data.available_cars.clone();
@@ -192,7 +192,7 @@ impl EditTab {
     fn setup_fuel_econ_data(&mut self) {
         if let Some(path_ref) = &self.current_car_path {
             match consumption_configuration_builder(path_ref) {
-                Ok(config) => { self.fuel_econ_data = Some(config) }
+                Ok(config) => { self.fuel_eff_data = Some(config) }
                 Err(e) => {
                     error!(e)
                 }
@@ -219,8 +219,8 @@ impl EditTab {
 
                 match ty {
                     EditOption::Gears => {
-                        if self.fuel_econ_data.is_some() {
-                            self.fuel_econ_data = None;
+                        if self.fuel_eff_data.is_some() {
+                            self.fuel_eff_data = None;
                         }
                         self.setup_gear_data()
                     },
@@ -267,7 +267,7 @@ impl EditTab {
                 }
             }
             EditMessage::FuelConsumptionUpdate(rpm, new_value) => {
-                if let Some(config) = &mut self.fuel_econ_data {
+                if let Some(config) = &mut self.fuel_eff_data {
                     config.update_efficiency_string(rpm, new_value);
                 }
             }
@@ -293,7 +293,7 @@ impl EditTab {
                         }
                     }
                     EditOption::FuelEcon => {
-                        if let Some(config) = &mut self.fuel_econ_data {
+                        if let Some(config) = &mut self.fuel_eff_data {
                             if let Some(car_path) = &self.current_car_path {
                                 match config.update_car(car_path) {
                                     Ok(_) => {
@@ -539,7 +539,7 @@ impl Tab for EditTab {
                 }
             }
             EditOption::FuelEcon => {
-                if let Some(fuel_econ_data) = &self.fuel_econ_data {
+                if let Some(fuel_econ_data) = &self.fuel_eff_data {
                     layout = fuel_econ_data.add_editable_list(layout);
                 }
             }
