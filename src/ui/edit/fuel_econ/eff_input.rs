@@ -18,8 +18,9 @@ use crate::ui::edit::fuel_econ::helpers::{create_engine_power_interpolator, get_
 
 // kW⋅h/g
 const GASOLINE_LHV: f64 = 0.01204;
+const RPM_STEP: usize = 500;
 
-pub struct FuelConsumptionConfig {
+pub struct ThermalEfficiencyInput {
     original_data: BTreeMap<i32, i32>,
     mechanical_efficiency: f64,
     updated_data: BTreeMap<i32, Option<String>>,
@@ -27,8 +28,8 @@ pub struct FuelConsumptionConfig {
     projected_fuel_flow: BTreeMap<i32, i32>
 }
 
-impl FuelConsumptionConfig {
-    pub fn from_car(car: &mut Car) -> Result<FuelConsumptionConfig, String> {
+impl ThermalEfficiencyInput {
+    pub fn from_car(car: &mut Car) -> Result<ThermalEfficiencyInput, String> {
         let drive_type= load_drive_type(car)?;
         let mechanical_efficiency = drive_type.mechanical_efficiency();
         info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, mechanical_efficiency);
@@ -77,7 +78,7 @@ impl FuelConsumptionConfig {
                 err.to_string()
             })?;
 
-            original_data  =
+            original_data =
                 match FuelConsumptionFlowRate::load_from_data(&engine.ini_data(), engine.data_interface()) {
                     Ok(rate_opt) => {
                         match rate_opt {
@@ -98,7 +99,7 @@ impl FuelConsumptionConfig {
 
             if original_data.is_empty() {
                 let (start_rpm, end_rpm) = get_min_max_rpms(&engine)?;
-                for rpm in (start_rpm..=end_rpm).rev().step_by(500) {
+                for rpm in (start_rpm..=end_rpm).rev().step_by(RPM_STEP) {
                     if rpm < 0 {
                         continue;
                     }
@@ -113,7 +114,7 @@ impl FuelConsumptionConfig {
                 }
             }
         }
-        Ok(FuelConsumptionConfig {
+        Ok(ThermalEfficiencyInput {
             original_data,
             mechanical_efficiency,
             updated_data,
@@ -183,7 +184,7 @@ impl FuelConsumptionConfig {
         layout.push(holder)
     }
 
-    pub fn update_efficiency_string(&mut self, rpm: i32, new_value: String) {
+    pub fn update_for_rpm(&mut self, rpm: i32, new_value: String) {
         if self.updated_data.contains_key(&rpm) {
             if new_value.is_empty() {
                 let _ = self.updated_data.insert(rpm, None);
@@ -211,7 +212,7 @@ impl FuelConsumptionConfig {
         }
     }
 
-    pub fn update_car(&self, ac_car_path: &PathBuf) -> Result<(), String> {
+    pub fn write_car_updates(&self, ac_car_path: &PathBuf) -> Result<(), String> {
         let mut car = match Car::load_from_path(ac_car_path) {
             Ok(c) => { c }
             Err(err) => {

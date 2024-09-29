@@ -18,21 +18,48 @@
  * You should have received a copy of the GNU General Public License
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use iced::widget::Column;
 use tracing::error;
 use assetto_corsa::Car;
 use crate::ui::edit::EditMessage;
-pub use crate::ui::edit::fuel_econ::eff_input::FuelConsumptionConfig;
+pub use crate::ui::edit::fuel_econ::eff_input::ThermalEfficiencyInput;
+use crate::ui::edit::fuel_econ::flow_input::FuelFlowInput;
+use crate::ui::edit::gears::{GearConfig, GearConfigType};
 
 mod eff_input;
 mod helpers;
+mod flow_input;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FuelEfficiencyConfigType {
+    ByThermalEfficiency,
+    ByFuelFlow
+}
+
+impl Display for FuelEfficiencyConfigType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            FuelEfficiencyConfigType::ByThermalEfficiency => { write!(f, "Thermal Efficiency") }
+            FuelEfficiencyConfigType::ByFuelFlow => { write!(f, "Fuel Flow") }
+        }
+    }
+}
 
 pub enum FuelEfficiencyConfig {
-    ThermalEff(FuelConsumptionConfig)
+    ThermalEff(ThermalEfficiencyInput),
+    FuelFlow(FuelFlowInput)
 }
 
 impl FuelEfficiencyConfig {
+    pub fn get_config_type(&self) -> FuelEfficiencyConfigType {
+        match self {
+            FuelEfficiencyConfig::ThermalEff(e) => FuelEfficiencyConfigType::ByThermalEfficiency,
+            FuelEfficiencyConfig::FuelFlow(e) => FuelEfficiencyConfigType::ByFuelFlow
+        }
+    }
+    
     pub(crate) fn add_editable_list<'a, 'b>(
         &'a self,
         layout: Column<'b, EditMessage>
@@ -40,30 +67,28 @@ impl FuelEfficiencyConfig {
     where 'b: 'a
     {
         match &self {
-            FuelEfficiencyConfig::ThermalEff(e) => {
-                e.add_editable_list(layout)
-            }
+            FuelEfficiencyConfig::ThermalEff(e) => e.add_editable_list(layout),
+            FuelEfficiencyConfig::FuelFlow(e) => e.add_editable_list(layout)
         }
     }
 
-    pub fn update_efficiency_string(&mut self, rpm: i32, new_value: String) {
+    pub fn update_for_rpm(&mut self, rpm: i32, new_value: String) {
         match self {
-            FuelEfficiencyConfig::ThermalEff(e) => {
-                e.update_efficiency_string(rpm, new_value)
-            }
+            FuelEfficiencyConfig::ThermalEff(e) => e.update_for_rpm(rpm, new_value),
+            FuelEfficiencyConfig::FuelFlow(e) => e.update_for_rpm(rpm, new_value),
         }
     }
     
-    pub fn update_car(&self, ac_car_path: &PathBuf) -> Result<(), String> {
+    pub fn write_car_updates(&self, ac_car_path: &PathBuf) -> Result<(), String> {
         match &self {
-            FuelEfficiencyConfig::ThermalEff(e) => {
-                e.update_car(ac_car_path)
-            }
+            FuelEfficiencyConfig::ThermalEff(e) => e.write_car_updates(ac_car_path),
+            FuelEfficiencyConfig::FuelFlow(e) => e.write_car_updates(ac_car_path)
         }
     }
 }
 
-pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelEfficiencyConfig, String> {
+pub fn consumption_configuration_builder(config_type: FuelEfficiencyConfigType,
+                                         ac_car_path: &PathBuf) -> Result<FuelEfficiencyConfig, String> {
     let mut car = match Car::load_from_path(ac_car_path) {
         Ok(c) => { c }
         Err(err) => {
@@ -72,5 +97,13 @@ pub fn consumption_configuration_builder(ac_car_path: &PathBuf) -> Result<FuelEf
             return Err(err_str);
         }
     };
-    Ok(FuelEfficiencyConfig::ThermalEff(FuelConsumptionConfig::from_car(&mut car)?))
+    match config_type {
+        FuelEfficiencyConfigType::ByFuelFlow => {
+            Ok(FuelEfficiencyConfig::FuelFlow(FuelFlowInput::from_car(&mut car)?))
+        },
+        FuelEfficiencyConfigType::ByThermalEfficiency => {
+            Ok(FuelEfficiencyConfig::ThermalEff(ThermalEfficiencyInput::from_car(&mut car)?))
+        }
+    }
+    
 }
