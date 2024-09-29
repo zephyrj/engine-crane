@@ -24,6 +24,7 @@ pub(crate) fn get_fuel_use_kg_per_hour(eff_percentage: i32, fuel_lhv: f64, power
     (get_fuel_use_per_sec_at_rpm(eff_percentage, fuel_lhv, power_kw) * 3.6).round() as i32
 }
 
+
 // TODO this would be a useful func on one of the engine structs; come back and refactor
 pub(crate) fn get_min_max_rpms(engine_ini: &Engine) -> Result<(i32, i32), String> {
     match EngineData::load_from_parent(engine_ini) {

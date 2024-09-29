@@ -41,7 +41,7 @@ use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;
 
 use crate::ui::{ApplicationData, ListPath};
-use crate::ui::edit::fuel_econ::{consumption_configuration_builder, FuelEfficiencyConfig};
+use crate::ui::edit::fuel_econ::{consumption_configuration_builder, FuelEfficiencyConfig, FuelEfficiencyConfigType};
 use crate::ui::edit::gears::{gear_configuration_builder, convert_gear_configuration, FinalDriveUpdate, GearConfig, GearConfigType, GearUpdateType, GearConfiguration};
 use crate::ui::elements::modal::Modal;
 use crate::ui::image_data::ICE_CREAM_SVG;
@@ -99,6 +99,7 @@ pub enum EditMessage {
     GearConfigSelected(GearConfigType),
     GearUpdate(GearUpdateType),
     FinalDriveUpdate(FinalDriveUpdate),
+    EfficiencyConfigSelected(FuelEfficiencyConfigType),
     FuelConsumptionUpdate(i32, String),
     ApplyChanges(),
     ResetChanges(),
@@ -189,9 +190,30 @@ impl EditTab {
         }
     }
 
-    fn setup_fuel_econ_data(&mut self) {
+    fn add_fuel_econ_config_selector_row<'a, 'b>(
+        &'a self,
+        layout: Column<'b, EditMessage>,
+        selected_option: FuelEfficiencyConfigType
+    ) -> Column<'b, EditMessage>
+    where 'b: 'a
+    {
+        let eff_config_row = 
+            [FuelEfficiencyConfigType::ByFuelFlow, FuelEfficiencyConfigType::ByThermalEfficiency,]
+            .iter().fold(
+            Row::new().padding(Padding::from([0, 10])).spacing(20).align_items(Alignment::End),
+            |row, config_choice| {
+                row.push(radio(
+                    format!("{config_choice}"),
+                    *config_choice,
+                    Some(selected_option),
+                    EditMessage::EfficiencyConfigSelected).spacing(3).size(20).text_size(18))
+            });
+        layout.push(horizontal_rule(5)).push(eff_config_row)
+    }
+
+    fn setup_fuel_econ_data(&mut self, config_type: FuelEfficiencyConfigType) {
         if let Some(path_ref) = &self.current_car_path {
-            match consumption_configuration_builder(path_ref) {
+            match consumption_configuration_builder(config_type, path_ref) {
                 Ok(config) => { self.fuel_eff_data = Some(config) }
                 Err(e) => {
                     error!(e)
@@ -206,7 +228,7 @@ impl EditTab {
                 self.current_car_path = Some(path_ref.full_path.clone());
                 match self.current_edit_type {
                     EditOption::Gears => self.setup_gear_data(),
-                    EditOption::FuelEcon => self.setup_fuel_econ_data(),
+                    EditOption::FuelEcon => self.setup_fuel_econ_data(FuelEfficiencyConfigType::ByFuelFlow),
                 }
             }
             EditMessage::EditTypeSelected(ty) => {
@@ -228,7 +250,7 @@ impl EditTab {
                         if self.gear_configuration.is_some() {
                             self.gear_configuration = None;
                         }
-                        self.setup_fuel_econ_data()
+                        self.setup_fuel_econ_data(FuelEfficiencyConfigType::ByFuelFlow)
                     }
                 }
             },
@@ -261,14 +283,29 @@ impl EditTab {
                     config.handle_gear_update(update_type);
                 }
             }
-            EditMessage::FinalDriveUpdate(update_type) => {
-                if let Some(config) = &mut self.gear_configuration {
-                    config.handle_final_drive_update(update_type);
+            EditMessage::EfficiencyConfigSelected(choice) => {
+                let current_config_type =
+                    if let Some(config) = &self.fuel_eff_data {
+                        Some(config.get_config_type())
+                    } else {
+                        None
+                    };
+                match current_config_type {
+                    None => { return; }
+                    Some(config_type) => if config_type == choice {
+                        return;
+                    }
                 }
+                self.setup_fuel_econ_data(choice);
             }
             EditMessage::FuelConsumptionUpdate(rpm, new_value) => {
                 if let Some(config) = &mut self.fuel_eff_data {
-                    config.update_efficiency_string(rpm, new_value);
+                    config.update_for_rpm(rpm, new_value);
+                }
+            }
+            EditMessage::FinalDriveUpdate(update_type) => {
+                if let Some(config) = &mut self.gear_configuration {
+                    config.handle_final_drive_update(update_type);
                 }
             }
             EditMessage::ApplyChanges() => {
@@ -295,7 +332,7 @@ impl EditTab {
                     EditOption::FuelEcon => {
                         if let Some(config) = &mut self.fuel_eff_data {
                             if let Some(car_path) = &self.current_car_path {
-                                match config.update_car(car_path) {
+                                match config.write_car_updates(car_path) {
                                     Ok(_) => {
                                         self.update_successful = true;
                                         info!("Successfully updated fuel consumption data for {}", car_path.display())
@@ -540,6 +577,7 @@ impl Tab for EditTab {
             }
             EditOption::FuelEcon => {
                 if let Some(fuel_econ_data) = &self.fuel_eff_data {
+                    layout = self.add_fuel_econ_config_selector_row(layout, fuel_econ_data.get_config_type());
                     layout = fuel_econ_data.add_editable_list(layout);
                 }
             }

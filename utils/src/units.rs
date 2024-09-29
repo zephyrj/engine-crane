@@ -27,4 +27,11 @@ pub fn calculate_power_kw(rpm: f32, torque: f32) -> f32 {
     (torque * rpm * 2.0 * std::f32::consts::PI) / (60.0 * 1000.0)
 }
 
+pub fn g_min_to_kg_hour(g_per_min: f64) -> f64 {
+    (g_per_min / 1000.0) * 60.0
+}
+
+pub fn kg_hour_to_g_min(kg_per_hour: f64) -> f64 {
+    (kg_per_hour * 1000.0) / 60.0
+}
 
