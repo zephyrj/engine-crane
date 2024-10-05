@@ -25,3 +25,4 @@ pub(crate) const ICE_CREAM_SVG: &[u8] = include_bytes!("resources/ice-cream-colo
 pub(crate) const WINDOW_LOGO: &[u8] = include_bytes!("resources/eng-logo.ico");
 pub(crate) const CIRCLE_TICK: &[u8] = include_bytes!("resources/check-circle-fill.svg");
 pub(crate) const CIRCLE_CROSS: &[u8] = include_bytes!("resources/x-circle-fill.svg");
+pub(crate) const ALERT_TRIANGLE: &[u8] = include_bytes!("resources/exclamation-triangle.svg");
