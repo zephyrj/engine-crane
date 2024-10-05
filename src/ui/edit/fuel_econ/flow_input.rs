@@ -19,6 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 use std::collections::BTreeMap;
+use std::num::ParseFloatError;
 use std::path::PathBuf;
 use iced::{Alignment, Length};
 use iced::widget::{Column, Row, Text, TextInput};
@@ -39,6 +40,7 @@ pub struct FuelFlowInput {
     original_data: BTreeMap<i32, i32>,
     mechanical_efficiency: f64,
     updated_data: BTreeMap<i32, Option<String>>,
+    calculated_fuel_flow: BTreeMap<i32, Option<f64>>
 }
 
 const RPM_STEP: usize = 500;
@@ -50,6 +52,7 @@ impl FuelFlowInput {
         info!("Existing car is {} with assumed mechanical efficiency of {}", drive_type, mechanical_efficiency);
 
         let original_data;
+        let mut calculated_fuel_flow: BTreeMap<i32, Option<f64>> = BTreeMap::new();
         let mut updated_data = BTreeMap::new();
         {
             let engine = Engine::from_car(car).map_err(|err| {
@@ -81,17 +84,21 @@ impl FuelFlowInput {
                 }
                 if *updated_data.first_key_value().ok_or(String::from("Updated data unexpectedly empty"))?.0 != start_rpm {
                     let _ = updated_data.insert(start_rpm, None);
+                    let _ = calculated_fuel_flow.insert(start_rpm, None);
                 }
             } else {
                 for rpm in original_data.keys() {
                     let _ = updated_data.insert(*rpm, None);
+                    let _ = calculated_fuel_flow.insert(*rpm, None);
                 }
             }
+
         }
         Ok(FuelFlowInput {
             original_data,
             mechanical_efficiency,
-            updated_data
+            updated_data,
+            calculated_fuel_flow
         })
     }
 
@@ -103,6 +110,7 @@ impl FuelFlowInput {
     {
         let mut rpm_column = Column::new().width(Length::Shrink).spacing(7).align_items(Alignment::Center).push(Text::new("RPM").size(16));
         let mut flow_input_col = Column::new().width(Length::Shrink).spacing(7).align_items(Alignment::Center).push(Text::new("Fuel Flow g/min").size(16));
+        let mut projected_flow_col = Column::new().width(Length::Shrink).spacing(7).align_items(Alignment::Center).push(Text::new("kg/hr").size(16));
 
         let row_height = Length::Units(28);
         for (rpm, val_opt) in self.updated_data.iter() {
@@ -123,6 +131,17 @@ impl FuelFlowInput {
                     .align_items(Alignment::Center)
                     .push(Text::new(format!("{}:", rpm)))
             );
+            projected_flow_col = projected_flow_col.push(
+                Row::new().height(row_height).align_items(Alignment::Center).push(Text::new(
+                    match self.calculated_fuel_flow.get(&rpm) {
+                        None => "--".to_string(),
+                        Some(val_opt) => match val_opt {  
+                            None => "--".to_string(),
+                            Some(val) => format!("{:.2}", val)
+                        }
+                    }
+                ).size(18))
+            );
         }
         let mut holder = Column::new().width(Length::Shrink).align_items(Alignment::Fill).spacing(10);
         holder = holder.push(
@@ -130,6 +149,7 @@ impl FuelFlowInput {
                 .push(rpm_column)
                 .push(flow_input_col)
                 .push(vertical_rule(5))
+                .push(projected_flow_col)
         );
         layout.push(holder)
     }
@@ -138,8 +158,15 @@ impl FuelFlowInput {
         if self.updated_data.contains_key(&rpm) {
             if new_value.is_empty() {
                 let _ = self.updated_data.insert(rpm, None);
+                let _ = self.calculated_fuel_flow.insert(rpm, None);
             } else {
-                let _ = self.updated_data.insert(rpm, Some(new_value));
+                match new_value.parse::<f64>() {
+                    Ok(flow_g_min) => {
+                        let _ = self.updated_data.insert(rpm, Some(new_value));
+                        let _ = self.calculated_fuel_flow.insert(rpm, Some(g_min_to_kg_hour(flow_g_min)));
+                    }
+                    Err(_) => {}
+                }
             }
         }
     }
@@ -168,30 +195,29 @@ impl FuelFlowInput {
                 }
             };
 
-            let mut max_fuel_flow: i32 = i32::MIN;
-            let flow_vec: Vec<(i32, i32)> = self.updated_data.iter()
+            let mut max_fuel_flow: f64 = f64::MIN;
+            let flow_vec: Vec<(i32, f64)> = self.calculated_fuel_flow.iter()
                 .filter_map(|(key, value)| {
-                    value.clone().and_then(|s| s.parse::<i32>().ok().map(|parsed_value| {
-                        if parsed_value > max_fuel_flow {
-                            max_fuel_flow = parsed_value;
+                    value.clone().and_then(|value| {
+                        if value > max_fuel_flow {
+                            max_fuel_flow = value ;
                         }
-                        (*key, parsed_value)
-                    } 
-                    ))
+                        Some((*key, value))
+                    })
                 })
                 .collect();
             let flow_interpolator = LutInterpolator::from_vec(flow_vec);
             
             let mut max_flow_lut: Vec<(i32, i32)> = Vec::new();
             for (rpm, _) in self.updated_data.iter() {
-                let flow_g_min = match flow_interpolator.get_value(*rpm) {
+                let flow_kg_hour = match flow_interpolator.get_value(*rpm) {
                     Some(eff) => eff.round() as i32,
                     None => {
                         warn!("Couldn't interpolate efficiency input @{}rpm. Skipping value in max_flow lut", rpm);
                         continue
                     }
                 };
-                max_flow_lut.push((*rpm, g_min_to_kg_hour(flow_g_min as f64).round() as i32));
+                max_flow_lut.push((*rpm, flow_kg_hour));
             }
             if max_flow_lut.is_empty() {
                 return Err("Not enough efficiency data to create fuel consumption data".to_string())
@@ -202,7 +228,7 @@ impl FuelFlowInput {
                 idle + 100,
                 self.mechanical_efficiency,
                 Some(max_flow_lut),
-                max_fuel_flow
+                max_fuel_flow.round() as i32
             );
             update_car_data(&mut engine, &fuel_flow).map_err(|err| {
                 err.to_string()

@@ -26,7 +26,6 @@ use assetto_corsa::Car;
 use crate::ui::edit::EditMessage;
 pub use crate::ui::edit::fuel_econ::eff_input::ThermalEfficiencyInput;
 use crate::ui::edit::fuel_econ::flow_input::FuelFlowInput;
-use crate::ui::edit::gears::{GearConfig, GearConfigType};
 
 mod eff_input;
 mod helpers;
