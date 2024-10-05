@@ -29,6 +29,7 @@ use iced_native::widget::scrollable::Properties;
 use crate::settings::Setting as AppSettings;
 use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, CrateEnginePath, LegacyAutomationUserdataPath};
 use crate::ui::{ApplicationData};
+use crate::ui::colour::{fail_red, success_green};
 use crate::ui::data::PathState;
 use crate::ui::image_data::{CIRCLE_CROSS, CIRCLE_TICK};
 
@@ -153,14 +154,6 @@ impl Tab for SettingsTab {
     }
 }
 
-fn success_green_colour() -> Color {
-    Color::from_rgb8(75, 181, 67)
-}
-
-fn fail_red_colour() -> Color {
-    Color::from_rgb8(237, 67, 55)
-}
-
 fn get_path_data<T: crate::settings::PathSetting>(app_data: &ApplicationData,
                                                   need_write_permission: bool) -> (bool, String, Option<String>)
 {
@@ -206,12 +199,12 @@ fn create_path_select(setting: Setting,
     let (img, theme) = match is_valid {
         true => {
             (CIRCLE_TICK, theme::Svg::custom_fn(|_| {
-                svg::Appearance{color: Some(success_green_colour())}
+                svg::Appearance{color: Some(success_green())}
             }))
         }
         false => {
             (CIRCLE_CROSS, theme::Svg::custom_fn(|_| {
-                svg::Appearance{color: Some(fail_red_colour())}
+                svg::Appearance{color: Some(fail_red())}
             }))
         }
     };
