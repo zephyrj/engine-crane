@@ -28,7 +28,7 @@ use std::path::{PathBuf};
 
 use iced::{Alignment, Background, ContentFit, Element, Length, Padding, theme, Theme};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule, Button, scrollable};
+use iced::widget::{Column, Container, pick_list, Row, Text, radio, horizontal_rule, Button, scrollable, svg};
 use iced_aw::{TabLabel};
 use iced_aw::style::colors::WHITE;
 use iced_native::{Color};
@@ -41,10 +41,11 @@ use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
 use crate::assetto_corsa::car::ui::CarUiData;
 
 use crate::ui::{ApplicationData, ListPath};
+use crate::ui::colour::warn_yellow;
 use crate::ui::edit::fuel_econ::{consumption_configuration_builder, FuelEfficiencyConfig, FuelEfficiencyConfigType};
 use crate::ui::edit::gears::{gear_configuration_builder, convert_gear_configuration, FinalDriveUpdate, GearConfig, GearConfigType, GearUpdateType, GearConfiguration};
 use crate::ui::elements::modal::Modal;
-use crate::ui::image_data::ICE_CREAM_SVG;
+use crate::ui::image_data::{ALERT_TRIANGLE, ICE_CREAM_SVG};
 use crate::ui::settings::Setting;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -508,18 +509,32 @@ impl Tab for EditTab {
     fn content<'a, 'b>(&'a self, _app_data: &'b ApplicationData) -> Element<'_, Self::Message>
         where 'b: 'a
     {
-        let edit_type_selector = Row::new().padding(0).spacing(8).align_items(Alignment::Center)
+        let mut edit_type_selector = Row::new().padding(0).spacing(8).align_items(Alignment::Center)
             .push(pick_list(
                 &self.edit_types,
                 Some(self.current_edit_type),
                 EditMessage::EditTypeSelected,
             ));
+        if self.current_edit_type == EditOption::FuelEcon {
+            let svg = Svg::new(Handle::from_memory(ALERT_TRIANGLE))
+                .style(theme::Svg::custom_fn(|_| {
+                    svg::Appearance{color: Some(warn_yellow())}
+                }))
+                .height(Length::Units(25))
+                .width(Length::Units(25));
+            edit_type_selector = edit_type_selector.push(
+                Row::new().spacing(3).align_items(Alignment::Center)
+                    .push(svg)
+                    .push(Text::new("Car will only be compatible with CSP if used").size(14))
+            )
+        }
+        
         let edit_select_container = Column::new()
             .align_items(Alignment::Start)
             .padding(Padding::from([0,0,5,0]))
             .push(Text::new("Type"))
             .push(edit_type_selector);
-
+        
         let current_car = match &self.current_car_path {
             None => { None }
             Some(path) => {
