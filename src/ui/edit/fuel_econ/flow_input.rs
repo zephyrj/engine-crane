@@ -122,7 +122,7 @@ impl FuelFlowInput {
             let flow_input = Row::new().height(row_height).align_items(Alignment::Center).push(
                 TextInput::new(
                     "", &*val, move |new_value| FuelConsumptionUpdate(rpm_copy, new_value)
-                ).width(Length::Units(50))
+                ).width(Length::Units(60))
             );
             flow_input_col = flow_input_col.push(flow_input);
             rpm_column = rpm_column.push(
