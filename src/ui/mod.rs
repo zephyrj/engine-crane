@@ -27,6 +27,7 @@ mod button;
 mod data;
 mod crate_engines;
 mod elements;
+mod colour;
 
 use swap::{EngineSwapMessage, EngineSwapTab};
 use edit::{EditMessage, EditTab};
