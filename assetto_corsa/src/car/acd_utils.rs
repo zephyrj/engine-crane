@@ -436,7 +436,8 @@ mod tests {
 
     #[test]
     fn extract_acd() {
-        let path = Path::new("C:/Program Files (x86)/Steam/steamapps/common/assettocorsa/content/cars/ks_ferrari_f2004/data.acd");
+        ///~/Downloads/car/RSS_Formula_RSS_4_2024-Assetto_Corsa-v1/content/cars/rss_formula_rss_4_2024
+        let path = Path::new("/home/josykes/Downloads/car/RSS_Formula_RSS_4_2024-Assetto_Corsa-v1/content/cars/rss_formula_rss_4_2024/data.acd");
         AcdArchive::load_from_acd_file(path).unwrap().unpack().unwrap();
     }
 

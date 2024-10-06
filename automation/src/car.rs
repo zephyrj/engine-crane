@@ -58,8 +58,8 @@ struct ByteChunk<'a> {
 
 impl<'a> ByteChunk<'a> {
     #[allow(dead_code)]
-    pub fn hex(&self) {
-        format!("{:x?}", self.byte_stream);
+    pub fn hex(&self) -> String {
+        format!("{:x?}", self.byte_stream)
     }
 }
 

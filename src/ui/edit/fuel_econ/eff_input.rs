@@ -21,7 +21,6 @@ const GASOLINE_LHV: f64 = 0.01204;
 const RPM_STEP: usize = 500;
 
 pub struct ThermalEfficiencyInput {
-    original_data: BTreeMap<i32, i32>,
     mechanical_efficiency: f64,
     updated_data: BTreeMap<i32, Option<String>>,
     power_curve_interpolator: LutInterpolator<i32, f64>,
@@ -115,7 +114,6 @@ impl ThermalEfficiencyInput {
             }
         }
         Ok(ThermalEfficiencyInput {
-            original_data,
             mechanical_efficiency,
             updated_data,
             power_curve_interpolator,

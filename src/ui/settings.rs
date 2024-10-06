@@ -19,7 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 use super::{Message, Tab};
-use iced::{Alignment, Color, Element, Length, Padding, theme};
+use iced::{Alignment, Element, Length, Padding, theme};
 use iced::alignment::Vertical;
 use iced::widget::{Button, Column, Container, svg, Text};
 use iced_aw::{TabLabel};

@@ -19,7 +19,6 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 use std::collections::BTreeMap;
-use std::num::ParseFloatError;
 use std::path::PathBuf;
 use iced::{Alignment, Length};
 use iced::widget::{Column, Row, Text, TextInput};
@@ -37,7 +36,6 @@ use crate::ui::edit::EditMessage::FuelConsumptionUpdate;
 use crate::ui::edit::fuel_econ::helpers::{get_min_max_rpms, load_drive_type};
 
 pub struct FuelFlowInput {
-    original_data: BTreeMap<i32, i32>,
     mechanical_efficiency: f64,
     updated_data: BTreeMap<i32, Option<String>>,
     calculated_fuel_flow: BTreeMap<i32, Option<f64>>
@@ -92,10 +90,8 @@ impl FuelFlowInput {
                     let _ = calculated_fuel_flow.insert(*rpm, None);
                 }
             }
-
         }
         Ok(FuelFlowInput {
-            original_data,
             mechanical_efficiency,
             updated_data,
             calculated_fuel_flow
@@ -184,11 +180,9 @@ impl FuelFlowInput {
         {
             let mut engine = Engine::from_car(&mut car).map_err(|err| { err.to_string() })?;
             let idle;
-            let limiter;
             match EngineData::load_from_parent(&engine) {
                 Ok(ed) => {
                     idle = ed.minimum;
-                    limiter = ed.limiter;
                 }
                 Err(e) => {
                     return Err(format!("Failed to load engine data. {}", e.to_string()));
