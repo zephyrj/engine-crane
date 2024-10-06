@@ -1,6 +1,6 @@
 [package]
 name = "automation"
-version = "0.4.0-alpha"
+version = "0.4.3-alpha"
 edition = "2021"
 authors = ["zephyrj <zephyrj@protonmail.com>"]
 
@@ -19,5 +19,5 @@ directories = { workspace = true }
 whoami = { workspace = true }
 
 [dependencies.rusqlite]
-version = "0.31.0"
+version = "0.32.1"
 features = ["bundled"]
