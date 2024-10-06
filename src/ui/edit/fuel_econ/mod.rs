@@ -54,8 +54,8 @@ pub enum FuelEfficiencyConfig {
 impl FuelEfficiencyConfig {
     pub fn get_config_type(&self) -> FuelEfficiencyConfigType {
         match self {
-            FuelEfficiencyConfig::ThermalEff(e) => FuelEfficiencyConfigType::ByThermalEfficiency,
-            FuelEfficiencyConfig::FuelFlow(e) => FuelEfficiencyConfigType::ByFuelFlow
+            FuelEfficiencyConfig::ThermalEff(_e) => FuelEfficiencyConfigType::ByThermalEfficiency,
+            FuelEfficiencyConfig::FuelFlow(_e) => FuelEfficiencyConfigType::ByFuelFlow
         }
     }
     
