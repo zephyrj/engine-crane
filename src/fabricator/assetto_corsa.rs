@@ -865,18 +865,7 @@ impl EngineParameterCalculatorV2 {
          round_float_to(max_boost, decimal_place_precision))
     }
 
-    pub fn get_max_boost_params(&self, decimal_place_precision: u32) -> (i32, f64) {
-        if self.is_naturally_aspirated() {
-            return (0, 0.0);
-        }
-        let version = self.game_version();
-        info!("Version: {}", version);
-        info!("Al-Rima Version: {}", FIRST_AL_RIMA_VERSION_NUM);
-        if self.game_version() >= FIRST_AL_RIMA_VERSION_NUM {
-            info!("Using Al-Rima boost calculations");
-            return self.get_max_boost_al_rima(decimal_place_precision)
-        }
-
+    pub fn get_max_boost_legacy(&self, decimal_place_precision: u32) -> (i32, f64) {
         let rpm_map = self.lookup_curve_data("RPM").unwrap();
         let boost_map = self.lookup_curve_data("Boost").unwrap();
 
@@ -894,6 +883,19 @@ impl EngineParameterCalculatorV2 {
         );
         (rpm_map[&ref_rpm_idx].round() as i32,
          round_float_to(max_boost, decimal_place_precision))
+    }
+
+    pub fn get_max_boost_params(&self, decimal_place_precision: u32) -> (i32, f64) {
+        if self.is_naturally_aspirated() {
+            return (0, 0.0);
+        }
+        if self.game_version() >= FIRST_AL_RIMA_VERSION_NUM {
+            info!("Using Al-Rima max boost calculations");
+            self.get_max_boost_al_rima(decimal_place_precision)
+        } else {
+            info!("Using legacy max boost calculations");
+            self.get_max_boost_legacy(decimal_place_precision)
+        }
     }
 
     pub fn create_turbo(&self) -> Option<engine::Turbo> {
