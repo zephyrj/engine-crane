@@ -497,27 +497,27 @@ pub fn update_ac_engine_parameters(ac_car_path: &Path,
 mod tests {
     use std::path::{PathBuf};
 
-    use crate::{automation, beam_ng};
-    use crate::beam_ng::get_mod_list;
+    use crate::{automation};
+    // use crate::beam_ng::get_mod_list;
     use crate::fabricator::assetto_corsa::{EngineParameterCalculator};
 
-    #[test]
-    fn load_mods() -> Result<(), String> {
-        let mods = get_mod_list();
-        let calculator = EngineParameterCalculator::from_beam_ng_mod(mods[0].as_path())?;
-        std::fs::write("inertia.txt",format!("{}", calculator.inertia().unwrap()));
-        std::fs::write("idle.txt",format!("{}", calculator.idle_speed().unwrap()));
-        std::fs::write("limiter.txt",format!("{}", calculator.limiter()));
-        std::fs::write("fuel_cons.txt",format!("{}", calculator.basic_fuel_consumption()));
-        std::fs::write("torque_curve.txt",format!("{:?}", calculator.naturally_aspirated_wheel_torque_curve(0.85)));
-        std::fs::write("turbo_ctrl.txt",format!("{:?}", calculator.create_turbo_controller().unwrap()));
-        std::fs::write("turbo.txt",format!("{:?}", calculator.create_turbo().unwrap()));
-        std::fs::write("coast.txt",format!("{:?}", calculator.coast_data().unwrap()));
-        std::fs::write("metadata.txt",format!("{:?}", calculator.create_metadata()));
-        std::fs::write("fuel_flow.txt", format!("{:?}", calculator.fuel_flow_consumption(0.75))).unwrap();
-        std::fs::write("damage.txt", format!("{:?}", calculator.damage())).unwrap();
-        Ok(())
-    }
+    // #[test]
+    // fn load_mods() -> Result<(), String> {
+    //     let mods = get_mod_list();
+    //     let calculator = EngineParameterCalculator::from_beam_ng_mod(mods[0].as_path())?;
+    //     std::fs::write("inertia.txt",format!("{}", calculator.inertia().unwrap()));
+    //     std::fs::write("idle.txt",format!("{}", calculator.idle_speed().unwrap()));
+    //     std::fs::write("limiter.txt",format!("{}", calculator.limiter()));
+    //     std::fs::write("fuel_cons.txt",format!("{}", calculator.basic_fuel_consumption()));
+    //     std::fs::write("torque_curve.txt",format!("{:?}", calculator.naturally_aspirated_wheel_torque_curve(0.85)));
+    //     std::fs::write("turbo_ctrl.txt",format!("{:?}", calculator.create_turbo_controller().unwrap()));
+    //     std::fs::write("turbo.txt",format!("{:?}", calculator.create_turbo().unwrap()));
+    //     std::fs::write("coast.txt",format!("{:?}", calculator.coast_data().unwrap()));
+    //     std::fs::write("metadata.txt",format!("{:?}", calculator.create_metadata()));
+    //     std::fs::write("fuel_flow.txt", format!("{:?}", calculator.fuel_flow_consumption(0.75))).unwrap();
+    //     std::fs::write("damage.txt", format!("{:?}", calculator.damage())).unwrap();
+    //     Ok(())
+    // }
 
     // #[test]
     // fn clone_and_swap_test() -> Result<(), String> {

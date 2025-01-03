@@ -25,13 +25,14 @@ use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::path::Path;
 use itertools::Itertools;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use statrs::distribution::{ContinuousCDF, Normal};
 
 use assetto_corsa::car::data;
 use assetto_corsa::car::data::engine;
 use assetto_corsa::car::data::engine::FuelConsumptionFlowRate;
 use automation::car::CarFile;
+use automation::FIRST_AL_RIMA_VERSION_NUM;
 use automation::sandbox::{EngineV1, load_engine_by_uuid, SandboxFinder};
 use utils::units::{calculate_power_kw, kw_to_bhp};
 use automation::validation::AutomationSandboxCrossChecker;
@@ -653,6 +654,16 @@ fn normal_lerp(min: f32, max: f32, input: f32, standard_deviation: f64) -> f32 {
 
 
 impl EngineParameterCalculatorV2 {
+    pub fn game_version(&self) -> f32 {
+        match self.lookup_float_data("Info", "GameVersion") {
+            Ok(version_float) => { version_float },
+            Err(e) => {
+                warn!("Failed to determine game version: {}", e);
+                0.0
+            }
+        }
+    }
+
     pub fn engine_weight(&self) -> u32 {
         self.lookup_float_data("Results", "Weight").unwrap().round() as u32
     }
@@ -797,22 +808,88 @@ impl EngineParameterCalculatorV2 {
         false
     }
 
+    pub fn get_max_boost_al_rima(&self, decimal_place_precision: u32) -> (i32, f64) {
+        let num_chargers = match self.lookup_string_data("Parts", "AspirationItem2") {
+            Ok(item2_string) => {
+                match item2_string.starts_with("NoOption_Name") {
+                    true => 1,
+                    false => 2
+                }
+            }
+            Err(e) => {
+                warn!("Failed to determine number of forced induction chargers; assuming 1");
+                1
+            }
+        };
+        let target_boost: Option<f32> = match self.lookup_float_data("Tune", "ChargerMaxBoost1") {
+            Ok(charger1_boost) => {
+                match num_chargers > 1 {
+                    true => {
+                        let charger2_boost = self.lookup_float_data("Tune", "ChargerMaxBoost2").unwrap_or_else(|e|{
+                            warn!("Failed to determine max boost of forced induction charger 2; only charger 1 will be considered for boost target");
+                            0.0
+                        });
+                        Some(charger1_boost + charger2_boost)
+                    }
+                    false => Some(charger1_boost)
+                }
+            }
+            Err(e) => {
+                warn!("Failed to determine max boost of forced induction charger 1; falling back to only consider boost curve data");
+                None
+            }
+        };
+        let ref_rpm_boost_target = target_boost.unwrap_or_else(|| f32::MAX);
+
+        let rpm_map = self.lookup_curve_data("RPM").unwrap();
+        let boost_map = self.lookup_curve_data("Boost").unwrap();
+
+        let (ref_rpm_idx, max_boost) = boost_map.iter().fold(
+            (1usize, normalise_boost_value(boost_map[&1] as f64, decimal_place_precision)),
+            |(current_ref_rpm_idx, current_max_boost), (new_idx, new_val)| {
+                let this_boost_val = normalise_boost_value(*new_val as f64, 2);
+                if this_boost_val > current_max_boost {
+                    if (this_boost_val <= ref_rpm_boost_target as f64) &&
+                        normalise_boost_value(*new_val as f64, 1) > normalise_boost_value(current_max_boost, 1) {
+                        // Only increase the ref index if:
+                        // - this isn't an "over boost" as a result of "boost creep" i.e. a value higher than the charger target boost
+                        // - it's significantly higher than current max boost  i.e. Greater than the previous value when comparing with 1 decimal place
+                        return (*new_idx, *new_val as f64);
+                    }
+                    return (current_ref_rpm_idx, *new_val as f64);
+                }
+                (current_ref_rpm_idx, current_max_boost)
+            }
+        );
+        (rpm_map[&ref_rpm_idx].round() as i32,
+         round_float_to(max_boost, decimal_place_precision))
+    }
+
     pub fn get_max_boost_params(&self, decimal_place_precision: u32) -> (i32, f64) {
         if self.is_naturally_aspirated() {
             return (0, 0.0);
         }
+        let version = self.game_version();
+        info!("Version: {}", version);
+        info!("Al-Rima Version: {}", FIRST_AL_RIMA_VERSION_NUM);
+        if self.game_version() >= FIRST_AL_RIMA_VERSION_NUM {
+            info!("Using Al-Rima boost calculations");
+            return self.get_max_boost_al_rima(decimal_place_precision)
+        }
+
         let rpm_map = self.lookup_curve_data("RPM").unwrap();
         let boost_map = self.lookup_curve_data("Boost").unwrap();
+
         let (ref_rpm_idx, max_boost) = boost_map.iter().fold(
             (1usize, normalise_boost_value(boost_map[&1] as f64, decimal_place_precision)),
-            |(idx_max, max_val), (idx, val)| {
-                if normalise_boost_value(*val as f64, 2) > max_val {
-                    if normalise_boost_value(*val as f64, 1) > normalise_boost_value(max_val, 1) {
-                        return (*idx, *val as f64);
+            |(current_ref_rpm_idx, current_max_boost), (new_idx, new_val)| {
+                if normalise_boost_value(*new_val as f64, 2) > current_max_boost {
+                    if normalise_boost_value(*new_val as f64, 1) > normalise_boost_value(current_max_boost, 1) {
+                        return (*new_idx, *new_val as f64);
                     }
-                    return (idx_max, *val as f64);
+                    return (current_ref_rpm_idx, *new_val as f64);
                 }
-                (idx_max, max_val)
+                (current_ref_rpm_idx, current_max_boost)
             }
         );
         (rpm_map[&ref_rpm_idx].round() as i32,

@@ -118,12 +118,6 @@ impl<'a> CarDataFile for Engine<'a> {
 
 #[cfg(test)]
 mod tests {
-    
-    
-    
-    
-    
-    
 
     const TURBO_NO_CTRL_DATA: &'static str = r#"
 [HEADER]

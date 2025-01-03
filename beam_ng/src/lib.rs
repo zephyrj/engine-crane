@@ -354,8 +354,8 @@ fn _extract_json_data_from_archive(archive: &mut zip::ZipArchive<fs::File>,
 
 
 mod tests {
-    // use std::path::PathBuf;
-    // use crate::{get_default_mod_path, get_mod_list, load_mod_data};
+    use std::path::PathBuf;
+    use crate::{get_default_mod_path, get_mod_list, load_mod_data};
 
     #[test]
     fn get_beam_ng_mod_path() -> Result<(), String> {

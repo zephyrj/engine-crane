@@ -41,4 +41,4 @@ pub fn get_install_path() -> PathBuf {
     steam::get_game_install_path(STEAM_GAME_NAME)
 }
 
-
+pub const FIRST_AL_RIMA_VERSION_NUM: f32 = 2412240000.0;
