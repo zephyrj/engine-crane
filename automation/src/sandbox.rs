@@ -96,17 +96,20 @@ impl SandboxFinder {
 pub enum SandboxVersion {
     Legacy,
     FourDotTwo,
-    Ellisbury
+    Ellisbury,
+    AlRima
 }
 
 impl SandboxVersion {
     pub fn from_version_number(version_num: u64) -> SandboxVersion {
-        if version_num >= 2312150000 {
+        if version_num >= 2412180000 {
+            return SandboxVersion::AlRima;
+        } else if version_num >= 2312150000 {
             return SandboxVersion::Ellisbury;
-        } else if version_num < 2111220000 {
-            return SandboxVersion::Legacy;
-        }
-        return SandboxVersion::FourDotTwo;
+        } else if version_num >= 2111220000 {
+            return SandboxVersion::FourDotTwo;
+        } 
+        SandboxVersion::Legacy
     }
 
     pub fn get_path(&self) -> String {
@@ -114,6 +117,7 @@ impl SandboxVersion {
             SandboxVersion::Legacy => { "Sandbox_openbeta.db" }
             SandboxVersion::FourDotTwo => { "Sandbox_211122.db" }
             SandboxVersion::Ellisbury => { "Sandbox_230915.db" }
+            SandboxVersion::AlRima => { "Sandbox_241218.db.db" }
         })
     }
 
@@ -122,6 +126,7 @@ impl SandboxVersion {
             SandboxVersion::Legacy => { "pre 4.2" }
             SandboxVersion::FourDotTwo => { "post 4.2" }
             SandboxVersion::Ellisbury => { "4.3 Ellisbury" }
+            SandboxVersion::AlRima => { "4.4 Al-Rima" }
         }
     }
 }
