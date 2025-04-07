@@ -24,6 +24,7 @@ pub mod sandbox;
 pub mod validation;
 
 mod types;
+mod lua_parse;
 
 pub use types::*;
 
