@@ -19,35 +19,37 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod tyre_sets;
+pub mod abs;
+pub mod traction_control;
 
-use crate::{Car, ini_utils};
 use crate::error::{Result, Error, ErrorKind};
+use crate::{ini_utils};
+use crate::car::Car;
 use crate::ini_utils::Ini;
 use crate::traits::{CarDataFile, DataInterface};
 
 #[derive(Debug)]
-pub struct Tyres<'a> {
+pub struct Electronics<'a> {
     car: &'a mut Car,
     ini_data: Ini,
 }
 
-impl<'a> Tyres<'a> {
-    const INI_FILENAME: &'static str = "tyres.ini";
+impl<'a> Electronics<'a> {
+    pub const INI_FILENAME: &'static str = "electronics.ini";
 
-    pub fn from_car(car: &'a mut Car) -> Result<Tyres<'a>> {
-        let file_data = match car.data_interface.get_original_file_data(Tyres::INI_FILENAME) {
+    pub fn from_car(car: &'a mut Car) -> Result<Electronics<'a>> {
+        let file_data = match car.data_interface.get_original_file_data(Electronics::INI_FILENAME) {
             Ok(data_option) => {
                 match data_option {
-                    None => Err(Error::new(ErrorKind::InvalidCar, format!("missing {} data", Self::INI_FILENAME))),
+                    None => Err(Error::new(ErrorKind::InvalidCar, format!("missing {} data", Electronics::INI_FILENAME))),
                     Some(data) => Ok(data)
                 }
             }
             Err(e) => {
-                Err(Error::new(ErrorKind::InvalidCar, format!("error reading {} data. {}", Self::INI_FILENAME, e.to_string())))
+                Err(Error::new(ErrorKind::InvalidCar, format!("error reading {} data. {}", Electronics::INI_FILENAME, e.to_string())))
             }
         }?;
-        Ok(Tyres {
+        Ok(Electronics {
             car,
             ini_data: Ini::load_from_string(String::from_utf8_lossy(file_data.as_slice()).into_owned())
         })
@@ -55,14 +57,14 @@ impl<'a> Tyres<'a> {
 
     pub fn write(&mut self) -> Result<()> {
         let data_interface = self.car.mut_data_interface();
-        data_interface.update_file_data(Tyres::INI_FILENAME,
+        data_interface.update_file_data(Electronics::INI_FILENAME,
                                         self.ini_data.to_bytes());
         data_interface.write()?;
         Ok(())
     }
 }
 
-impl<'a> CarDataFile for Tyres<'a> {
+impl<'a> CarDataFile for Electronics<'a> {
     fn ini_data(&self) -> &Ini {
         &self.ini_data
     }
@@ -77,7 +79,6 @@ impl<'a> CarDataFile for Tyres<'a> {
     }
 }
 
-#[allow(dead_code)]
 fn get_mandatory_field<T: std::str::FromStr>(ini_data: &Ini, section_name: &str, key: &str) -> Result<T> {
     let res: T = match ini_utils::get_value(ini_data, section_name, key) {
         Some(val) => val,
@@ -86,33 +87,9 @@ fn get_mandatory_field<T: std::str::FromStr>(ini_data: &Ini, section_name: &str,
     Ok(res)
 }
 
-#[allow(dead_code)]
 fn mandatory_field_error(section: &str, key: &str) -> Error {
     return Error::new(
         ErrorKind::InvalidCar,
-        format!("Missing {}.{} in {}", section, key, Tyres::INI_FILENAME)
+        format!("Missing {}.{} in {}", section, key, Electronics::INI_FILENAME)
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::car::data::tyres::tyre_sets::TyreCompounds;
-    use crate::car::data::tyres::Tyres;
-    use crate::error::{Error, ErrorKind};
-    use crate::{Car, Installation};
-    use crate::traits::MandatoryDataSection;
-    use crate::Result;
-
-    #[test]
-    fn load_tyres() {
-        let car_folder_name = "abarth500";
-        let ac_install = Installation::new();
-        let car_folder_root = ac_install.get_installed_car_path();
-        let car_folder_path = car_folder_root.join(car_folder_name);
-        let mut car = Car::load_from_path(&car_folder_path).unwrap();
-        let tyres = Tyres::from_car(&mut car).unwrap();
-        let tyre_compound = TyreCompounds::load_from_parent(&tyres).unwrap();
-        let x = 0;
-        //let tyre_set = tyre_compound.get_default_set().expect("Couldn't find default tyre set");
-    }
 }

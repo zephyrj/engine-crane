@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2024 zephyrj
+ * 2025 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -26,6 +26,7 @@ pub mod digital_instruments;
 pub mod ai;
 pub mod setup;
 pub mod tyres;
+pub mod electronics;
 
 pub use car_ini_data::CarIniData;
 pub use engine::Engine;

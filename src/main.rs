@@ -1,6 +1,6 @@
 /*
  * Copyright (c):
- * 2024 zephyrj
+ * 2025 zephyrj
  * zephyrj@protonmail.com
  *
  * This file is part of engine-crane.
@@ -38,6 +38,7 @@ use utils;
 
 // -> Result<(), iced::Error>
 fn main() -> Result<(), iced::Error> {
+
     match env::current_dir() {
         Ok(current_dir) => {
             let file_appender = tracing_appender::rolling::never(current_dir, "engine_crane.log");

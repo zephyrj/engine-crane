@@ -1621,7 +1621,7 @@ checksum = "a3d8a32ae18130a3c84dd492d4215c3d913c3b07c6b63c2eb3eb7ff1101ab7bf"
 
 [[package]]
 name = "engine-crane"
-version = "0.4.4-alpha"
+version = "0.4.5-alpha"
 dependencies = [
  "arboard",
  "assetto_corsa",
