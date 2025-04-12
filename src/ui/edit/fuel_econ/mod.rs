@@ -22,6 +22,7 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use iced::widget::Column;
 use tracing::error;
+use zephyrj_ac_tools as assetto_corsa;
 use assetto_corsa::Car;
 use crate::ui::edit::EditMessage;
 pub use crate::ui::edit::fuel_econ::eff_input::ThermalEfficiencyInput;

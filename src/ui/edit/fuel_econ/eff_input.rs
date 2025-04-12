@@ -4,6 +4,7 @@ use iced::{Alignment, Length};
 use iced::widget::{Column, Row, Text, TextInput};
 use iced_native::widget::vertical_rule;
 use tracing::{error, info, warn};
+use zephyrj_ac_tools as assetto_corsa;
 use assetto_corsa::Car;
 use assetto_corsa::car::data::{CarIniData, Engine};
 use assetto_corsa::car::data::car_ini_data::CarVersion;

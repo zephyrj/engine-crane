@@ -36,9 +36,11 @@ use iced_native::widget::scrollable::Properties;
 use iced_native::widget::{button, checkbox, container, Svg, text};
 use iced_native::svg::Handle;
 use tracing::{error, info};
-use crate::assetto_corsa::Car;
-use crate::assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
-use crate::assetto_corsa::car::ui::CarUiData;
+
+use zephyrj_ac_tools as assetto_corsa;
+use assetto_corsa::Car;
+use assetto_corsa::car::ENGINE_CRANE_CAR_TAG;
+use assetto_corsa::car::ui::CarUiData;
 
 use crate::ui::{ApplicationData, ListPath};
 use crate::ui::colour::warn_yellow;

@@ -25,11 +25,13 @@ use iced::{Alignment, Length, Padding, theme};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Column, Container, Radio, Row, Text};
 use iced_native::widget::{text, text_input, vertical_rule};
-use assetto_corsa::car::model::GearingCalculator;
-use crate::assetto_corsa::car;
 
-use crate::assetto_corsa::car::data::{Drivetrain, setup};
-use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
+use zephyrj_ac_tools as assetto_corsa;
+use assetto_corsa::car::model::GearingCalculator;
+use assetto_corsa::car;
+
+use assetto_corsa::car::data::{Drivetrain, setup};
+use assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_delete_button};
 
 use crate::ui::edit::EditMessage;

@@ -24,10 +24,11 @@ use iced::{Alignment, Length};
 
 use iced::widget::{Column, Radio, Row, Text};
 use iced_native::widget::{text, text_input};
-use crate::assetto_corsa::car;
-use crate::assetto_corsa::car::data::Drivetrain;
-use crate::assetto_corsa::car::data::setup::gears::{GearData, SingleGear};
-use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
+use zephyrj_ac_tools as assetto_corsa;
+use assetto_corsa::car;
+use assetto_corsa::car::data::Drivetrain;
+use assetto_corsa::car::data::setup::gears::{GearData, SingleGear};
+use assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::gears::ratio_set::{RatioSet};

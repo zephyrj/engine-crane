@@ -31,7 +31,7 @@ use tracing_subscriber;
 use tracing_appender;
 use tracing::{info};
 
-use assetto_corsa;
+use zephyrj_ac_tools as assetto_corsa;
 use automation;
 use utils;
 

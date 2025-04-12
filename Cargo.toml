@@ -9,7 +9,7 @@ default-run = "engine-crane"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = ["assetto_corsa", "automation", "beam_ng", "crate_engine", "steam", "utils", "crate_engine/ccrate_engine_builder"]
+members = ["automation", "beam_ng", "crate_engine", "steam", "utils", "crate_engine/ccrate_engine_builder"]
 
 [workspace.dependencies]
 font-kit = "0.13.2"
@@ -21,6 +21,7 @@ utils = { path = "utils" }
 iced_native = { version = "0.8" }
 iced = { version = "0.7", default-features = false, features = ["glow", "default_system_font", "image", "svg"] }
 iced_aw = { git = "https://github.com/zephyrj/iced_aw", branch = "tab-custom-styling", default-features = false, features = ["tab_bar", "tabs", "colors"] }
+
 #iced_aw = { version = "0.2", default-features = false, features = ["tab_bar", "tabs", "colors"] }
 
 directories = "5.0.1"
@@ -43,7 +44,7 @@ statrs = "0.17.1"
 
 
 [dependencies]
-assetto_corsa = { path = "assetto_corsa" }
+zephyrj-ac-tools = { git = "https://github.com/zephyrj/zephyrj-ac-tools" }
 automation = { workspace = true }
 beam_ng = { workspace = true }
 crate-engine = { workspace = true }

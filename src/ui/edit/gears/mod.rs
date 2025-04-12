@@ -29,6 +29,7 @@ mod ratio_set;
 use iced::{Alignment, Length};
 use iced::alignment::Vertical;
 use iced::widget::{Row, Text};
+use zephyrj_ac_tools as assetto_corsa;
 use assetto_corsa::car::model::GearingCalculator;
 pub use gear_config::{gear_configuration_builder,
                       convert_gear_configuration,

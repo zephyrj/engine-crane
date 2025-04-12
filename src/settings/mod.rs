@@ -4,6 +4,8 @@ use config::{Config, ConfigError};
 use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 
+use zephyrj_ac_tools as assetto_corsa;
+
 macro_rules! default_config_builder_helper {
     ($($config_type:ty),+) => {
         {

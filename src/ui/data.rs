@@ -19,6 +19,7 @@
  * along with engine-crane. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use zephyrj_ac_tools as assetto_corsa;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 use std::fs::create_dir;
@@ -30,6 +31,8 @@ use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, Crat
 use crate::ui::{GlobalSettings, ListPath, settings};
 use crate::ui::settings::Setting;
 use crate::utils::filesystem;
+
+
 
 fn create_local_data_dirs_if_missing() {
     let local_data_path = get_local_app_data_path();

@@ -1,3 +1,4 @@
+use zephyrj_ac_tools as assetto_corsa;
 use assetto_corsa::Car;
 use assetto_corsa::car::data;
 use assetto_corsa::car::data::drivetrain::traction::DriveType;

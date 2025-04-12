@@ -28,6 +28,8 @@ use itertools::Itertools;
 use tracing::{debug, info, warn};
 use statrs::distribution::{ContinuousCDF, Normal};
 
+use zephyrj_ac_tools as assetto_corsa;
+
 use assetto_corsa::car::data;
 use assetto_corsa::car::data::engine;
 use assetto_corsa::car::data::engine::FuelConsumptionFlowRate;

@@ -29,11 +29,13 @@ use iced::widget::{Column, Container, container, Radio, Row, Text};
 use iced_native::widget::{scrollable, text, text_input, vertical_rule};
 use iced_native::widget::scrollable::Properties;
 use itertools::Itertools;
+
+use zephyrj_ac_tools as assetto_corsa;
 use assetto_corsa::car::model::GearingCalculator;
-use crate::assetto_corsa::car;
-use crate::assetto_corsa::car::data::{Drivetrain, setup};
-use crate::assetto_corsa::car::data::setup::gears::{GearConfig, SingleGear};
-use crate::assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
+use assetto_corsa::car;
+use assetto_corsa::car::data::{Drivetrain, setup};
+use assetto_corsa::car::data::setup::gears::{GearConfig, SingleGear};
+use assetto_corsa::traits::{CarDataUpdater, MandatoryDataSection};
 use crate::ui::button::{create_add_button, create_delete_button, create_disabled_add_button, create_disabled_delete_button};
 use crate::ui::edit::EditMessage;
 use crate::ui::edit::EditMessage::GearUpdate;

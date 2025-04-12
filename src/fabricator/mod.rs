@@ -29,22 +29,24 @@ use tracing::{error, info, warn};
 use automation::sandbox::SandboxFinder;
 use utils::numeric::{round_float_to, round_up_to_nearest_multiple};
 
-use crate::assetto_corsa::car::data::engine::{CoastCurve, Damage, EngineData, PowerCurve};
+use zephyrj_ac_tools as ac;
 
-use crate::assetto_corsa::Car;
-use crate::assetto_corsa::car::data;
-use crate::assetto_corsa::car::data::ai::Ai;
-use crate::assetto_corsa::car::data::CarIniData;
-use crate::assetto_corsa::car::data::car_ini_data::CarVersion;
-use crate::assetto_corsa::car::data::digital_instruments::DigitalInstruments;
-use crate::assetto_corsa::car::data::digital_instruments::shift_lights::ShiftLights;
-use crate::assetto_corsa::car::ui::{CarUiData, CarUpgradeIcon};
-use crate::assetto_corsa::car::data::Drivetrain;
-use crate::assetto_corsa::car::data::Engine;
-use crate::assetto_corsa::car::data::engine;
-use crate::assetto_corsa::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
+use ac::car::data::engine::{CoastCurve, Damage, EngineData, PowerCurve};
 
-use crate::assetto_corsa::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
+use ac::Car;
+use ac::car::data;
+use ac::car::data::ai::Ai;
+use ac::car::data::CarIniData;
+use ac::car::data::car_ini_data::CarVersion;
+use ac::car::data::digital_instruments::DigitalInstruments;
+use ac::car::data::digital_instruments::shift_lights::ShiftLights;
+use ac::car::ui::{CarUiData, CarUpgradeIcon};
+use ac::car::data::Drivetrain;
+use ac::car::data::Engine;
+use ac::car::data::engine;
+use ac::car::data::engine::turbo_ctrl::delete_all_turbo_controllers_from_car;
+
+use ac::traits::{extract_mandatory_section, extract_optional_section, OptionalDataSection, update_car_data};
 use crate::fabricator::assetto_corsa::UPGRADE_ICON_BYTES;
 
 #[derive(thiserror::Error, Debug)]
@@ -52,7 +54,7 @@ pub enum FabricationError {
     #[error("io error")]
     IoError(#[from] io::Error),
     #[error("assetto corsa data error")]
-    ACDataError(#[from] crate::assetto_corsa::error::Error),
+    ACDataError(#[from] ac::error::Error),
     #[error("BeamNG mod data error. `{0}`")]
     BeamNGModDataError(String),
     #[error("jbeam encoding error")]

@@ -42,12 +42,13 @@ use iced::Theme;
 use iced_aw::style::tab_bar::Appearance;
 use iced_aw::style::TabBarStyles;
 use iced_aw::tab_bar::StyleSheet;
-use crate::{assetto_corsa, fabricator};
+use crate::fabricator;
 use tracing::{span, Level, info, error};
 use rfd::FileDialog;
 use arboard::Clipboard;
 use iced::window::Icon;
 
+use zephyrj_ac_tools as assetto_corsa;
 use assetto_corsa::car::delete_car;
 use automation::sandbox::SandboxFinder;
 
