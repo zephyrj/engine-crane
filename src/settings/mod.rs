@@ -182,7 +182,7 @@ impl Setting for LegacyAutomationUserdataPath {
     fn friendly_name() -> &'static str { "Legacy Automation userdata path" }
 
     fn default() -> Self::ValueType {
-        automation::sandbox::get_default_legacy_user_data_path().to_string_lossy().into_owned()
+        zephyrj_automation_tools::sandbox::get_default_legacy_user_data_path().to_string_lossy().into_owned()
     }
 
     fn get(global_settings: &GlobalSettings) -> &Self::ValueType {
@@ -202,7 +202,7 @@ impl Setting for AutomationUserdataPath {
     fn param_name() -> &'static str { "automation_userdata_path" }
     fn friendly_name() -> &'static str { "Automation userdata path" }
     fn default() -> Self::ValueType {
-        automation::sandbox::get_default_user_data_path().to_string_lossy().into_owned()
+        zephyrj_automation_tools::sandbox::get_default_user_data_path().to_string_lossy().into_owned()
     }
 
     fn get(global_settings: &GlobalSettings) -> &Self::ValueType {

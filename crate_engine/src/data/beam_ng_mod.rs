@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
+use zephyrj_automation_tools as automation;
 use automation::sandbox::{EngineV1, SandboxFinder};
 use automation::validation::{AutomationSandboxCrossChecker};
 use utils::hash::create_sha256_hash_array;

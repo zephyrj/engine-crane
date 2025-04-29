@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["zephyrj <zephyrj@protonmail.com>"]
 
 [dependencies]
-automation = { workspace = true }
+zephyrj-automation-tools = { workspace = true }
 beam_ng = { workspace = true }
 utils = { workspace = true }
 tracing =  { workspace = true }

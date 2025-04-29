@@ -49,6 +49,7 @@ use arboard::Clipboard;
 use iced::window::Icon;
 
 use zephyrj_ac_tools as assetto_corsa;
+use zephyrj_automation_tools as automation;
 use assetto_corsa::car::delete_car;
 use automation::sandbox::SandboxFinder;
 

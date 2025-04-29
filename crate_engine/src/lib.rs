@@ -38,6 +38,7 @@ pub use data::direct_export;
 
 pub type FromBeamNGModOptions = beam_ng_mod::CreationOptions;
 
+use zephyrj_automation_tools as automation;
 
 pub const CRATE_ENGINE_FILE_SUFFIX: &'static str = "eng";
 

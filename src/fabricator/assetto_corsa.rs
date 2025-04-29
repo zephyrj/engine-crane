@@ -29,6 +29,7 @@ use tracing::{debug, info, warn};
 use statrs::distribution::{ContinuousCDF, Normal};
 
 use zephyrj_ac_tools as assetto_corsa;
+use zephyrj_automation_tools as automation;
 
 use assetto_corsa::car::data;
 use assetto_corsa::car::data::engine;

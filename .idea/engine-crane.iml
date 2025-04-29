@@ -10,6 +10,7 @@
       <sourceFolder url="file://$MODULE_DIR$/utils/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crate_engine/ccrate_engine_builder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crate_engine/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/engine-crane-lib/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/assetto_corsa/target" />
     </content>

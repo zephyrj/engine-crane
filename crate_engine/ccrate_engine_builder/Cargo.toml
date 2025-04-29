@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 directories = { workspace = true }
-automation = { workspace = true }
+zephyrj-automation-tools = { workspace = true }
 crate-engine = { workspace = true }
 utils = { workspace = true }
 unwrap-infallible = { workspace = true }

@@ -23,6 +23,7 @@ use std::io::{Read, Write};
 use std::mem;
 use bincode::{deserialize_from, serialize_into};
 use serde::{Deserialize, Serialize};
+use zephyrj_automation_tools as automation;
 use automation::{AspirationType, BlockConfig, HeadConfig, Valves};
 use crate::source::DataSource;
 
