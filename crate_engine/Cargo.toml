@@ -6,7 +6,7 @@ authors = ["zephyrj <zephyrj@protonmail.com>"]
 
 [dependencies]
 zephyrj-automation-tools = { workspace = true }
-beam_ng = { workspace = true }
+zephyrj-beamng-tools = { workspace = true }
 utils = { workspace = true }
 tracing =  { workspace = true }
 sha2 = { workspace = true }

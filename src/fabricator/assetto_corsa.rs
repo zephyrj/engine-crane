@@ -97,7 +97,7 @@ impl EngineParameterCalculator {
     pub fn from_beam_ng_mod(beam_ng_mod_path: &Path, sandbox_finder: SandboxFinder) -> Result<EngineParameterCalculator, FabricationError> {
         use crate::fabricator::FabricationError::*;
         info!("Creating AC parameter calculator for BeamNG mod {}", beam_ng_mod_path.to_path_buf().display());
-        let mut mod_data = beam_ng::ModData::from_path(beam_ng_mod_path).map_err(
+        let mut mod_data = zephyrj_beamng_tools::ModData::from_path(beam_ng_mod_path).map_err(
             BeamNGModDataError
         )?;
 

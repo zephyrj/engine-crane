@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tracing::{warn};
 use unwrap_infallible::UnwrapInfallible;
-use beam_ng::jbeam;
+use zephyrj_beamng_tools::jbeam;
 
 pub use metadata::CrateEngineMetadata;
 pub use data::CrateEngineData;

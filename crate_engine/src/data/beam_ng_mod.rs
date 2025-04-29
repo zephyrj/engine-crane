@@ -130,7 +130,7 @@ impl DataV1 {
     }
 
     pub fn from_beamng_mod_zip(mod_path: &Path, options: CreationOptions) -> Result<DataV1, String> {
-        let mut mod_data = beam_ng::ModData::from_path(mod_path)?;
+        let mut mod_data = zephyrj_beamng_tools::ModData::from_path(mod_path)?;
         let car_file_data = match mod_data.get_automation_car_file_data() {
             None => return Err("Failed to load .car file from mod. File is missing".to_string()),
             Some(data) => data.clone()

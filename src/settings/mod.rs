@@ -142,7 +142,7 @@ impl Setting for BeamNGModPath {
     fn friendly_name() -> &'static str { "BeamNG mod path" }
 
     fn default() -> Self::ValueType {
-        beam_ng::get_default_mod_path().to_string_lossy().into_owned()
+        zephyrj_beamng_tools::get_default_mod_path().to_string_lossy().into_owned()
     }
 
     fn get(global_settings: &GlobalSettings) -> &Self::ValueType {

@@ -366,7 +366,7 @@ impl BeamNGData {
     fn load_available_mods(beamng_mod_path: &PathBuf) -> Vec<ListPath> {
         let span = span!(Level::INFO, "Loading beamNG mods");
         let _enter = span.enter();
-        let mods = ListPath::convert_path_vec(beam_ng::get_mod_list_in(beamng_mod_path));
+        let mods = ListPath::convert_path_vec(zephyrj_beamng_tools::get_mod_list_in(beamng_mod_path));
         info!("Found {} mods", mods.len());
         mods
     }

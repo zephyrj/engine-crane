@@ -501,7 +501,7 @@ mod tests {
     use std::path::{PathBuf};
 
     use crate::{automation};
-    // use crate::beam_ng::get_mod_list;
+    // use zephyrj_beamng_tools::get_mod_list;
     use crate::fabricator::assetto_corsa::{EngineParameterCalculator};
 
     // #[test]
@@ -537,7 +537,7 @@ mod tests {
         //let path = PathBuf::from("/home/josykes/.steam/debian-installation/steamapps/compatdata/293760/pfx/drive_c/users/steamuser/AppData/Local/BeamNG.drive/mods/");
         let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods");
         // C:\Users\zephy\AppData\Local\BeamNG.drive\mods\dae1.zip
-        let mod_data = beam_ng::ModData::from_path(&path.join("dawnv6.zip"))?;
+        let mod_data = zephyrj_beamng_tools::ModData::from_path(&path.join("dawnv6.zip"))?;
         let automation_car_file = automation::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or("Couldn't find car data")?.clone())?;
         println!("{:#?}", automation_car_file);
         if let Some(version) = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("GameVersion") {

@@ -9,12 +9,12 @@ default-run = "engine-crane"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = ["beam_ng", "crate_engine", "steam", "utils", "crate_engine/ccrate_engine_builder"]
+members = ["crate_engine", "steam", "utils", "crate_engine/ccrate_engine_builder"]
 
 [workspace.dependencies]
 font-kit = "0.13.2"
 zephyrj-automation-tools = { git = "https://github.com/zephyrj/zephyrj-automation-tools" }
-beam_ng = { path = "beam_ng" }
+zephyrj-beamng-tools = { git = "https://github.com/zephyrj/zephyrj-beamng-tools" }
 crate-engine = { path = "crate_engine" }
 steam = { path = "steam" }
 utils = { path = "utils" }
@@ -46,7 +46,7 @@ statrs = "0.17.1"
 [dependencies]
 zephyrj-ac-tools = { git = "https://github.com/zephyrj/zephyrj-ac-tools" }
 zephyrj-automation-tools = { workspace = true }
-beam_ng = { workspace = true }
+zephyrj-beamng-tools = { workspace = true }
 crate-engine = { workspace = true }
 steam = { workspace = true }
 utils = { workspace = true }
