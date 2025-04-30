@@ -20,16 +20,13 @@
  */
 #![windows_subsystem = "windows"]
 mod ui;
-mod data;
-mod fabricator;
-mod settings;
-
+pub mod settings;
 
 use std::env;
 use std::path::PathBuf;
 use tracing_subscriber;
 use tracing_appender;
-use tracing::{info};
+use tracing::info;
 
 use zephyrj_ac_tools as assetto_corsa;
 use zephyrj_automation_tools as automation;

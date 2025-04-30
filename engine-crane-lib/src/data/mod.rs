@@ -24,17 +24,15 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use directories::BaseDirs;
-use iced::futures::io;
 use tracing::warn;
 
 use utils::filesystem::get_filetypes_in_path;
-
-pub use crate_engine::{CrateEngine, CrateEngineMetadata, CrateEngineData, FromBeamNGModOptions};
+use crate_engine::{CrateEngine, CrateEngineMetadata, CrateEngineData, FromBeamNGModOptions};
 
 const LOCAL_DATA_DIRNAME: &'static str = "EngineCrane";
 const DEFAULT_CRATE_ENGINE_DIRNAME: &'static str = "crate";
 
-pub fn find_crate_engines_in_path(path: &Path) -> io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
+pub fn find_crate_engines_in_path(path: &Path) -> std::io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
     let mut found_metadata = BTreeMap::new();
     let paths = get_filetypes_in_path(path, crate_engine::CRATE_ENGINE_FILE_SUFFIX)?;
     for path in paths.into_iter() {

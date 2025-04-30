@@ -500,7 +500,6 @@ pub fn update_ac_engine_parameters(ac_car_path: &Path,
 mod tests {
     use std::path::{PathBuf};
 
-    use crate::{automation};
     // use zephyrj_beamng_tools::get_mod_list;
     use crate::fabricator::assetto_corsa::{EngineParameterCalculator};
 
@@ -538,7 +537,7 @@ mod tests {
         let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods");
         // C:\Users\zephy\AppData\Local\BeamNG.drive\mods\dae1.zip
         let mod_data = zephyrj_beamng_tools::ModData::from_path(&path.join("dawnv6.zip"))?;
-        let automation_car_file = automation::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or("Couldn't find car data")?.clone())?;
+        let automation_car_file = zephyrj_automation_tools::car::CarFile::from_bytes( mod_data.get_automation_car_file_data().ok_or("Couldn't find car data")?.clone())?;
         println!("{:#?}", automation_car_file);
         if let Some(version) = automation_car_file.get_section("Car").unwrap().get_section("Variant").unwrap().get_attribute("GameVersion") {
             println!("{}", version);

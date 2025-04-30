@@ -162,7 +162,7 @@ impl Setting for CrateEnginePath {
     fn param_name() -> &'static str { "crate_engine_path" }
     fn friendly_name() -> &'static str { "Crate engine path" }
     fn default() -> Self::ValueType {
-        crate::data::get_default_crate_engine_path().to_string_lossy().into_owned()
+        engine_crane_lib::data::get_default_crate_engine_path().to_string_lossy().into_owned()
     }
 
     fn get(global_settings: &GlobalSettings) -> &Self::ValueType {

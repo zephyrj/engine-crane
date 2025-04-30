@@ -29,7 +29,7 @@ use iced_aw::TabLabel;
 use iced_native::widget::{button, container, text, vertical_rule};
 use tracing::{error, info};
 
-use crate::data::{CrateEngine, CrateEngineMetadata, FromBeamNGModOptions};
+use crate_engine::{CrateEngine, CrateEngineMetadata, FromBeamNGModOptions};
 
 use crate::ui::{ListPath, Message, Tab};
 use crate::ui::data::ApplicationData;

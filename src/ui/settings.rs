@@ -26,7 +26,7 @@ use iced_aw::{TabLabel};
 use iced_native::widget::{Row, scrollable, Svg};
 use iced_native::svg::Handle;
 use iced_native::widget::scrollable::Properties;
-use crate::settings::Setting as AppSettings;
+use crate::settings::{PathSetting, Setting as AppSettings};
 use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, CrateEnginePath, LegacyAutomationUserdataPath};
 use crate::ui::{ApplicationData};
 use crate::ui::colour::{fail_red, success_green};
@@ -154,8 +154,8 @@ impl Tab for SettingsTab {
     }
 }
 
-fn get_path_data<T: crate::settings::PathSetting>(app_data: &ApplicationData,
-                                                  need_write_permission: bool) -> (bool, String, Option<String>)
+fn get_path_data<T: PathSetting>(app_data: &ApplicationData,
+                                 need_write_permission: bool) -> (bool, String, Option<String>)
 {
     let mut valid = true;
     let mut invalid_text = None;

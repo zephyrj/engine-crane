@@ -26,13 +26,12 @@ use std::fs::create_dir;
 use std::io;
 use std::path::PathBuf;
 use tracing::{error, info, Level, span, warn};
-use crate::data::{CrateEngineMetadata, find_crate_engines_in_path, get_default_crate_engine_path, get_local_app_data_path};
-use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, CrateEnginePath, LegacyAutomationUserdataPath};
+use crate_engine::{CrateEngineMetadata};
+use engine_crane_lib::data::{find_crate_engines_in_path, get_default_crate_engine_path, get_local_app_data_path};
+use crate::settings::{AcInstallPath, AutomationUserdataPath, BeamNGModPath, CrateEnginePath, LegacyAutomationUserdataPath, PathSetting};
 use crate::ui::{GlobalSettings, ListPath, settings};
 use crate::ui::settings::Setting;
 use crate::utils::filesystem;
-
-
 
 fn create_local_data_dirs_if_missing() {
     let local_data_path = get_local_app_data_path();
@@ -152,15 +151,15 @@ impl ApplicationData {
         }
     }
 
-    fn revert_to_default_path<T: crate::settings::PathSetting>(&mut self) {
+    fn revert_to_default_path<T: PathSetting>(&mut self) {
         self.set_path::<T>(T::default());
     }
 
-    pub(crate) fn get_path<T: crate::settings::PathSetting>(&self) -> Option<PathBuf> {
+    pub(crate) fn get_path<T: PathSetting>(&self) -> Option<PathBuf> {
         T::resolve_path(&self.settings)
     }
 
-    pub(crate) fn set_path<T: crate::settings::PathSetting>(&mut self, val: T::ValueType) {
+    pub(crate) fn set_path<T: PathSetting>(&mut self, val: T::ValueType) {
         T::set(&mut self.settings, val);
         self.set_path_permission_data::<T>();
     }
@@ -216,16 +215,16 @@ impl ApplicationData {
         self.crate_engine_data.refresh_available_engines(self.get_path::<CrateEnginePath>())
     }
 
-    pub fn get_permission_data<T: crate::settings::PathSetting>(&self) -> (PathState, PathState) {
+    pub fn get_permission_data<T: PathSetting>(&self) -> (PathState, PathState) {
         match self.permissions.get(T::param_name()) {
             None => (PathState::Invalid, PathState::Invalid),
             Some((readable, writable)) => (*readable, *writable)
         }
     }
 
-    fn update_permission_data<T: crate::settings::PathSetting>(&mut self,
-                                                               read_state: PathState,
-                                                               write_state: PathState)
+    fn update_permission_data<T: PathSetting>(&mut self,
+                                                                  read_state: PathState,
+                                                                  write_state: PathState)
     {
         self.permissions.entry(T::param_name())
             .and_modify(|(readable, writable)|{
@@ -236,7 +235,7 @@ impl ApplicationData {
             });
     }
 
-    fn set_path_permission_data<T: crate::settings::PathSetting>(&mut self) {
+    fn set_path_permission_data<T: PathSetting>(&mut self) {
         match self.get_path::<T>() {
             None => {
                 info!("{} not set", T::friendly_name());

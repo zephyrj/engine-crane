@@ -1,0 +1,19 @@
+[package]
+name = "engine-crane-lib"
+version = "0.4.5-alpha"
+edition = "2021"
+authors = ["zephyrj <zephyrj@protonmail.com>"]
+
+[dependencies]
+zephyrj-ac-tools = { git = "https://github.com/zephyrj/zephyrj-ac-tools" }
+zephyrj-automation-tools = { workspace = true }
+zephyrj-beamng-tools = { workspace = true }
+crate-engine = { workspace = true }
+utils = { workspace = true }
+serde-hjson = { workspace = true }
+tracing = { workspace = true }
+directories = { workspace = true }
+whoami = { workspace = true }
+thiserror = { workspace = true }
+itertools = { workspace = true }
+statrs = { workspace = true }

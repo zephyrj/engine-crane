@@ -44,9 +44,9 @@ use crate_engine::beam_ng_mod;
 use crate_engine::direct_export::Data;
 use crate::fabricator::{FabricationError};
 use crate::fabricator::FabricationError::{InvalidData, MissingDataSection};
-use crate::utils::numeric::{round_float_to};
+use utils::numeric::{round_float_to};
 
-pub(crate) const UPGRADE_ICON_BYTES: &[u8] = include_bytes!("resources/upgrade.png");
+pub const UPGRADE_ICON_BYTES: &[u8] = include_bytes!("resources/upgrade.png");
 
 pub enum EngineParameterCalculator {
     V1(EngineParameterCalculatorV1),
@@ -292,7 +292,7 @@ impl EngineParameterCalculator {
 }
 
 #[derive(Debug)]
-pub(crate) struct EngineParameterCalculatorV1 {
+pub struct EngineParameterCalculatorV1 {
     automation_car_file: CarFile,
     engine_jbeam_data: serde_hjson::Map<String, serde_hjson::Value>,
     engine_sqlite_data: EngineV1
@@ -631,7 +631,7 @@ impl EngineParameterCalculatorV1 {
 }
 
 #[derive(Debug)]
-pub(crate) struct EngineParameterCalculatorV2 {
+pub struct EngineParameterCalculatorV2 {
     eng_data: crate_engine::direct_export::Data
 }
 

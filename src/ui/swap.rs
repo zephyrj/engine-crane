@@ -28,7 +28,7 @@ use iced_aw::{TabLabel};
 use iced::alignment::Horizontal;
 use iced_native::widget::radio;
 
-use crate::fabricator::{AssettoCorsaPhysicsLevel};
+use engine_crane_lib::fabricator::{AssettoCorsaPhysicsLevel};
 use crate::ui::{ApplicationData, ListPath};
 use crate::ui::settings::Setting;
 
