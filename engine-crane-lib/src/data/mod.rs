@@ -28,17 +28,23 @@ use tracing::warn;
 
 use utils::filesystem::get_filetypes_in_path;
 use crate_engine::{CrateEngine, CrateEngineMetadata, CrateEngineData, FromBeamNGModOptions};
+use crate_engine::source::DataSource;
 
 const LOCAL_DATA_DIRNAME: &'static str = "EngineCrane";
 const DEFAULT_CRATE_ENGINE_DIRNAME: &'static str = "crate";
 
-pub fn find_crate_engines_in_path(path: &Path) -> std::io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
+pub fn find_crate_engines_in_path(path: &Path, source_filter: Option<DataSource>) -> std::io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
     let mut found_metadata = BTreeMap::new();
     let paths = get_filetypes_in_path(path, crate_engine::CRATE_ENGINE_FILE_SUFFIX)?;
     for path in paths.into_iter() {
         match File::open(&path) {
             Ok(mut f) => match CrateEngineMetadata::from_reader(&mut f) {
                 Ok(m) => {
+                    if let Some(filter) = &source_filter {
+                        if &m.get_source() != filter {
+                            continue;
+                        }
+                    }
                     found_metadata.insert(path, m);
                 }
                 Err(e) => {

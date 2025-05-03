@@ -431,7 +431,7 @@ impl CrateEngineData {
     fn load_available_engines(&mut self, crate_eng_path: &PathBuf) {
         let span = span!(Level::INFO, "Loading crate engines");
         let _enter = span.enter();
-        let found_engs = find_crate_engines_in_path(crate_eng_path).unwrap_or_else(|e| {
+        let found_engs = find_crate_engines_in_path(crate_eng_path, None).unwrap_or_else(|e| {
             warn!("Failed to read {}. {}", crate_eng_path.display(), e.to_string());
             BTreeMap::new()
         });
