@@ -810,6 +810,20 @@ impl EngineParameterCalculatorV2 {
         }
         false
     }
+    
+    fn is_supercharged(&self) -> bool {
+        match self.lookup_string_data("Parts", "AspirationType") {
+            Ok(aspiration) => aspiration.starts_with("Aspiration_Supercharger"),
+            Err(_) => false
+        }
+    }
+    
+    fn is_twincharged(&self) -> bool {
+        match self.lookup_string_data("Parts", "AspirationType") {
+            Ok(aspiration) => aspiration.starts_with("Aspiration_Twin_Charged"),
+            Err(_) => false
+        }
+    }
 
     pub fn get_max_boost_al_rima(&self, decimal_place_precision: u32) -> (i32, f64) {
         let num_chargers = match self.lookup_string_data("Parts", "AspirationItem2") {
@@ -905,21 +919,41 @@ impl EngineParameterCalculatorV2 {
         if self.is_naturally_aspirated() {
             return None;
         }
-        // todo update this to take into account the boost amount set and ignore any overboost that may skew the turbo section calculation
         let (ref_rpm, max_boost) = self.get_max_boost_params(3);
         let mut t = engine::Turbo::new();
-        t.add_section(engine::turbo::TurboSection::new(
-            0,
-            // TODO work out how to better approximate these
-            0.99,
-            0.965,
-            max_boost,
-            max_boost,
-            (max_boost * 10_f64).ceil() / 10_f64,
-            ref_rpm,
-            2.5,
-            0)
-        );
+        // TODO for twin charged can we somehow create two turbos?
+        match self.is_supercharged() || self.is_twincharged() {
+            true => {
+                // for superchargers, ignore reference RPM and use linear gamma so boost will 
+                // almost entirely depend on the boost ctrl to act immediately
+                t.add_section(engine::turbo::TurboSection::new(
+                    0,
+                    // TODO work out how to better approximate these
+                    0.99,
+                    0.965,
+                    max_boost,
+                    max_boost,
+                    (max_boost * 10_f64).ceil() / 10_f64,
+                    (self.idle_speed().unwrap() + 100_f64).round() as i32,
+                    1.0,
+                    0)
+                );
+            }
+            false => {
+                t.add_section(engine::turbo::TurboSection::new(
+                    0,
+                    // TODO work out how to better approximate these
+                    0.99,
+                    0.965,
+                    max_boost,
+                    max_boost,
+                    (max_boost * 10_f64).ceil() / 10_f64,
+                    ref_rpm,
+                    2.5,
+                    0)
+                );
+            }
+        }
         Some(t)
     }
 

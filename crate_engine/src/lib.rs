@@ -82,7 +82,7 @@ impl CrateEngine {
             None => "Unknown".to_string(),
             Some(f) => f.clone()
         };
-        let metadata = metadata::CurrentMetadataType {
+        let metadata = metadata::MetadataV1 {
             data_version: crate_data.version_int(),
             automation_version: data.automation_data().variant_version,
             name,
@@ -103,7 +103,7 @@ impl CrateEngine {
         };
 
         Ok(CrateEngine{
-            metadata: CrateEngineMetadata::from_current_version(metadata),
+            metadata: CrateEngineMetadata::MetadataV1(metadata),
             data: crate_data
         })
     }
@@ -114,22 +114,27 @@ impl CrateEngine {
                 let automation_version = data.float_data["Info"]["GameVersion"].round() as u64;
                 let name = format!("{} {}", data.string_data["Info"]["FamilyName"], data.string_data["Info"]["VariantName"]);
                 let build_year = data.float_data["Info"]["VariantYear"].round() as u16;
-                let block_config = automation::BlockConfig::from_str(&data.string_data["Parts"]["BlockType"]).unwrap_infallible();
+                let block_type = automation::BlockType::from_str(&data.string_data["Parts"]["BlockType"]).unwrap_infallible();
                 let head_config = automation::HeadConfig::from_str(&data.string_data["Parts"]["HeadType"]).unwrap_infallible();
+                let cylinders = data.float_data["Parts"]["Cylinders"].round() as u16;
                 let valves = automation::Valves::from_int(
                     (data.float_data["Parts"]["IntakeValves"].round() + data.float_data["Parts"]["ExhaustValves"].round()) as u16
                 ).unwrap_infallible();
                 let capacity = (data.float_data["Tune"]["Displacement"] * 1000.0).round() as u32;
-                let aspiration = automation::AspirationType::from_str(&data.string_data["Parts"]["Aspiration"]).unwrap_infallible();
-
-                metadata::MetadataV2 {
+                let aspiration = match data.string_data["Parts"].contains_key("AspirationType") {
+                    true => automation::AspirationType::from_str(&data.string_data["Parts"]["AspirationType"]).unwrap_infallible(),
+                    false => automation::AspirationType::from_str(&data.string_data["Parts"]["Aspiration"]).unwrap_infallible(),
+                };
+                
+                metadata::CurrentMetadataType {
                     source: source::DataSource::from_direct_export(),
                     data_version: data.version_int(),
                     automation_version,
                     name,
                     build_year,
-                    block_config,
+                    block_type,
                     head_config,
+                    cylinders,
                     valves,
                     capacity,
                     aspiration,
@@ -143,7 +148,7 @@ impl CrateEngine {
             }
         };
         Ok(CrateEngine{
-            metadata: CrateEngineMetadata::MetadataV2(metadata),
+            metadata: CrateEngineMetadata::from_current_version(metadata),
             data: CrateEngineData::DirectExport(data_type)
         })
     }

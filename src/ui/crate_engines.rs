@@ -171,7 +171,7 @@ impl CrateEngineTab {
                 title_col = title_col.push(Text::new("Capacity:"));
                 value_col = value_col.push(create_text_with_units(format!("{}", m.capacity()), "cc"));
                 title_col = title_col.push(Text::new("Config:"));
-                value_col = value_col.push(Text::new(format!("{} {} {}", m.block_config(), m.head_config(), m.valves())));
+                value_col = value_col.push(Text::new(m.block_description()));
                 title_col = title_col.push(Text::new("Aspiration:"));
                 value_col = value_col.push(Text::new(format!("{}", m.aspiration())));
                 title_col = title_col.push(Text::new("Fuel:"));

@@ -72,7 +72,7 @@ fn clear_last_error() {
 }
 
 #[no_mangle]
-pub extern fn get_last_error() -> *const c_char {
+pub extern "C" fn get_last_error() -> *const c_char {
     LAST_ERROR.with(|last_error| {
         match &*last_error.borrow() {
             Some(err) => err.as_ptr(),
@@ -82,14 +82,14 @@ pub extern fn get_last_error() -> *const c_char {
 }
 
 #[no_mangle]
-pub extern fn init(script_version: u32) -> *mut DataV1 {
+pub extern "C" fn init(script_version: u32) -> *mut DataV1 {
     let mut data: Box<DataV1> = Box::new(DataV1::new());
     data.exporter_script_version = script_version;
     Box::into_raw(data)
 }
 
 #[no_mangle]
-pub extern fn add_string(instance: *mut DataV1,
+pub extern "C" fn add_string(instance: *mut DataV1,
                          group: *const c_char,
                          key: *const c_char,
                          val: *const c_char) {
@@ -103,7 +103,7 @@ pub extern fn add_string(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern fn add_float(instance: *mut DataV1,
+pub extern "C" fn add_float(instance: *mut DataV1,
                         group: *const c_char,
                         key: *const c_char,
                         val: c_float) {
@@ -116,7 +116,7 @@ pub extern fn add_float(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern fn add_curve_data(instance: *mut DataV1,
+pub extern "C" fn add_curve_data(instance: *mut DataV1,
                              curve_name: *const c_char,
                              index: c_ulong,
                              val: c_float) {
@@ -128,7 +128,7 @@ pub extern fn add_curve_data(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern fn dump_json(instance: *mut DataV1,
+pub extern "C" fn dump_json(instance: *mut DataV1,
                         path_char: *const c_char) -> bool
 {
     clear_last_error();
@@ -173,7 +173,7 @@ pub extern fn dump_json(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern fn finalise(instance: *mut DataV1,
+pub extern "C" fn finalise(instance: *mut DataV1,
                        path_char: *const c_char) -> bool
 {
     clear_last_error();
@@ -215,6 +215,6 @@ pub extern fn finalise(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern fn destroy(struct_instance: *mut DataV1) {
+pub extern "C" fn destroy(struct_instance: *mut DataV1) {
     unsafe { drop(Box::from_raw(struct_instance)); }
 }

@@ -25,19 +25,21 @@ use bincode::{deserialize_from, serialize_into};
 use serde::{Deserialize, Serialize};
 use zephyrj_automation_tools as automation;
 use automation::{AspirationType, BlockConfig, HeadConfig, Valves};
+use zephyrj_automation_tools::BlockType;
 use crate::source::DataSource;
 
 
-pub(crate) type CurrentMetadataType = MetadataV1;
+pub(crate) type CurrentMetadataType = MetadataV3;
 
 pub enum CrateEngineMetadata {
     MetadataV1(MetadataV1),
-    MetadataV2(MetadataV2)
+    MetadataV2(MetadataV2),
+    MetadataV3(MetadataV3),
 }
 
 impl CrateEngineMetadata {
     pub fn from_current_version(inner_type: CurrentMetadataType) -> CrateEngineMetadata {
-        return CrateEngineMetadata::MetadataV1(inner_type)
+        CrateEngineMetadata::MetadataV3(inner_type)
     }
 
     pub fn from_reader(reader: &mut impl Read) -> Result<CrateEngineMetadata, String> {
@@ -53,6 +55,10 @@ impl CrateEngineMetadata {
                 let metadata = deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
                 Ok(CrateEngineMetadata::MetadataV2(metadata))
             },
+            MetadataV3::VERSION_U16 => {
+                let metadata = deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
+                Ok(CrateEngineMetadata::MetadataV3(metadata))
+            }
             _ => Err(format!("Unknown metadata version {}", metadata_version))
         }
     }
@@ -62,14 +68,16 @@ impl CrateEngineMetadata {
             CrateEngineMetadata::MetadataV1(m) => {
                 DataSource::from_beam_ng_mod(vec![m.engine_jbeam_hash, m.automation_data_hash])
             },
-            CrateEngineMetadata::MetadataV2(m) => m.source.clone()
+            CrateEngineMetadata::MetadataV2(m) => m.source.clone(),
+            CrateEngineMetadata::MetadataV3(m) => m.source.clone(),
         }
     }
 
     pub fn get_metadata_version_u16(&self) -> u16 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.get_version_u16(),
-            CrateEngineMetadata::MetadataV2(m) => m.get_version_u16()
+            CrateEngineMetadata::MetadataV2(m) => m.get_version_u16(),
+            CrateEngineMetadata::MetadataV3(m) => m.get_version_u16(),
         }
     }
 
@@ -78,6 +86,7 @@ impl CrateEngineMetadata {
         match self {
             CrateEngineMetadata::MetadataV1(m) => serialize_into(writer, &m),
             CrateEngineMetadata::MetadataV2(m) => serialize_into(writer, &m),
+            CrateEngineMetadata::MetadataV3(m) => serialize_into(writer, &m),
         }
     }
 
@@ -85,6 +94,7 @@ impl CrateEngineMetadata {
         match self {
             CrateEngineMetadata::MetadataV1(d) => { &d.name }
             CrateEngineMetadata::MetadataV2(d) => { &d.name }
+            CrateEngineMetadata::MetadataV3(d) => { &d.name }
         }
     }
 
@@ -92,6 +102,7 @@ impl CrateEngineMetadata {
         match self {
             CrateEngineMetadata::MetadataV1(d) => { *&d.data_version }
             CrateEngineMetadata::MetadataV2(d) => { *&d.data_version }
+            CrateEngineMetadata::MetadataV3(d) => { *&d.data_version }
         }
     }
 
@@ -99,90 +110,127 @@ impl CrateEngineMetadata {
         match self {
             CrateEngineMetadata::MetadataV1(m) => { m.automation_version }
             CrateEngineMetadata::MetadataV2(m) => { m.automation_version }
+            CrateEngineMetadata::MetadataV3(m) => { m.automation_version }
         }
     }
 
     pub fn build_year(&self) -> u16 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.build_year,
-            CrateEngineMetadata::MetadataV2(m) => m.build_year
+            CrateEngineMetadata::MetadataV2(m) => m.build_year,
+            CrateEngineMetadata::MetadataV3(m) => m.build_year,
         }
     }
 
-    pub fn block_config(&self) -> &BlockConfig {
+    pub fn block_config(&self) -> Option<&BlockConfig> {
         match self {
-            CrateEngineMetadata::MetadataV1(m) => &m.block_config,
-            CrateEngineMetadata::MetadataV2(m) => &m.block_config
+            CrateEngineMetadata::MetadataV1(m) => Some(&m.block_config),
+            CrateEngineMetadata::MetadataV2(m) => Some(&m.block_config),
+            CrateEngineMetadata::MetadataV3(m) => None,
+        }
+    }
+
+    pub fn block_type(&self) -> Option<&BlockType> {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => None,
+            CrateEngineMetadata::MetadataV2(m) => None,
+            CrateEngineMetadata::MetadataV3(m) => Some(&m.block_type),
         }
     }
 
     pub fn head_config(&self) -> &HeadConfig {
         match self {
             CrateEngineMetadata::MetadataV1(m) => &m.head_config,
-            CrateEngineMetadata::MetadataV2(m) => &m.head_config
+            CrateEngineMetadata::MetadataV2(m) => &m.head_config,
+            CrateEngineMetadata::MetadataV3(m) => &m.head_config,
+        }
+    }
+    
+    pub fn cylinders(&self) -> u16 {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => m.block_config.cylinders(),
+            CrateEngineMetadata::MetadataV2(m) => m.block_config.cylinders(),
+            CrateEngineMetadata::MetadataV3(m) => m.cylinders
         }
     }
 
     pub fn valves(&self) -> &Valves {
         match self {
             CrateEngineMetadata::MetadataV1(m) => &m.valves,
-            CrateEngineMetadata::MetadataV2(m) => &m.valves
+            CrateEngineMetadata::MetadataV2(m) => &m.valves,
+            CrateEngineMetadata::MetadataV3(m) => &m.valves,
         }
     }
 
     pub fn capacity(&self) -> u32 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.capacity,
-            CrateEngineMetadata::MetadataV2(m) => m.capacity
+            CrateEngineMetadata::MetadataV2(m) => m.capacity,
+            CrateEngineMetadata::MetadataV3(m) => m.capacity,
         }
     }
 
     pub fn aspiration(&self) -> &AspirationType {
         match self {
             CrateEngineMetadata::MetadataV1(m) => &m.aspiration,
-            CrateEngineMetadata::MetadataV2(m) => &m.aspiration
+            CrateEngineMetadata::MetadataV2(m) => &m.aspiration,
+            CrateEngineMetadata::MetadataV3(m) => &m.aspiration,
         }
     }
 
     pub fn fuel(&self) -> &str {
         match self {
             CrateEngineMetadata::MetadataV1(m) => &m.fuel,
-            CrateEngineMetadata::MetadataV2(m) => &m.fuel
+            CrateEngineMetadata::MetadataV2(m) => &m.fuel,
+            CrateEngineMetadata::MetadataV3(m) => &m.fuel,
         }
     }
 
     pub fn peak_power(&self) -> u32 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.peak_power,
-            CrateEngineMetadata::MetadataV2(m) => m.peak_power
+            CrateEngineMetadata::MetadataV2(m) => m.peak_power,
+            CrateEngineMetadata::MetadataV3(m) => m.peak_power,
         }
     }
 
     pub fn peak_power_rpm(&self) -> u32 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.peak_power_rpm,
-            CrateEngineMetadata::MetadataV2(m) => m.peak_power_rpm
+            CrateEngineMetadata::MetadataV2(m) => m.peak_power_rpm,
+            CrateEngineMetadata::MetadataV3(m) => m.peak_power_rpm,
         }
     }
 
     pub fn peak_torque(&self) -> u32 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.peak_torque,
-            CrateEngineMetadata::MetadataV2(m) => m.peak_torque
+            CrateEngineMetadata::MetadataV2(m) => m.peak_torque,
+            CrateEngineMetadata::MetadataV3(m) => m.peak_torque,
         }
     }
 
     pub fn peak_torque_rpm(&self) -> u32 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.peak_torque_rpm,
-            CrateEngineMetadata::MetadataV2(m) => m.peak_torque_rpm
+            CrateEngineMetadata::MetadataV2(m) => m.peak_torque_rpm,
+            CrateEngineMetadata::MetadataV3(m) => m.peak_torque_rpm,
         }
     }
 
     pub fn max_rpm(&self) -> u32 {
         match self {
             CrateEngineMetadata::MetadataV1(m) => m.max_rpm,
-            CrateEngineMetadata::MetadataV2(m) => m.max_rpm
+            CrateEngineMetadata::MetadataV2(m) => m.max_rpm,
+            CrateEngineMetadata::MetadataV3(m) => m.max_rpm,
+        }
+    }
+    
+    pub fn block_description(&self) -> String {
+        match self {
+            CrateEngineMetadata::MetadataV1(m) => format!("{} {} {}", m.block_config, m.head_config, m.valves),
+            CrateEngineMetadata::MetadataV2(m) => format!("{} {} {}", m.block_config, m.head_config, m.valves),
+            CrateEngineMetadata::MetadataV3(m) => format!("{}{} {} {}", m.block_type, m.cylinders, m.head_config, m.valves),
         }
     }
 }
@@ -237,6 +285,34 @@ pub struct MetadataV2 {
 
 impl MetadataV2 {
     const VERSION_U16: u16 = 2_u16;
+    pub fn get_version_u16(&self) -> u16 {
+        Self::VERSION_U16
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MetadataV3 {
+    pub source: DataSource,
+    pub data_version: u16,
+    pub automation_version: u64,
+    pub name: String,
+    pub build_year: u16,
+    pub block_type: BlockType,
+    pub head_config: HeadConfig,
+    pub cylinders: u16,
+    pub valves: Valves,
+    pub capacity: u32,
+    pub aspiration: AspirationType,
+    pub fuel: String,
+    pub peak_power: u32,
+    pub peak_power_rpm: u32,
+    pub peak_torque: u32,
+    pub peak_torque_rpm: u32,
+    pub max_rpm: u32
+}
+
+impl MetadataV3 {
+    const VERSION_U16: u16 = 3_u16;
     pub fn get_version_u16(&self) -> u16 {
         Self::VERSION_U16
     }
