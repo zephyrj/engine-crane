@@ -30,7 +30,7 @@ use windows::{Win32::Foundation::*, Win32::System::SystemServices::*, };
 
 use crate_engine;
 use crate_engine::{CrateEngine};
-use crate_engine::direct_export::DataV1;
+use crate_engine::direct_export::LuaDataContainer;
 
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
@@ -82,17 +82,17 @@ pub extern "C" fn get_last_error() -> *const c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn init(script_version: u32) -> *mut DataV1 {
-    let mut data: Box<DataV1> = Box::new(DataV1::new());
+pub extern "C" fn init(script_version: u32) -> *mut LuaDataContainer {
+    let mut data: Box<LuaDataContainer> = Box::new(LuaDataContainer::new());
     data.exporter_script_version = script_version;
     Box::into_raw(data)
 }
 
 #[no_mangle]
-pub extern "C" fn add_string(instance: *mut DataV1,
-                         group: *const c_char,
-                         key: *const c_char,
-                         val: *const c_char) {
+pub extern "C" fn add_string(instance: *mut LuaDataContainer,
+                             group: *const c_char,
+                             key: *const c_char,
+                             val: *const c_char) {
     let data = unsafe { &mut*(instance) };
     let group_cstr = unsafe { CStr::from_ptr(group) };
     let key_cstr = unsafe { CStr::from_ptr(key) };
@@ -103,10 +103,10 @@ pub extern "C" fn add_string(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern "C" fn add_float(instance: *mut DataV1,
-                        group: *const c_char,
-                        key: *const c_char,
-                        val: c_float) {
+pub extern "C" fn add_float(instance: *mut LuaDataContainer,
+                            group: *const c_char,
+                            key: *const c_char,
+                            val: c_float) {
     let data = unsafe { &mut*(instance) };
     let group_cstr = unsafe { CStr::from_ptr(group) };
     let key_cstr = unsafe { CStr::from_ptr(key) };
@@ -116,10 +116,10 @@ pub extern "C" fn add_float(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern "C" fn add_curve_data(instance: *mut DataV1,
-                             curve_name: *const c_char,
-                             index: c_ulong,
-                             val: c_float) {
+pub extern "C" fn add_curve_data(instance: *mut LuaDataContainer,
+                                 curve_name: *const c_char,
+                                 index: c_ulong,
+                                 val: c_float) {
     let data = unsafe { &mut*(instance) };
     let curve_name_cstr = unsafe { CStr::from_ptr(curve_name) };
     data.add_curve_data(String::from_utf8_lossy(curve_name_cstr.to_bytes()).to_string(),
@@ -128,8 +128,8 @@ pub extern "C" fn add_curve_data(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern "C" fn dump_json(instance: *mut DataV1,
-                        path_char: *const c_char) -> bool
+pub extern "C" fn dump_json(instance: *mut LuaDataContainer,
+                            path_char: *const c_char) -> bool
 {
     clear_last_error();
     let data = unsafe { &mut*(instance) };
@@ -173,8 +173,8 @@ pub extern "C" fn dump_json(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern "C" fn finalise(instance: *mut DataV1,
-                       path_char: *const c_char) -> bool
+pub extern "C" fn finalise(instance: *mut LuaDataContainer,
+                           path_char: *const c_char) -> bool
 {
     clear_last_error();
     let data = unsafe {Box::from_raw(instance)};
@@ -188,7 +188,7 @@ pub extern "C" fn finalise(instance: *mut DataV1,
         }
     }
 
-    let result = CrateEngine::from_exporter_data(crate_engine::direct_export::Data::V1(*data));
+    let result = CrateEngine::from_exporter_data(crate_engine::direct_export::Data::from_lua_data(*data));
     match result {
         Ok(eng) => {
             match fs::create_dir_all(&path) {
@@ -215,6 +215,6 @@ pub extern "C" fn finalise(instance: *mut DataV1,
 }
 
 #[no_mangle]
-pub extern "C" fn destroy(struct_instance: *mut DataV1) {
+pub extern "C" fn destroy(struct_instance: *mut LuaDataContainer) {
     unsafe { drop(Box::from_raw(struct_instance)); }
 }

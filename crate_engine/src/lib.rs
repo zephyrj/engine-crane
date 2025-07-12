@@ -24,7 +24,7 @@ pub mod source;
 mod data;
 
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{Read, Write, Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tracing::{warn};
@@ -109,43 +109,44 @@ impl CrateEngine {
     }
 
     pub fn from_exporter_data(data_type: direct_export::Data) -> Result<CrateEngine, String> {
-        let metadata = match &data_type {
-            direct_export::Data::V1(data) => {
-                let automation_version = data.float_data["Info"]["GameVersion"].round() as u64;
-                let name = format!("{} {}", data.string_data["Info"]["FamilyName"], data.string_data["Info"]["VariantName"]);
-                let build_year = data.float_data["Info"]["VariantYear"].round() as u16;
-                let block_type = automation::BlockType::from_str(&data.string_data["Parts"]["BlockType"]).unwrap_infallible();
-                let head_config = automation::HeadConfig::from_str(&data.string_data["Parts"]["HeadType"]).unwrap_infallible();
-                let cylinders = data.float_data["Parts"]["Cylinders"].round() as u16;
-                let valves = automation::Valves::from_int(
-                    (data.float_data["Parts"]["IntakeValves"].round() + data.float_data["Parts"]["ExhaustValves"].round()) as u16
-                ).unwrap_infallible();
-                let capacity = (data.float_data["Tune"]["Displacement"] * 1000.0).round() as u32;
-                let aspiration = match data.string_data["Parts"].contains_key("AspirationType") {
-                    true => automation::AspirationType::from_str(&data.string_data["Parts"]["AspirationType"]).unwrap_infallible(),
-                    false => automation::AspirationType::from_str(&data.string_data["Parts"]["Aspiration"]).unwrap_infallible(),
-                };
-                
-                metadata::CurrentMetadataType {
-                    source: source::DataSource::from_direct_export(),
-                    data_version: data.version_int(),
-                    automation_version,
-                    name,
-                    build_year,
-                    block_type,
-                    head_config,
-                    cylinders,
-                    valves,
-                    capacity,
-                    aspiration,
-                    fuel: data.string_data["Fuel"]["Type"].clone(),
-                    peak_power: data.float_data["Results"]["PeakPower"].round() as u32,
-                    peak_power_rpm: data.float_data["Results"]["PeakPowerRPM"].round() as u32,
-                    peak_torque: data.float_data["Results"]["PeakTorque"].round() as u32,
-                    peak_torque_rpm: data.float_data["Results"]["PeakTorqueRPM"].round() as u32,
-                    max_rpm: data.float_data["Results"]["MaxRPM"].round() as u32
-                }
-            }
+        let data = match &data_type {
+            direct_export::Data::V1(d) => &d.lua_data_container,
+            direct_export::Data::V2(d) => &d.lua_data_container
+        };
+
+        let automation_version = data.float_data["Info"]["GameVersion"].round() as u64;
+        let name = format!("{} {}", data.string_data["Info"]["FamilyName"], data.string_data["Info"]["VariantName"]);
+        let build_year = data.float_data["Info"]["VariantYear"].round() as u16;
+        let block_type = automation::BlockType::from_str(&data.string_data["Parts"]["BlockType"]).unwrap_infallible();
+        let head_config = automation::HeadConfig::from_str(&data.string_data["Parts"]["HeadType"]).unwrap_infallible();
+        let cylinders = data.float_data["Parts"]["Cylinders"].round() as u16;
+        let valves = automation::Valves::from_int(
+            (data.float_data["Parts"]["IntakeValves"].round() + data.float_data["Parts"]["ExhaustValves"].round()) as u16
+        ).unwrap_infallible();
+        let capacity = (data.float_data["Tune"]["Displacement"] * 1000.0).round() as u32;
+        let aspiration = match data.string_data["Parts"].contains_key("AspirationType") {
+            true => automation::AspirationType::from_str(&data.string_data["Parts"]["AspirationType"]).unwrap_infallible(),
+            false => automation::AspirationType::from_str(&data.string_data["Parts"]["Aspiration"]).unwrap_infallible(),
+        };
+
+        let metadata = metadata::CurrentMetadataType {
+            source: source::DataSource::from_direct_export(),
+            data_version: data_type.version_int(),
+            automation_version,
+            name,
+            build_year,
+            block_type,
+            head_config,
+            cylinders,
+            valves,
+            capacity,
+            aspiration,
+            fuel: data.string_data["Fuel"]["Type"].clone(),
+            peak_power: data.float_data["Results"]["PeakPower"].round() as u32,
+            peak_power_rpm: data.float_data["Results"]["PeakPowerRPM"].round() as u32,
+            peak_torque: data.float_data["Results"]["PeakTorque"].round() as u32,
+            peak_torque_rpm: data.float_data["Results"]["PeakTorqueRPM"].round() as u32,
+            max_rpm: data.float_data["Results"]["MaxRPM"].round() as u32
         };
         Ok(CrateEngine{
             metadata: CrateEngineMetadata::from_current_version(metadata),
@@ -159,7 +160,7 @@ impl CrateEngine {
         Ok(CrateEngine { metadata, data })
     }
 
-    pub fn serialize_to(&self, writer: &mut impl Write) -> bincode::Result<()> {
+    pub fn serialize_to(&self, writer: &mut impl Write) -> Result<usize, bincode::error::EncodeError> {
         self.metadata.serialize_into(writer)?;
         self.data.serialize_into(writer)
     }
@@ -176,14 +177,17 @@ impl CrateEngine {
         &self.data
     }
 
-    pub fn write_to_path(&self, path: PathBuf) -> bincode::Result<PathBuf> {
+    pub fn write_to_path(&self, path: PathBuf) -> Result<PathBuf, bincode::error::EncodeError> {
         if !path.is_dir() {
-            return Err(bincode::Error::from(
-                bincode::ErrorKind::Custom(format!("Output path {} not found", path.display()))
-            ))
+            return Err(bincode::error::EncodeError::Io {
+                inner: Error::new(ErrorKind::NotFound, format!("Output path {} not found", path.display())),
+                index: 0
+            });
         }
         let crate_path = utils::filesystem::create_safe_filename_in_path(&path, self.name(), CRATE_ENGINE_FILE_SUFFIX);
-        let mut f = File::create(&crate_path)?;
+        let mut f = File::create(&crate_path).map_err(|e| {
+            bincode::error::EncodeError::Io { inner: e, index: 0 }
+        })?;
         self.serialize_to(&mut f)?;
         Ok(crate_path)
     }
@@ -213,7 +217,7 @@ fn create_crate_engine() -> Result<(), String> {
     let path = PathBuf::from("C:/Users/zephy/AppData/Local/BeamNG.drive/mods/dawnv6.zip");
     let eng = CrateEngine::from_beamng_mod_zip(&path, data::beam_ng_mod::CreationOptions::default())?;
     println!("Loaded {} from mod", eng.name());
-    let crate_path = PathBuf::from(format!("{}.eng", eng.name()));
+    let _crate_path = PathBuf::from(format!("{}.eng", eng.name()));
     {
         let mut file = File::create(format!("{}.eng", eng.name())).expect("Failed to open file");
         match eng.serialize_to(&mut file) {

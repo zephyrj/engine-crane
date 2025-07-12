@@ -21,7 +21,7 @@
 
 use std::io::{Read, Write};
 use std::mem;
-use bincode::{deserialize_from, serialize_into};
+use bincode::serde::{decode_from_std_read, encode_into_std_write};
 use serde::{Deserialize, Serialize};
 use zephyrj_automation_tools as automation;
 use automation::{AspirationType, BlockConfig, HeadConfig, Valves};
@@ -48,15 +48,15 @@ impl CrateEngineMetadata {
         let metadata_version = u16::from_le_bytes(buf);
         match metadata_version {
             MetadataV1::VERSION_U16 => {
-                let metadata = deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
+                let metadata = decode_from_std_read(reader, bincode::config::legacy()).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
                 Ok(CrateEngineMetadata::MetadataV1(metadata))
             },
             MetadataV2::VERSION_U16 => {
-                let metadata = deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
+                let metadata = decode_from_std_read(reader, bincode::config::legacy()).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
                 Ok(CrateEngineMetadata::MetadataV2(metadata))
             },
             MetadataV3::VERSION_U16 => {
-                let metadata = deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
+                let metadata = decode_from_std_read(reader, bincode::config::standard()).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?;
                 Ok(CrateEngineMetadata::MetadataV3(metadata))
             }
             _ => Err(format!("Unknown metadata version {}", metadata_version))
@@ -81,12 +81,14 @@ impl CrateEngineMetadata {
         }
     }
 
-    pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
-        writer.write(&self.get_metadata_version_u16().to_le_bytes())?;
+    pub fn serialize_into(&self, writer: &mut impl Write) -> Result<usize, bincode::error::EncodeError> {
+        writer.write(&self.get_metadata_version_u16().to_le_bytes()).map_err(|e| {
+            bincode::error::EncodeError::Io {inner:e,index:0}
+        })?;
         match self {
-            CrateEngineMetadata::MetadataV1(m) => serialize_into(writer, &m),
-            CrateEngineMetadata::MetadataV2(m) => serialize_into(writer, &m),
-            CrateEngineMetadata::MetadataV3(m) => serialize_into(writer, &m),
+            CrateEngineMetadata::MetadataV1(m) => encode_into_std_write(&m, writer, bincode::config::legacy()),
+            CrateEngineMetadata::MetadataV2(m) => encode_into_std_write(&m, writer, bincode::config::legacy()),
+            CrateEngineMetadata::MetadataV3(m) => encode_into_std_write(&m, writer, bincode::config::standard()),
         }
     }
 
@@ -126,14 +128,14 @@ impl CrateEngineMetadata {
         match self {
             CrateEngineMetadata::MetadataV1(m) => Some(&m.block_config),
             CrateEngineMetadata::MetadataV2(m) => Some(&m.block_config),
-            CrateEngineMetadata::MetadataV3(m) => None,
+            CrateEngineMetadata::MetadataV3(_m) => None,
         }
     }
 
     pub fn block_type(&self) -> Option<&BlockType> {
         match self {
-            CrateEngineMetadata::MetadataV1(m) => None,
-            CrateEngineMetadata::MetadataV2(m) => None,
+            CrateEngineMetadata::MetadataV1(_m) => None,
+            CrateEngineMetadata::MetadataV2(_m) => None,
             CrateEngineMetadata::MetadataV3(m) => Some(&m.block_type),
         }
     }
@@ -316,12 +318,4 @@ impl MetadataV3 {
     pub fn get_version_u16(&self) -> u16 {
         Self::VERSION_U16
     }
-}
-
-fn _deserialize_metadata<R, T>(reader: R) -> Result<T, String>
-    where
-        R: Read,
-        T: serde::de::DeserializeOwned,
-{
-    deserialize_from(reader).map_err(|e| format!("Failed to deserialize metadata. {}", e.to_string()))?
 }

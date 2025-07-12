@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
-use bincode::{deserialize_from, Options, serialize_into};
+use bincode::serde::{decode_from_std_read, encode_into_std_write};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
@@ -31,6 +31,7 @@ use tracing::{info, warn};
 use zephyrj_automation_tools as automation;
 use automation::sandbox::{EngineV1, SandboxFinder};
 use automation::validation::{AutomationSandboxCrossChecker};
+use bincode::serde::decode_from_slice;
 use utils::hash::create_sha256_hash_array;
 use crate::CrateEngineMetadata;
 
@@ -47,7 +48,7 @@ impl CreationOptions {
 
 #[derive(Debug, Clone)]
 pub enum Data {
-    V1(DataV1)
+    V1(DataV1),
 }
 
 impl Data {
@@ -57,7 +58,8 @@ impl Data {
 
     pub fn from_reader(_metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<Data, String> {
         let internal_data =
-            deserialize_from(reader).map_err(|e| {
+            decode_from_std_read(reader,
+                                 bincode::config::legacy()).map_err(|e| {
                 format!("Failed to deserialise {} crate engine. {}", 1, e.to_string())
             })?;
         Ok(Data::V1(internal_data))
@@ -69,9 +71,9 @@ impl Data {
         }
     }
 
-    pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
+    pub fn serialize_into(&self, writer: &mut impl Write) -> Result<usize, bincode::error::EncodeError>  {
         match self {
-            Data::V1(d) => serialize_into(writer, d)
+            Data::V1(d) => encode_into_std_write(d, writer, bincode::config::legacy())
         }
     }
 
@@ -249,16 +251,23 @@ impl DataV1 {
         &self._car_file_data
     }
 
-    pub fn from_eng_file(file_path: &Path) -> bincode::Result<DataV1> {
-        let mut file = File::open(file_path)?;
+    pub fn from_eng_file(file_path: &Path) -> Result<(DataV1, usize), bincode::error::DecodeError>
+    {
+        let mut file = File::open(file_path).map_err(|err|{
+            bincode::error::DecodeError::Io {inner: err, additional: 0}
+        })?;
         let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer)?;
-        let config = bincode::options().with_limit(104857600);
-        config.deserialize(&buffer)
+        file.read_to_end(&mut buffer).map_err(|err| {
+            bincode::error::DecodeError::Io {inner: err, additional: 0}
+        })?;
+        let config =
+            bincode::config::legacy()
+                .with_limit::<104857600>();
+        decode_from_slice(&buffer, config)
     }
 
-    pub fn write_to_file(&self, file: &mut File) -> bincode::Result<()> {
-        serialize_into(file, &self)
+    pub fn write_to_file(&self, file: &mut File) -> Result<usize, bincode::error::EncodeError> {
+        encode_into_std_write(&self, file, bincode::config::legacy())
     }
 }
 

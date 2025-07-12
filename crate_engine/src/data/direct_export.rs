@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use bincode::{deserialize_from, serialize_into};
+use bincode::serde::{decode_from_std_read, encode_into_std_write};
 use serde::{Deserialize, Serialize};
 use crate::CrateEngineMetadata;
 
@@ -35,37 +35,8 @@ impl CreationOptions {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Data {
-    V1(DataV1)
-}
-
-impl Data {
-    pub fn version_int(&self) -> u16 {
-        match self {
-            Data::V1(d) => d.version_int()
-        }
-    }
-
-    pub fn from_reader(_metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<Data, String> {
-        let internal_data =
-            deserialize_from(reader).map_err(|e| {
-                format!("Failed to deserialise {} crate engine. {}", 1, e.to_string())
-            })?;
-        Ok(Data::V1(internal_data))
-    }
-
-    pub fn serialise_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
-        match self {
-            Data::V1(d) => {
-                serialize_into(writer, d)
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct DataV1 {
+pub struct LuaDataContainer {
     pub exporter_script_version: u32,
     pub string_data: BTreeMap<String, BTreeMap<String, String>>,
     pub float_data: BTreeMap<String, BTreeMap<String, f32>>,
@@ -73,14 +44,9 @@ pub struct DataV1 {
     _car_file_data: Option<Vec<u8>>,
 }
 
-impl DataV1 {
-    pub const VERSION: u16 = 1;
-    pub fn version_int(&self) -> u16 {
-        Self::VERSION
-    }
-
-    pub fn new() -> DataV1 {
-        DataV1::default()
+impl LuaDataContainer {
+    pub fn new() -> LuaDataContainer {
+        LuaDataContainer::default()
     }
 
     pub fn add_string(&mut self, group_name: String, key: String, value: String) {
@@ -115,5 +81,87 @@ impl DataV1 {
             },
             None => format!("{}-{}", backup_fam_name, backup_var_name)
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Data {
+    V1(DataV1),
+    V2(DataV2)
+}
+
+impl Data {
+    pub fn from_lua_data(lua_data_container: LuaDataContainer) -> Data {
+        Data::V2(DataV2 {lua_data_container})
+    }
+
+    pub fn version_int(&self) -> u16 {
+        match self {
+            Data::V1(d) => d.version_int(),
+            Data::V2(d) => d.version_int(),
+        }
+    }
+
+    pub fn from_reader(metadata: &CrateEngineMetadata, reader: &mut impl Read) -> Result<Data, String> {
+        match metadata.data_version() {
+            1 => {
+                let internal_data =
+                    decode_from_std_read(reader, bincode::config::legacy()).map_err(|e| {
+                        format!("Failed to deserialise {} crate engine. {}", 1, e.to_string())
+                    })?;
+                Ok(Data::V1(internal_data))
+            }
+            2 => {
+                let internal_data =
+                    decode_from_std_read(reader, bincode::config::standard()).map_err(|e| {
+                        format!("Failed to deserialise {} crate engine. {}", 1, e.to_string())
+                    })?;
+                Ok(Data::V2(internal_data))
+            }
+            _ => Err(format!("Unknown data version {}", metadata.data_version()))
+        }
+    }
+
+    pub fn serialise_into(&self, writer: &mut impl Write) -> Result<usize, bincode::error::EncodeError> {
+        match self {
+            Data::V1(d) => {
+                encode_into_std_write(d, writer, bincode::config::legacy())
+            },
+            Data::V2(d) => {
+                encode_into_std_write(d, writer, bincode::config::standard())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DataV1 {
+    pub lua_data_container: LuaDataContainer
+}
+
+impl DataV1 {
+    pub const VERSION: u16 = 1;
+    pub fn version_int(&self) -> u16 {
+        Self::VERSION
+    }
+
+    pub fn new() -> DataV1 {
+        DataV1::default()
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct DataV2 {
+    pub lua_data_container: LuaDataContainer
+}
+
+impl DataV2 {
+    pub const VERSION: u16 = 2;
+    pub fn version_int(&self) -> u16 {
+        Self::VERSION
+    }
+
+    pub fn new() -> DataV2 {
+        DataV2::default()
     }
 }

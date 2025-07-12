@@ -58,7 +58,7 @@ impl CrateEngineData {
         }
     }
 
-    pub fn serialize_into(&self, writer: &mut impl Write) -> bincode::Result<()> {
+    pub fn serialize_into(&self, writer: &mut impl Write) -> Result<usize, bincode::error::EncodeError> {
         match self {
             CrateEngineData::BeamNGMod(d) => d.serialize_into(writer),
             CrateEngineData::DirectExport(d) => d.serialise_into(writer),

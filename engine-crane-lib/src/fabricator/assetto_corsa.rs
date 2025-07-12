@@ -1031,39 +1031,40 @@ impl EngineParameterCalculatorV2 {
     }
 
     fn lookup_float_data(&self, group: &str, key: &str) -> Result<f32, FabricationError> {
-        match &self.eng_data {
-            Data::V1(data) => {
-                let group_map = data.float_data.get(group).ok_or_else(||{
-                    MissingDataSection(format!("Group {}", group), "float_data".to_string())
-                })?;
-                Ok(*group_map.get(key).ok_or_else(|| {
-                    MissingDataSection(key.to_string(), "float_data".to_string())
-                })?)
-            }
-        }
+        let data = match &self.eng_data {
+            Data::V1(data) => &data.lua_data_container,
+            Data::V2(data) => &data.lua_data_container
+        };
+
+        let group_map = data.float_data.get(group).ok_or_else(||{
+            MissingDataSection(format!("Group {}", group), "float_data".to_string())
+        })?;
+        Ok(*group_map.get(key).ok_or_else(|| {
+            MissingDataSection(key.to_string(), "float_data".to_string())
+        })?)
     }
 
     fn lookup_string_data(&self, group: &str, key: &str) -> Result<&str, FabricationError> {
-        match &self.eng_data {
-            Data::V1(data) => {
-                let group_map = data.string_data.get(group).ok_or_else(||{
-                    MissingDataSection(format!("Group {}", group), "string_data".to_string())
-                })?;
-                Ok(group_map.get(key).ok_or_else(|| {
-                    MissingDataSection(key.to_string(), "string_data".to_string())
-                })?)
-            }
-        }
+        let data = match &self.eng_data {
+            Data::V1(data) => &data.lua_data_container,
+            Data::V2(data) => &data.lua_data_container
+        };
+        let group_map = data.string_data.get(group).ok_or_else(||{
+            MissingDataSection(format!("Group {}", group), "string_data".to_string())
+        })?;
+        Ok(group_map.get(key).ok_or_else(|| {
+            MissingDataSection(key.to_string(), "string_data".to_string())
+        })?)
     }
 
     fn lookup_curve_data(&self, name: &str) -> Result<&BTreeMap<usize, f32>, FabricationError> {
-        match &self.eng_data {
-            Data::V1(data) => {
-                Ok(data.curve_data.get(name).ok_or_else(||{
-                    MissingDataSection(name.to_string(), "curve_data".to_string())
-                })?)
-            }
-        }
+        let data = match &self.eng_data {
+            Data::V1(data) => &data.lua_data_container,
+            Data::V2(data) => &data.lua_data_container
+        };
+        Ok(data.curve_data.get(name).ok_or_else(||{
+            MissingDataSection(name.to_string(), "curve_data".to_string())
+        })?)
     }
 }
 
