@@ -674,7 +674,18 @@ impl EngineParameterCalculatorV2 {
     pub fn inertia(&self) -> Result<f64, FabricationError> {
         // TODO perhaps use the flywheel weight and dimensions to calculate this somehow?
         // I(kg⋅m2) = 1/2 * Mass * (radius * radius)
-        let responsiveness = self.lookup_float_data("Results", "Responsiveness")?;
+        let responsiveness ;
+        if self.game_version() >= 2507110000.0 {
+            responsiveness = match self.lookup_float_data("Results", "ExportResponsiveness") {
+                Ok(val) => {
+                    info!("Using ExportResponsiveness for inertia");
+                    val
+                }
+                Err(e) => self.lookup_float_data("Results", "Responsiveness")?
+            }
+        } else {
+            responsiveness = self.lookup_float_data("Results", "Responsiveness")?;
+        };
         Ok(normal_lerp(0.32, 0.07, responsiveness / 100.0, 0.2) as f64)
     }
 
