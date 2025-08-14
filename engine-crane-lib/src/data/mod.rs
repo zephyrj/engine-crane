@@ -33,15 +33,52 @@ use crate_engine::source::DataSource;
 const LOCAL_DATA_DIRNAME: &'static str = "EngineCrane";
 const DEFAULT_CRATE_ENGINE_DIRNAME: &'static str = "crate";
 
-pub fn find_crate_engines_in_path(path: &Path, source_filter: Option<DataSource>) -> std::io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
+#[derive(Debug, Default)]
+pub struct CrateEngineFilter {
+    source: Option<DataSource>,
+    min_data_version: Option<u16>
+}
+
+impl CrateEngineFilter {
+    pub fn new(source: Option<DataSource>, min_data_version: Option<u16>) -> Self {
+        Self {
+            source,
+            min_data_version
+        }
+    }
+
+    pub fn set_source_filter(&mut self, source: Option<DataSource>) {
+        self.source = source;
+    }
+
+    pub fn set_min_data_version_filter(&mut self, data_version: Option<u16>) {
+        self.min_data_version = data_version;
+    }
+
+    pub fn matches(&self, metadata: &CrateEngineMetadata) -> bool {
+        if let Some(source) = &self.source {
+            if &metadata.get_source() != source {
+                return false;
+            }
+        }
+        if let Some(data_version) = &self.min_data_version {
+            if &metadata.data_version() != data_version {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+pub fn find_crate_engines_in_path(path: &Path, filter: Option<CrateEngineFilter>) -> std::io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
     let mut found_metadata = BTreeMap::new();
     let paths = get_filetypes_in_path(path, crate_engine::CRATE_ENGINE_FILE_SUFFIX)?;
     for path in paths.into_iter() {
         match File::open(&path) {
             Ok(mut f) => match CrateEngineMetadata::from_reader(&mut f) {
                 Ok(m) => {
-                    if let Some(filter) = &source_filter {
-                        if &m.get_source() != filter {
+                    if let Some(filter) = &filter {
+                        if !filter.matches(&m) {
                             continue;
                         }
                     }
