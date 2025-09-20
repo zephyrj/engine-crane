@@ -70,6 +70,34 @@ impl CrateEngineFilter {
     }
 }
 
+pub struct CrateEngineFilterBuilder {
+    source: Option<DataSource>,
+    min_data_version: Option<u16>
+}
+
+impl CrateEngineFilterBuilder {
+    pub fn new() -> Self {
+        Self {
+            source: None,
+            min_data_version: None
+        }
+    }
+
+    pub fn source(mut self, source: DataSource) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    pub fn min_data_version(mut self, data_version: u16) -> Self {
+        self.min_data_version = Some(data_version);
+        self
+    }
+
+    pub fn build(self) -> CrateEngineFilter {
+        CrateEngineFilter::new(self.source, self.min_data_version)
+    }
+}
+
 pub fn find_crate_engines_in_path(path: &Path, filter: Option<CrateEngineFilter>) -> std::io::Result<BTreeMap<PathBuf, CrateEngineMetadata>> {
     let mut found_metadata = BTreeMap::new();
     let paths = get_filetypes_in_path(path, crate_engine::CRATE_ENGINE_FILE_SUFFIX)?;
