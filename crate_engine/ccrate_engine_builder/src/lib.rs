@@ -194,7 +194,7 @@ pub extern "C" fn finalise(instance: *mut LuaDataContainer,
             match fs::create_dir_all(&path) {
                 Ok(_) => {}
                 Err(e) => {
-                    set_last_error(&format!("Failed to create directory ({} )to write crate engine to. {}",
+                    set_last_error(&format!("Failed to create directory ({}) to write crate engine to. {}",
                                             path.display(), e.to_string()));
                     return false;
                 }

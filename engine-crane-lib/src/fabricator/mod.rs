@@ -85,7 +85,8 @@ pub fn swap_automation_engine_into_ac_car(beam_ng_mod_path: &Path,
                                           additional_car_data: AdditionalAcCarData) -> Result<(), FabricationError> {
     update_ac_engine_parameters(ac_car_path,
                                 assetto_corsa::EngineParameterCalculator::from_beam_ng_mod(beam_ng_mod_path, sandbox_finder)?,
-                                settings, additional_car_data
+                                settings,
+                                additional_car_data
     )
 }
 
@@ -95,7 +96,8 @@ pub fn swap_crate_engine_into_ac_car(crate_engine_path: &Path,
                                      additional_car_data: AdditionalAcCarData) -> Result<(), FabricationError> {
     update_ac_engine_parameters(ac_car_path,
                                 assetto_corsa::EngineParameterCalculator::from_crate_engine(crate_engine_path)?,
-                                settings, additional_car_data
+                                settings,
+                                additional_car_data
     )
 }
 

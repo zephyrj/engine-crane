@@ -731,13 +731,46 @@ impl EngineParameterCalculatorV2 {
     }
 
     pub fn fuel_flow_consumption(&self, mechanical_efficiency: f64) -> FuelConsumptionFlowRate {
-        data::engine::FuelConsumptionFlowRate::new(
-            0.03,
-            (self.idle_speed().unwrap() + 100_f64).round() as i32,
-            mechanical_efficiency,
-            None,
-            50
-        )
+        // The lut values should be: rpm, kg/hr
+        // The max-flow should be weighted to the upper end of the rev-range as racing is usually done in that range.
+        // This is probably enough of a fallback as this will only be used if a lut isn't found and that will be
+        // calculated below
+        let rpm_map = self.lookup_curve_data("RPM").unwrap();
+        match self.lookup_curve_data("FuelUsage") {
+            Ok(fuel_kg_per_sec_map) => {
+                let mut max_flow_lut: Vec<(i32, i32)> = Vec::new();
+                let mut max_fuel_flow= i32::MAX;
+                // We have to iterate this backwards as the start of the fuel usage curve doesn't match up with the RPM curve
+                // We know the last value in the RPM curve is the max RPM and the last value in the fuel usage curve
+                // is the fuel flow at the max RPM.
+                for (rpm, fuel_kg_per_sec) in rpm_map.values().rev().zip(fuel_kg_per_sec_map.values().rev()) {
+                    let flow_g_per_sec =  (fuel_kg_per_sec * 1000.0).round() as i32;
+                    if flow_g_per_sec > max_fuel_flow {
+                        max_fuel_flow = flow_g_per_sec;
+                    }
+                    max_flow_lut.push((*rpm as i32, flow_g_per_sec));
+                }
+                max_flow_lut.reverse();
+                data::engine::FuelConsumptionFlowRate::new(
+                    0.03,
+                    (self.idle_speed().unwrap() + 100_f64).round() as i32,
+                    mechanical_efficiency,
+                    Some(max_flow_lut),
+                    max_fuel_flow
+                )
+            }
+            Err(e) => {
+                warn!("Failed to load fuel usage curve data: {}", e);
+                info!("Using fallback fuel flow calculation");
+                return data::engine::FuelConsumptionFlowRate::new(
+                    0.03,
+                    (self.idle_speed().unwrap() + 100_f64).round() as i32,
+                    mechanical_efficiency,
+                    None,
+                    50
+                )
+            }
+        }
     }
 
     /// Return a vector containing pairs of RPM, Torque (NM)

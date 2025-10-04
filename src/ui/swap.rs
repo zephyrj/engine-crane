@@ -94,7 +94,7 @@ pub struct EngineSwapTab {
 impl EngineSwapTab {
     pub(crate) fn new() -> Self {
         EngineSwapTab {
-            available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame],
+            available_physics: vec![AssettoCorsaPhysicsLevel::BaseGame, AssettoCorsaPhysicsLevel::CspExtendedPhysics],
             current_source: EngineSource::BeamNGMod,
             current_car: None,
             current_mod: None,
