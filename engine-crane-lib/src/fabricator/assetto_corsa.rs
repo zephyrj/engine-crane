@@ -739,16 +739,16 @@ impl EngineParameterCalculatorV2 {
         match self.lookup_curve_data("FuelUsage") {
             Ok(fuel_kg_per_sec_map) => {
                 let mut max_flow_lut: Vec<(i32, i32)> = Vec::new();
-                let mut max_fuel_flow= i32::MAX;
+                let mut max_fuel_flow= i32::MIN;
                 // We have to iterate this backwards as the start of the fuel usage curve doesn't match up with the RPM curve
                 // We know the last value in the RPM curve is the max RPM and the last value in the fuel usage curve
                 // is the fuel flow at the max RPM.
                 for (rpm, fuel_kg_per_sec) in rpm_map.values().rev().zip(fuel_kg_per_sec_map.values().rev()) {
-                    let flow_g_per_sec =  (fuel_kg_per_sec * 1000.0).round() as i32;
-                    if flow_g_per_sec > max_fuel_flow {
-                        max_fuel_flow = flow_g_per_sec;
+                    let flow_kg_per_hour =  (fuel_kg_per_sec * 3600.0).round() as i32;
+                    if flow_kg_per_hour > max_fuel_flow {
+                        max_fuel_flow = flow_kg_per_hour;
                     }
-                    max_flow_lut.push((*rpm as i32, flow_g_per_sec));
+                    max_flow_lut.push((*rpm as i32, flow_kg_per_hour));
                 }
                 max_flow_lut.reverse();
                 data::engine::FuelConsumptionFlowRate::new(
