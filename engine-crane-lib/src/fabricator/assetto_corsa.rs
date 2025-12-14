@@ -674,7 +674,8 @@ impl EngineParameterCalculatorV2 {
     pub fn inertia(&self) -> Result<f64, FabricationError> {
         // TODO perhaps use the flywheel weight and dimensions to calculate this somehow?
         // I(kg⋅m2) = 1/2 * Mass * (radius * radius)
-        let responsiveness ;
+        let responsiveness;
+        let responsiveness_scaling_factor;
         if self.game_version() >= 2507110000.0 {
             responsiveness = match self.lookup_float_data("Results", "ExportResponsiveness") {
                 Ok(val) => {
@@ -682,11 +683,15 @@ impl EngineParameterCalculatorV2 {
                     val
                 }
                 Err(e) => self.lookup_float_data("Results", "Responsiveness")?
-            }
+            };
+            // This is a bit of a hack - the value seems to go past 1100-ish so take a stab at
+            // 1200 being the max as apposed to the 100 max of the older responsiveness value
+            responsiveness_scaling_factor = 1200f32;
         } else {
             responsiveness = self.lookup_float_data("Results", "Responsiveness")?;
+            responsiveness_scaling_factor = 100f32;
         };
-        Ok(normal_lerp(0.32, 0.07, responsiveness / 100.0, 0.2) as f64)
+        Ok(normal_lerp(0.32, 0.07, responsiveness / responsiveness_scaling_factor, 0.2) as f64)
     }
 
     pub fn idle_speed(&self) -> Option<f64> {
