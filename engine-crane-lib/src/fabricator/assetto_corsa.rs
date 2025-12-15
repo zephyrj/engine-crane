@@ -639,6 +639,10 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + t * (b - a)
 }
 
+fn clamp(a: f32, min: f32, max: f32) -> f32 {
+    if a < min { min } else if a > max { max } else { a }
+}
+
 fn normal_lerp(min: f32, max: f32, input: f32, standard_deviation: f64) -> f32 {
     // Ensure t is between 0 and 1
     let t = input.clamp(0.0, 1.0);
@@ -675,7 +679,6 @@ impl EngineParameterCalculatorV2 {
         // TODO perhaps use the flywheel weight and dimensions to calculate this somehow?
         // I(kg⋅m2) = 1/2 * Mass * (radius * radius)
         let responsiveness;
-        let responsiveness_scaling_factor;
         if self.game_version() >= 2507110000.0 {
             responsiveness = match self.lookup_float_data("Results", "ExportResponsiveness") {
                 Ok(val) => {
@@ -684,14 +687,21 @@ impl EngineParameterCalculatorV2 {
                 }
                 Err(e) => self.lookup_float_data("Results", "Responsiveness")?
             };
-            // This is a bit of a hack - the value seems to go past 1100-ish so take a stab at
-            // 1200 being the max as apposed to the 100 max of the older responsiveness value
-            responsiveness_scaling_factor = 1200f32;
+            // This is a bit of a hack - the value seems to go past 1100-ish for anything realistic but
+            // seems like it can go as high as 1650+ if you make something stupidly small.
+            // Take a stab at 1200 being the max sensible value as apposed to the 100 max
+            // of the older responsiveness value.
+            // The value also goes much lower than 0 (have seen -3990 in testing)
+            // so ditch the normal lerp as there is a much wider window of values to lerp over.
+            // Don't clamp the input to between 0 and 1 to account for "silly" engines and
+            // instead clamp the output of the lerp to something that isn't completely wild
+            let inertia  = lerp(0.32, 0.07, responsiveness / 1200f32);
+            // 0.04 is like an F1 engine, 0.8 is just a massive value that seems reasonable for "big" when its -3390?
+            Ok(clamp(inertia, 0.04, 0.8) as f64)
         } else {
             responsiveness = self.lookup_float_data("Results", "Responsiveness")?;
-            responsiveness_scaling_factor = 100f32;
-        };
-        Ok(normal_lerp(0.32, 0.07, responsiveness / responsiveness_scaling_factor, 0.2) as f64)
+            Ok(normal_lerp(0.32, 0.07, responsiveness / 100f32, 0.2) as f64)
+        }
     }
 
     pub fn idle_speed(&self) -> Option<f64> {
